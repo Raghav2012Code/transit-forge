@@ -29,6 +29,7 @@ export default function SimControls({ playing, speed, tick, timeMinutes, onToggl
         onClick={onToggle}
         aria-label={playing ? 'Pause simulation' : 'Play simulation'}
         title={playing ? 'Pause (Space)' : 'Play (Space)'}
+        data-tour="sim-play"
       >
         {playing ? <IconPause /> : <IconPlay />}
       </button>

@@ -16,7 +16,7 @@ interface Props {
 
 export default function ModeSwitch({ mode, onChange }: Props) {
   return (
-    <div className="tf-seg" role="radiogroup" aria-label="Editor mode">
+    <div className="tf-seg" role="radiogroup" aria-label="Editor mode" data-tour="mode-switch">
       {MODES.map((m) => {
         const Icon = m.icon;
         return (
@@ -28,6 +28,7 @@ export default function ModeSwitch({ mode, onChange }: Props) {
             className="tf-seg-item wide"
             onClick={() => onChange(m.key)}
             title={`${m.label} (${m.hotkey})`}
+            data-tour={`mode-${m.key}`}
           >
             <Icon />
             <span>{m.label}</span>

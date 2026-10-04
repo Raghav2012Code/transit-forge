@@ -7,6 +7,9 @@ import { buildCityMeshes } from './city/buildCity.ts';
 import { buildNetworkMeshes } from './transport/buildNetwork.ts';
 import { buildVehicles, syncVehicleMeshes, updateVehicles } from './vehicles/vehicles.ts';
 import { buildCarRig, updateCarRig } from './traffic/carRig.ts';
+import type { CameraCmd } from './map/camera.ts';
+import { resolveClick, type CycleCandidate, type CycleState } from './map/selectionCycle.ts';
+import type { MapMarker } from './map/markers.ts';
 
 export interface Layers {
   metro: boolean;
@@ -14,11 +17,47 @@ export interface Layers {
   bus: boolean;
   roads: boolean;
   buildings: boolean;
+  labels: boolean;
+  vehicles: boolean;
+  problems: boolean;
 }
 
 export interface Selection {
-  kind: 'station' | 'route' | 'zone' | 'road';
+  kind: 'station' | 'route' | 'zone' | 'road' | 'vehicle' | 'incident' | 'problem';
   id: string;
+}
+
+/** Reported camera state (throttled) for the minimap + nav widget. */
+export interface CameraInfo {
+  pos: [number, number, number];
+  target: [number, number, number];
+  dist: number;
+}
+
+/** Hover payload for the map tooltip (assembled in the event handler). */
+export interface HoverInfo {
+  kind: Selection['kind'];
+  id: string;
+  name: string;
+  type: string;
+  metric: string;
+  x: number;
+  y: number;
+}
+
+export interface CatchmentView {
+  x: number;
+  z: number;
+  radii: number[];
+}
+
+export interface MeasureView {
+  /** Fixed first point; null while the tool waits for it. */
+  a: { x: number; z: number } | null;
+  /** Fixed second point; null while placing. */
+  b: { x: number; z: number } | null;
+  hover: { x: number; z: number } | null;
+  label: string;
 }
 
 export type Overlay =
@@ -91,6 +130,26 @@ interface SceneViewProps {
   draft: DraftView | null;
   /** Analytics heatmap values; null when no analytics overlay active. */
   analytics: AnalyticsView | null;
+  /** Camera command; applied once per sequence id (presets, focus, minimap). */
+  cameraCmd: CameraCmd | null;
+  /** Throttled camera reports for minimap / nav widget. */
+  onCamera: ((info: CameraInfo) => void) | null;
+  /** Throttled hover picks for the map tooltip (simulate mode). */
+  onHoverObject: ((h: HoverInfo | null) => void) | null;
+  /** Right-click pick for the context menu. */
+  onContextPick: ((sel: Selection, x: number, y: number) => void) | null;
+  /** Clickable planning-problem markers (plan mode). */
+  problemMarkers: MapMarker[];
+  /** What-changed indicators derived from the op log. */
+  changeMarkers: MapMarker[];
+  /** Walking catchment rings around the inspected station; null hides. */
+  catchment: CatchmentView | null;
+  /** Measurement line; null hides. */
+  measure: MeasureView | null;
+  /** When true, map clicks feed the measurement tool instead of selecting. */
+  measureActive: boolean;
+  onMeasurePoint: ((x: number, z: number) => void) | null;
+  onMeasureHover: ((x: number, z: number) => void) | null;
 }
 
 function stationLoad(waiting: number, capacityPerHr: number): number {
@@ -114,7 +173,7 @@ const GRADE_COLORS: Record<AccessGradeKey, number> = {
 };
 
 // Rendering consumes simulation data; it never mutates it or holds sim logic.
-export default function SceneView({ simRef, layers, overlay, selection, onSelect, networkKey, ghosts, highlightRoutes, build, draft, analytics }: SceneViewProps) {
+export default function SceneView({ simRef, layers, overlay, selection, onSelect, networkKey, ghosts, highlightRoutes, build, draft, analytics, cameraCmd, onCamera, onHoverObject, onContextPick, problemMarkers, changeMarkers, catchment, measure, measureActive, onMeasurePoint, onMeasureHover }: SceneViewProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelect);
   const layersRef = useRef(layers);
@@ -124,6 +183,17 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
   const ghostsRef = useRef(ghosts);
   const highlightRef = useRef(highlightRoutes);
   const analyticsRef = useRef(analytics);
+  const cameraCmdRef = useRef(cameraCmd);
+  const onCameraRef = useRef(onCamera);
+  const onHoverRef = useRef(onHoverObject);
+  const onContextRef = useRef(onContextPick);
+  const problemMarkersRef = useRef(problemMarkers);
+  const changeMarkersRef = useRef(changeMarkers);
+  const catchmentRef = useRef(catchment);
+  const measureRef = useRef(measure);
+  const measureActiveRef = useRef(measureActive);
+  const onMeasurePointRef = useRef(onMeasurePoint);
+  const onMeasureHoverRef = useRef(onMeasureHover);
   // Mirror latest props for the RAF loop and event handlers (committed values
   // only; the render path itself never touches refs).
   useEffect(() => {
@@ -136,6 +206,19 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     highlightRef.current = highlightRoutes;
     selectionRef.current = selection;
     analyticsRef.current = analytics;
+    cameraCmdRef.current = cameraCmd;
+    onCameraRef.current = onCamera;
+    onHoverRef.current = onHoverObject;
+    onContextRef.current = onContextPick;
+    problemMarkersRef.current = problemMarkers;
+    changeMarkersRef.current = changeMarkers;
+    catchmentRef.current = catchment;
+    measureRef.current = measure;
+    measureActiveRef.current = measureActive;
+    onMeasurePointRef.current = onMeasurePoint;
+    onMeasureHoverRef.current = onMeasureHover;
+    mountRef.current?.classList.toggle('tf-measuring', measureActive);
+    problemLabelById.current = new Map(problemMarkers.map((m) => [m.selId, m.label]));
   });
   const rigRef = useRef<{
     stationMeshById: Map<string, THREE.Mesh>;
@@ -144,6 +227,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
   } | null>(null);
   const selectionRef = useRef<Selection | null>(selection);
   // (mirrored in the commit effect below alongside the other live refs)
+  const problemLabelById = useRef(new Map<string, string>());
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -208,6 +292,26 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       ray.setFromCamera(ptr, camera);
       return rect;
     };
+    // Full pick set for inspection: static pickables plus live vehicle meshes
+    // plus incident / problem / change markers (registered below).
+    const extraPickables: THREE.Object3D[] = [];
+    const KIND_PRIORITY: Record<string, number> = {
+      station: 0, vehicle: 1, incident: 2, problem: 3, route: 4, road: 5, zone: 6,
+    };
+    const collectCandidates = (hits: THREE.Intersection[]): CycleCandidate[] => {
+      const seen = new Map<string, CycleCandidate>();
+      for (const h of hits) {
+        const ud = h.object.userData as { kind?: Selection['kind']; id?: string };
+        if (!ud.kind || ud.id === undefined) continue;
+        const key = `${ud.kind}:${ud.id}`;
+        if (!seen.has(key)) seen.set(key, { kind: ud.kind, id: ud.id });
+      }
+      return [...seen.values()].sort(
+        (a, b) => (KIND_PRIORITY[a.kind] ?? 9) - (KIND_PRIORITY[b.kind] ?? 9),
+      );
+    };
+    let cycleState: CycleState | null = null;
+    const pickAll = (): THREE.Object3D[] => [...pickables, ...extraPickables];
     const handleClick = (e: MouseEvent) => {
       const b = buildRef.current;
       pickAt(e);
@@ -230,25 +334,111 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         }
         return;
       }
-      ray.params.Line = { threshold: 4 };
-      const hits = ray.intersectObjects(pickables, false);
-      if (hits.length === 0) {
-        onSelectRef.current(null);
+      if (measureActiveRef.current) {
+        if (ray.ray.intersectPlane(groundPlane, groundHit)) {
+          onMeasurePointRef.current?.(groundHit.x, groundHit.z);
+        }
         return;
       }
-      const ud = hits[0].object.userData as { kind: Selection['kind']; id: string };
-      onSelectRef.current({ kind: ud.kind, id: ud.id });
+      ray.params.Line = { threshold: 4 };
+      const hits = ray.intersectObjects(pickAll(), false);
+      const candidates = collectCandidates(hits);
+      // Repeated clicks on the same spot cycle stacked objects (§10).
+      const { pick, state } = resolveClick(cycleState, e.clientX, e.clientY, performance.now(), candidates);
+      cycleState = state;
+      onSelectRef.current(pick ? { kind: pick.kind as Selection['kind'], id: pick.id } : null);
     };
+    const hoverInfoFor = (kind: Selection['kind'], id: string, x: number, y: number): HoverInfo | null => {
+      const sim = simRef.current;
+      if (!sim) return null;
+      if (kind === 'station') {
+        const st = sim.stations.find((s) => s.id === id);
+        if (!st) return null;
+        return { kind, id, name: st.name, type: st.routeIds.length > 1 ? 'Interchange station' : 'Station', metric: `${Math.round(st.waiting)} waiting`, x, y };
+      }
+      if (kind === 'route') {
+        const r = sim.routes.find((x) => x.id === id);
+        if (!r) return null;
+        const board = Math.round(sim.counters.routeBoardings[id] ?? 0);
+        return { kind, id, name: r.name, type: `${r.mode} line · ${r.stationIds.length} stops`, metric: `${board.toLocaleString()} boardings`, x, y };
+      }
+      if (kind === 'road') {
+        const st = sim.edgeState[id];
+        if (!st) return null;
+        const edge = sim.city.roadEdges.find((e) => e.id === id);
+        const label = edge ? `${edge.isBridge ? 'Bridge' : edge.isArterial ? 'Arterial' : 'Local'} ${edge.a.replace(/^rn-/, '').toUpperCase()}–${edge.b.replace(/^rn-/, '').toUpperCase()}` : id;
+        return { kind, id, name: label, type: st.closed ? 'Road · closed' : `Road · ${st.level}`, metric: `V/C ${Math.round(st.vc * 100) / 100}`, x, y };
+      }
+      if (kind === 'zone') {
+        const z = sim.city.zones.find((zz) => zz.id === id);
+        if (!z) return null;
+        return { kind, id, name: z.name, type: `District · ${z.kind}`, metric: `${z.population.toLocaleString()} residents`, x, y };
+      }
+      if (kind === 'vehicle') {
+        const vv = sim.vehicles.find((v) => v.id === id);
+        if (!vv) return null;
+        const r = sim.routes.find((x) => x.id === vv.routeId);
+        return { kind, id, name: r?.name ?? vv.routeId, type: 'Vehicle', metric: `${vv.load}/${vv.capacity} aboard`, x, y };
+      }
+      if (kind === 'incident') {
+        const inc = sim.incidents.find((i) => i.id === id);
+        if (!inc) return null;
+        const left = Math.max(0, Math.round(inc.startMin + inc.durationMin - sim.timeMinutes));
+        return { kind, id, name: inc.label, type: `Disruption · ${inc.status}`, metric: inc.status === 'active' ? `~${left} min left` : inc.kind, x, y };
+      }
+      if (kind === 'problem') {
+        const label = problemLabelById.current.get(id) ?? id;
+        return { kind, id, name: label, type: 'Planning problem', metric: 'click to explain', x, y };
+      }
+      return null;
+    };
+    let lastHoverAt = 0;
     const handleHover = (e: MouseEvent) => {
       const b = buildRef.current;
-      if (!b) return;
-      pickAt(e);
-      if (ray.ray.intersectPlane(groundPlane, groundHit)) {
-        b.onHover(groundHit.x, groundHit.z);
+      if (measureActiveRef.current) {
+        pickAt(e);
+        if (ray.ray.intersectPlane(groundPlane, groundHit)) {
+          onMeasureHoverRef.current?.(groundHit.x, groundHit.z);
+        }
+        return;
       }
+      if (b) {
+        pickAt(e);
+        if (ray.ray.intersectPlane(groundPlane, groundHit)) {
+          b.onHover(groundHit.x, groundHit.z);
+        }
+        return;
+      }
+      // Throttled inspection hover: raycast at most ~11×/s (perf §32).
+      const now = performance.now();
+      if (now - lastHoverAt < 90) return;
+      lastHoverAt = now;
+      const cb = onHoverRef.current;
+      if (!cb) return;
+      pickAt(e);
+      ray.params.Line = { threshold: 4 };
+      const hits = ray.intersectObjects(pickAll(), false);
+      const candidates = collectCandidates(hits);
+      const top = candidates[0];
+      cb(top ? hoverInfoFor(top.kind as Selection['kind'], top.id, e.clientX, e.clientY) : null);
+    };
+    const handleLeave = () => {
+      onHoverRef.current?.(null);
+    };
+    const handleContext = (e: MouseEvent) => {
+      e.preventDefault();
+      const cb = onContextRef.current;
+      if (!cb || buildRef.current) return;
+      pickAt(e);
+      ray.params.Line = { threshold: 4 };
+      const hits = ray.intersectObjects(pickAll(), false);
+      const top = collectCandidates(hits)[0];
+      if (top) cb({ kind: top.kind as Selection['kind'], id: top.id }, e.clientX, e.clientY);
     };
     renderer.domElement.addEventListener('click', handleClick);
     renderer.domElement.addEventListener('mousemove', handleHover);
+    renderer.domElement.addEventListener('mouseleave', handleLeave);
+    renderer.domElement.addEventListener('contextmenu', handleContext);
 
     const onResize = () => {
       const w = mount.clientWidth;
@@ -311,13 +501,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const m = mid ? net.stationMeshById.get(mid) : undefined;
           if (m) spots.push(m.position.clone().setY(12));
         }
-        for (const p of spots) {
+        spots.forEach((p, si) => {
           const ring = new THREE.Mesh(new THREE.TorusGeometry(7, 1, 8, 32), markerMat(0xef4444));
           ring.rotation.x = -Math.PI / 2;
           ring.position.copy(p);
-          ring.userData.incidentMarker = true;
+          ring.userData = { kind: 'incident', id: inc.id, baseY: p.y, phase: si * 1.1 };
           incidentGroup.add(ring);
-        }
+        });
         // Replacement shuttle line between its endpoint stations.
         if (inc.replacementRouteId) {
           const rep = inc.replacement;
@@ -335,6 +525,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           }
         }
       }
+      refreshExtraPickables();
     };
 
     // Draft preview: route/road path + hover marker, rebuilt when draft changes.
@@ -372,6 +563,240 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       }
     };
 
+    const TONE_COLORS: Record<string, number> = {
+      warn: 0xfacc15, bad: 0xef4444, info: 0x6ea8fe, good: 0x34d399,
+    };
+    // Problem + change markers: pooled rings, rebuilt when marker identity changes.
+    const problemGroup = new THREE.Group();
+    problemGroup.name = 'problems';
+    scene.add(problemGroup);
+    const changeGroup = new THREE.Group();
+    changeGroup.name = 'changes';
+    scene.add(changeGroup);
+    const markerPos = new Map<string, THREE.Vector3>();
+    let lastMarkerKey = '';
+    const rebuildMarkers = () => {
+      const key = JSON.stringify([problemMarkersRef.current, changeMarkersRef.current]);
+      if (key === lastMarkerKey) return;
+      lastMarkerKey = key;
+      problemGroup.clear();
+      changeGroup.clear();
+      markerPos.clear();
+      let phase = 0;
+      const add = (group: THREE.Group, m: MapMarker) => {
+        const ring = new THREE.Mesh(
+          new THREE.TorusGeometry(6, 1, 8, 28),
+          new THREE.MeshBasicMaterial({ color: TONE_COLORS[m.tone] ?? 0xffffff, transparent: true, opacity: 0.9 }),
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(m.x, 11, m.z);
+        ring.userData = { kind: m.selKind, id: m.selId, baseY: 11, phase: phase++ * 0.9 };
+        group.add(ring);
+        markerPos.set(`${m.selKind}:${m.selId}`, ring.position);
+      };
+      for (const m of problemMarkersRef.current) add(problemGroup, m);
+      for (const m of changeMarkersRef.current) add(changeGroup, m);
+      refreshExtraPickables();
+    };
+    // Walking-catchment rings around the inspected station.
+    const catchmentGroup = new THREE.Group();
+    catchmentGroup.name = 'catchment';
+    scene.add(catchmentGroup);
+    let lastCatchKey = '';
+    const rebuildCatchment = () => {
+      const c = catchmentRef.current;
+      const key = c ? JSON.stringify(c) : '';
+      if (key === lastCatchKey) return;
+      lastCatchKey = key;
+      catchmentGroup.clear();
+      if (!c) return;
+      for (const r of c.radii) {
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(Math.max(1, r - 2), r, 72),
+          new THREE.MeshBasicMaterial({ color: 0x6ea8fe, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
+        );
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.set(c.x, 4.5, c.z);
+        catchmentGroup.add(ring);
+        const fill = new THREE.Mesh(
+          new THREE.CircleGeometry(r, 48),
+          new THREE.MeshBasicMaterial({ color: 0x6ea8fe, transparent: true, opacity: 0.05, side: THREE.DoubleSide }),
+        );
+        fill.rotation.x = -Math.PI / 2;
+        fill.position.set(c.x, 4.4, c.z);
+        catchmentGroup.add(fill);
+      }
+    };
+    // Measurement line + label.
+    const measureGroup = new THREE.Group();
+    measureGroup.name = 'measure';
+    scene.add(measureGroup);
+    const measureCanvas = document.createElement('canvas');
+    measureCanvas.width = 512;
+    measureCanvas.height = 96;
+    const measureTex = new THREE.CanvasTexture(measureCanvas);
+    const measureSprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: measureTex, transparent: true, depthTest: false }),
+    );
+    measureSprite.scale.set(64, 12, 1);
+    measureSprite.visible = false;
+    measureGroup.add(measureSprite);
+    let lastMeasureKey = '';
+    const drawMeasureLabel = (text: string, mx: number, mz: number) => {
+      const ctx = measureCanvas.getContext('2d');
+      if (!ctx) return;
+      ctx.clearRect(0, 0, 512, 96);
+      ctx.font = '600 40px system-ui, sans-serif';
+      const w = Math.min(500, ctx.measureText(text).width + 48);
+      ctx.fillStyle = 'rgba(11,16,32,0.92)';
+      ctx.strokeStyle = '#6ea8fe';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.roundRect((512 - w) / 2, 8, w, 80, 10);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#dbe4ff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, 256, 50);
+      measureTex.needsUpdate = true;
+      measureSprite.position.set(mx, 14, mz);
+      measureSprite.visible = true;
+    };
+    const rebuildMeasure = () => {
+      const m = measureRef.current;
+      const key = m ? JSON.stringify(m) : '';
+      if (key === lastMeasureKey) return;
+      lastMeasureKey = key;
+      // Clear previous line/dots but keep the reused label sprite.
+      for (let i = measureGroup.children.length - 1; i >= 0; i--) {
+        const child = measureGroup.children[i];
+        if (child !== measureSprite) measureGroup.remove(child);
+      }
+      measureSprite.visible = false;
+      if (!m || !m.a) return;
+      const end = m.b ?? m.hover;
+      const dot = (p: { x: number; z: number }, color: number) => {
+        const mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(2.4, 12, 12),
+          new THREE.MeshBasicMaterial({ color }),
+        );
+        mesh.position.set(p.x, 8, p.z);
+        measureGroup.add(mesh);
+      };
+      dot(m.a, 0x6ea8fe);
+      if (end) {
+        dot(end, m.b ? 0x34d399 : 0xfacc15);
+        const line = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(m.a.x, 8, m.a.z),
+            new THREE.Vector3(end.x, 8, end.z),
+          ]),
+          new THREE.LineBasicMaterial({ color: 0x6ea8fe }),
+        );
+        measureGroup.add(line);
+        drawMeasureLabel(m.label, (m.a.x + end.x) / 2, (m.a.z + end.z) / 2);
+      }
+    };
+    // Text labels: cached canvas sprites, tiered by camera distance.
+    const labelGroup = new THREE.Group();
+    labelGroup.name = 'labels';
+    scene.add(labelGroup);
+    const labelCache = new Map<string, THREE.Sprite>();
+    const getLabel = (text: string, accent: string): THREE.Sprite => {
+      const key = `${accent}|${text}`;
+      const hit = labelCache.get(key);
+      if (hit) return hit;
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.font = '600 30px system-ui, sans-serif';
+        const w = Math.min(248, ctx.measureText(text).width + 36);
+        ctx.fillStyle = 'rgba(11,16,32,0.88)';
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.roundRect((256 - w) / 2, 6, w, 52, 8);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#e8eefc';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 128, 33);
+      }
+      const tex = new THREE.CanvasTexture(canvas);
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+      sprite.scale.set(34, 8.5, 1);
+      labelCache.set(key, sprite);
+      return sprite;
+    };
+    interface LabelItem { text: string; accent: string; x: number; y: number; z: number; tier: 0 | 1 | 2; }
+    const labelItems: LabelItem[] = [];
+    {
+      const sim0 = simRef.current;
+      if (sim0) {
+        for (const r of sim0.routes) {
+          const mid = r.stationIds[Math.floor(r.stationIds.length / 2)];
+          const m = net.stationMeshById.get(mid);
+          if (m) labelItems.push({ text: r.name.split(' ')[0], accent: r.color, x: m.position.x, y: 20, z: m.position.z, tier: 0 });
+        }
+        for (const z of sim0.city.zones) {
+          labelItems.push({ text: z.name, accent: '#33436e', x: z.center.x, y: 5, z: z.center.z, tier: 0 });
+        }
+        for (const st of sim0.stations) {
+          if (st.routeIds.length > 1) {
+            labelItems.push({ text: st.name, accent: '#facc15', x: st.pos.x, y: 15, z: st.pos.z, tier: 1 });
+          }
+        }
+        for (const st of sim0.stations) {
+          labelItems.push({ text: st.name, accent: '#5f6f95', x: st.pos.x, y: 12, z: st.pos.z, tier: 2 });
+        }
+      }
+    }
+    const labelSprites: { sprite: THREE.Sprite; tier: 0 | 1 | 2 }[] = labelItems.map((it) => {
+      const sprite = getLabel(it.text, it.accent);
+      sprite.position.set(it.x, it.y, it.z);
+      labelGroup.add(sprite);
+      return { sprite, tier: it.tier };
+    });
+    // Direction cones along routes (selected route, or all in flow overlay).
+    const dirGroup = new THREE.Group();
+    dirGroup.name = 'directions';
+    scene.add(dirGroup);
+    const coneGeo = new THREE.ConeGeometry(2.4, 6, 10);
+    const coneMatByRoute = new Map<string, THREE.MeshBasicMaterial>();
+    const dirCones: { mesh: THREE.Mesh; routeId: string; t: number }[] = [];
+    {
+      const sim0 = simRef.current;
+      if (sim0) {
+        for (const r of sim0.routes) {
+          let mat = coneMatByRoute.get(r.id);
+          if (!mat) {
+            mat = new THREE.MeshBasicMaterial({ color: r.color });
+            coneMatByRoute.set(r.id, mat);
+          }
+          for (const t of [0.3, 0.55, 0.8]) {
+            const mesh = new THREE.Mesh(coneGeo, mat);
+            mesh.userData.routeId = r.id;
+            dirGroup.add(mesh);
+            dirCones.push({ mesh, routeId: r.id, t });
+          }
+        }
+      }
+    }
+    const conePos = new THREE.Vector3();
+    const coneTan = new THREE.Vector3();
+    const coneUp = new THREE.Vector3(0, 1, 0);
+    const refreshExtraPickables = () => {
+      extraPickables.length = 0;
+      for (const [, mesh] of rig.meshById) extraPickables.push(mesh);
+      for (const child of incidentGroup.children) extraPickables.push(child);
+      for (const child of problemGroup.children) extraPickables.push(child);
+      for (const child of changeGroup.children) extraPickables.push(child);
+    };
+
     const loadColor = new THREE.Color();
     const baseColor = new THREE.Color(0xcbd5e1);
     const hotColor = new THREE.Color(0xef4444);
@@ -380,17 +805,56 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     let raf = 0;
     let elapsed = 0;
     let lastFrame = performance.now();
+    let frame = 0;
+    // Smooth camera commands: eased glide, cancelled by user input.
+    let appliedCamSeq = 0;
+    let camAnim: { fp: THREE.Vector3; ft: THREE.Vector3; tp: THREE.Vector3; tt: THREE.Vector3; t0: number } | null = null;
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const cancelCamAnim = () => {
+      camAnim = null;
+    };
+    controls.addEventListener('start', cancelCamAnim);
+    let lastCamReport = 0;
+    const lastReported = new THREE.Vector3(1e9, 0, 0);
+    const lastReportedTarget = new THREE.Vector3(0, 0, 0);
     const animate = () => {
       raf = requestAnimationFrame(animate);
       const now = performance.now();
       elapsed += Math.min(0.1, (now - lastFrame) / 1000);
       lastFrame = now;
+      frame++;
+      // Camera commands from presets / focus / minimap / search.
+      const cmd = cameraCmdRef.current;
+      if (cmd && cmd.seq !== appliedCamSeq) {
+        appliedCamSeq = cmd.seq;
+        const tp = new THREE.Vector3(cmd.pose.pos[0], cmd.pose.pos[1], cmd.pose.pos[2]);
+        const tt = new THREE.Vector3(cmd.pose.target[0], cmd.pose.target[1], cmd.pose.target[2]);
+        if (reducedMotion) {
+          camera.position.copy(tp);
+          controls.target.copy(tt);
+          camAnim = null;
+        } else {
+          camAnim = { fp: camera.position.clone(), ft: controls.target.clone(), tp, tt, t0: now };
+        }
+      }
+      if (camAnim) {
+        const k = Math.min(1, (now - camAnim.t0) / 650);
+        const e = k * k * (3 - 2 * k);
+        camera.position.lerpVectors(camAnim.fp, camAnim.tp, e);
+        controls.target.lerpVectors(camAnim.ft, camAnim.tt, e);
+        if (k >= 1) camAnim = null;
+      }
       const cur = simRef.current;
       if (cur) {
         syncVehicleMeshes(rig, cur.vehicles, cur.routes, cur.stations);
         updateVehicles(rig, cur.vehicles);
         updateCarRig(carRig, cur.cars, edgeLen);
         rebuildDraft();
+        rebuildMarkers();
+        rebuildCatchment();
+        rebuildMeasure();
+        // Vehicle meshes come and go with the fleet; keep picking fresh.
+        if (frame % 60 === 0) refreshExtraPickables();
         const ov = overlayRef.current;
         const highlighted = new Set(highlightRef.current);
         const av = analyticsRef.current;
@@ -604,11 +1068,84 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
               sc = Math.max(sc, 1 + Math.min(1, score / 100) * 0.4);
             }
           }
+          const selStation = selectionRef.current;
+          if (selStation?.kind === 'station' && id === selStation.id) {
+            sc = Math.max(sc, 1.5);
+            mat.emissive.setHex(0xfacc15);
+            mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 0.9);
+          }
           mesh.scale.set(sc, 1, sc);
         }
+        // Selection emphasis: the selected route glows while others dim (§31 —
+        // at any moment it must be obvious what is selected).
+        const sel = selectionRef.current;
+        if (sel?.kind === 'route') {
+          for (const [id, mesh] of net.routeMeshById) {
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            if (id === sel.id) {
+              mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 1.6);
+            } else {
+              mat.color.multiplyScalar(0.5);
+            }
+          }
+        }
+        if (sel?.kind === 'road') {
+          const mesh = city.roadMeshById.get(sel.id);
+          if (mesh) {
+            const mat = mesh.material as THREE.MeshStandardMaterial;
+            mat.emissive.setHex(0xfacc15);
+            mat.emissiveIntensity = 0.9;
+          }
+        }
+        // Problem + incident markers bob; the selected one pulses larger.
+        for (const group of [incidentGroup, problemGroup, changeGroup]) {
+          for (const child of group.children) {
+            const mesh = child as THREE.Mesh;
+            const ud = mesh.userData as { baseY?: number; phase?: number; kind?: string; id?: string };
+            if (ud.baseY !== undefined) {
+              mesh.position.y = ud.baseY + Math.sin(elapsed * 2 + (ud.phase ?? 0)) * 1.2;
+            }
+            const isSel =
+              (sel?.kind === 'incident' && ud.kind === 'incident' && ud.id === sel.id) ||
+              (sel?.kind === 'problem' && ud.kind === 'problem' && ud.id === sel.id);
+            const s = isSel ? 1.4 + 0.15 * Math.sin(elapsed * 5) : 1;
+            mesh.scale.set(s, s, s);
+          }
+        }
+        // Direction cones: selected route always, all routes in flow overlay.
+        {
+          const showAll = overlayRef.current === 'flow';
+          const selRoute = sel?.kind === 'route' ? sel.id : null;
+          for (const c of dirCones) {
+            const visible = c.routeId === selRoute || (showAll && c.routeId !== selRoute);
+            c.mesh.visible = visible;
+            if (!visible) continue;
+            const seg = rig.segmentsByRoute.get(c.routeId);
+            const curve = seg?.curve;
+            if (!curve) {
+              c.mesh.visible = false;
+              continue;
+            }
+            curve.getPointAt(c.t, conePos);
+            curve.getTangentAt(c.t, coneTan);
+            conePos.y += 3;
+            c.mesh.position.copy(conePos);
+            c.mesh.quaternion.setFromUnitVectors(coneUp, coneTan.clone().setY(0).normalize());
+          }
+        }
+        // Label tiers by camera distance: routes + districts far, interchanges
+        // mid-range, every station close. Never thousands of DOM nodes — these
+        // are pooled sprites (perf §32).
+        {
+          const dist = camera.position.distanceTo(controls.target);
+          const tier = dist > 650 ? 0 : dist > 300 ? 1 : 2;
+          for (const l of labelSprites) l.sprite.visible = l.tier <= tier;
+          labelGroup.visible = layersRef.current.labels;
+        }
+        problemGroup.visible = layersRef.current.problems;
+        rig.group.visible = layersRef.current.vehicles;
         // Incident markers follow the active incident set.
         rebuildIncidentMarkers(cur.closureSig);
-        const sel = selectionRef.current;
         if (sel && (sel.kind === 'station' || sel.kind === 'zone')) {
           const st = byId.get(sel.id);
           const zone = cur.city.zones.find((z) => z.id === sel.id);
@@ -626,6 +1163,18 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             selRing.visible = true;
             selRing.position.set((a.x + b.x) / 2, 6, (a.z + b.z) / 2);
           } else selRing.visible = false;
+        } else if (sel && sel.kind === 'vehicle') {
+          const mesh = rig.meshById.get(sel.id);
+          if (mesh) {
+            selRing.visible = true;
+            selRing.position.set(mesh.position.x, mesh.position.y + 1, mesh.position.z);
+          } else selRing.visible = false;
+        } else if (sel && (sel.kind === 'incident' || sel.kind === 'problem')) {
+          const at = markerPos.get(`${sel.kind}:${sel.id}`);
+          if (at) {
+            selRing.visible = true;
+            selRing.position.set(at.x, at.y, at.z);
+          } else selRing.visible = false;
         } else selRing.visible = false;
         const L = layersRef.current;
         net.byMode.metro.visible = L.metro;
@@ -633,6 +1182,19 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         net.byMode.bus.visible = L.bus;
         city.roads.visible = L.roads;
         city.buildings.visible = L.buildings;
+      }
+      const reportCb = onCameraRef.current;
+      if (reportCb && now - lastCamReport > 250) {
+        if (camera.position.distanceTo(lastReported) > 1 || controls.target.distanceTo(lastReportedTarget) > 1) {
+          lastCamReport = now;
+          lastReported.copy(camera.position);
+          lastReportedTarget.copy(controls.target);
+          reportCb({
+            pos: [camera.position.x, camera.position.y, camera.position.z],
+            target: [controls.target.x, controls.target.y, controls.target.z],
+            dist: camera.position.distanceTo(controls.target),
+          });
+        }
       }
       controls.update();
       renderer.render(scene, camera);
@@ -644,6 +1206,9 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('click', handleClick);
       renderer.domElement.removeEventListener('mousemove', handleHover);
+      renderer.domElement.removeEventListener('mouseleave', handleLeave);
+      renderer.domElement.removeEventListener('contextmenu', handleContext);
+      controls.removeEventListener('start', cancelCamAnim);
       controls.dispose();
       scene.traverse((o) => {
         const mesh = o as THREE.Mesh;

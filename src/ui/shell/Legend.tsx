@@ -87,15 +87,45 @@ const LEGENDS: Partial<Record<Overlay, Entry>> = {
   },
 };
 
-export default function Legend({ overlay, demandLayer }: { overlay: Overlay; demandLayer: string }) {
+export interface LegendExtras {
+  problems: boolean;
+  catchment: boolean;
+  measure: boolean;
+  changes: boolean;
+  split: boolean;
+}
+
+export default function Legend({ overlay, demandLayer, extras }: {
+  overlay: Overlay;
+  demandLayer: string;
+  extras?: Partial<LegendExtras>;
+}) {
   const entry = LEGENDS[overlay];
-  if (!entry) return null;
+  const extraRows: { color: string; label: string }[] = [];
+  if (extras?.problems) {
+    extraRows.push(
+      { color: '#ef4444', label: 'Severe problem' },
+      { color: '#facc15', label: 'Watch / single point of failure' },
+      { color: '#6ea8fe', label: 'Access / growth pressure' },
+    );
+  }
+  if (extras?.catchment) extraRows.push({ color: '#6ea8fe', label: 'Walking catchment' });
+  if (extras?.measure) extraRows.push({ color: '#6ea8fe', label: 'Measured distance' });
+  if (extras?.changes) {
+    extraRows.push(
+      { color: '#34d399', label: 'Added infrastructure' },
+      { color: '#ef4444', label: 'Removed infrastructure' },
+      { color: '#6ea8fe', label: 'Service / fare change' },
+    );
+  }
+  if (extras?.split) extraRows.push({ color: 'var(--signal)', label: 'Left: baseline · right: scenario' });
+  if (!entry && extraRows.length === 0) return null;
   const title =
-    overlay === 'demand' ? `Demand — ${demandLayer}` : entry.title;
+    overlay === 'demand' ? `Demand — ${demandLayer}` : (entry?.title ?? 'Map');
   return (
     <div className="tf-legend">
       <h4>{title}</h4>
-      {entry.kind === 'ramp' ? (
+      {entry && entry.kind === 'ramp' ? (
         <>
           <div className="tf-ramp" style={{ backgroundImage: entry.gradient }} />
           <div className="tf-ramp-labels">
@@ -104,9 +134,19 @@ export default function Legend({ overlay, demandLayer }: { overlay: Overlay; dem
           </div>
           {entry.note && <div className="tf-ramp-labels"><span>{entry.note}</span></div>}
         </>
-      ) : (
+      ) : entry ? (
         <div className="tf-legend-rows">
           {entry.rows.map((r) => (
+            <div className="tf-legend-row" key={r.label}>
+              <span className="tf-swatch" style={{ background: r.color }} />
+              <span>{r.label}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {extraRows.length > 0 && (
+        <div className="tf-legend-rows">
+          {extraRows.map((r) => (
             <div className="tf-legend-row" key={r.label}>
               <span className="tf-swatch" style={{ background: r.color }} />
               <span>{r.label}</span>

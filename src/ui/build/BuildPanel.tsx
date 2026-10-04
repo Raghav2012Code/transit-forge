@@ -45,7 +45,7 @@ export default function BuildPanel(p: Props) {
   return (
     <div className="tf-build">
       <h3>Build</h3>
-      <div className="tf-tool-grid" role="group" aria-label="Build tools">
+      <div className="tf-tool-grid" role="group" aria-label="Build tools" data-tour="build-tools">
         {TOOLS.map((t) => (
           <button
             key={t.key}

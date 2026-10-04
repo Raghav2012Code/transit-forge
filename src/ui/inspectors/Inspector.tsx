@@ -1,7 +1,8 @@
-import type { Selection } from '../../rendering/SceneView.tsx';
+import type { Overlay, Selection } from '../../rendering/SceneView.tsx';
 import type { SimulationState } from '../../simulation/index.ts';
 import { formatClock } from '../../simulation/index.ts';
 import { stationCatchment } from '../../simulation/analytics/catchment.ts';
+import type { CityProblem } from '../../simulation/planning/problems.ts';
 import { LOOP_ROUTES } from '../../simulation/passengers/passengers.ts';
 import { nextArrivalMin, nextTerminusDeparture, routeEffectiveHeadway } from '../../simulation/service/timetable.ts';
 
@@ -79,14 +80,127 @@ interface Props {
   selection: Selection | null;
   sim: SimulationState;
   onClose: () => void;
+  problems: CityProblem[];
+  onFocusStation: (id: string) => void;
+  onInvestigate: (target: { kind: 'station' | 'route' | 'road' | 'zone'; id: string }) => void;
+  onOverlay: (o: Overlay) => void;
+  onOpenDisrupt: () => void;
+  catchmentRadius: number | null;
+  onCatchmentRadius: (r: number | null) => void;
+  zoneCoverage?: number;
+  zoneTravel?: number | null;
 }
 
-export default function Inspector({ selection, sim, onClose }: Props) {
+function roadLabel(sim: SimulationState, id: string): string {
+  const edge = sim.city.roadEdges.find((e) => e.id === id);
+  if (!edge) return id;
+  return `${edge.isBridge ? 'Bridge' : edge.isArterial ? 'Arterial' : 'Local'} ${edge.a.replace(/^rn-/, '').toUpperCase()}–${edge.b.replace(/^rn-/, '').toUpperCase()}`;
+}
+
+function targetName(sim: SimulationState, target: CityProblem['target']): string {
+  if (!target) return 'across the network';
+  if (target.kind === 'station') return sim.stations.find((s) => s.id === target.id)?.name ?? target.id;
+  if (target.kind === 'route') return sim.routes.find((r) => r.id === target.id)?.name ?? target.id;
+  if (target.kind === 'zone') return sim.city.zones.find((z) => z.id === target.id)?.name ?? target.id;
+  return roadLabel(sim, target.id);
+}
+
+const CATCHMENT_RADII = [400, 800, 1200];
+
+export default function Inspector({ selection, sim, onClose, problems, onFocusStation, onInvestigate, onOverlay, onOpenDisrupt, catchmentRadius, onCatchmentRadius, zoneCoverage, zoneTravel }: Props) {
   if (!selection) {
     return (
       <div className="tf-inspector">
         <h3>Inspector</h3>
-        <p className="tf-hint">Click a station, route, or district in the 3D view.</p>
+        <p className="tf-hint">Click a station, route, vehicle, or district in the 3D view.</p>
+      </div>
+    );
+  }
+
+  if (selection.kind === 'problem') {
+    const problem = problems.find((p) => p.id === selection.id);
+    if (!problem) return null;
+    return (
+      <div className="tf-inspector">
+        <div className="tf-inspector-head">
+          <h3>{problem.title}</h3>
+          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+        </div>
+        <p className="tf-hint">Planning problem · severity {Math.round(problem.severity)}/100</p>
+        <dl>
+          {problem.metrics.map(([k, v]) => (
+            <div className="tf-stat-row" key={k}><dt>{k}</dt><dd>{v}</dd></div>
+          ))}
+          <div className="tf-stat-row"><dt>Affected</dt><dd>{targetName(sim, problem.target)}</dd></div>
+        </dl>
+        <p className="tf-hint">Why this matters</p>
+        <ul className="tf-ranked">
+          {problem.why.map((w, i) => <li key={i}>{w}</li>)}
+        </ul>
+        <p className="tf-hint">Possible interventions (rule-based, not AI)</p>
+        <ul className="tf-ranked">
+          {problem.interventions.map((w, i) => <li key={i}>{w}</li>)}
+        </ul>
+        {problem.target && (
+          <div className="tf-draft-actions">
+            <button type="button" className="tf-btn small primary" onClick={() => onInvestigate(problem.target as { kind: 'station' | 'route' | 'road' | 'zone'; id: string })}>
+              Investigate
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (selection.kind === 'vehicle') {
+    const vv = sim.vehicles.find((v) => v.id === selection.id);
+    if (!vv) return null;
+    const route = sim.routes.find((r) => r.id === vv.routeId);
+    const pct = Math.round((vv.load / Math.max(1, vv.capacity)) * 100);
+    return (
+      <div className="tf-inspector">
+        <div className="tf-inspector-head">
+          <h3>{route?.name ?? vv.routeId}</h3>
+          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+        </div>
+        <p className="tf-hint">Vehicle · {vv.dwellLeft > 0 ? 'dwelling at station' : 'moving'}</p>
+        <dl>
+          <div className="tf-stat-row"><dt>Load</dt><dd>{vv.load} / {vv.capacity} ({pct}%)</dd></div>
+          <div className="tf-stat-row"><dt>Completed trips</dt><dd>{vv.trips}</dd></div>
+        </dl>
+        {route && (
+          <div className="tf-draft-actions">
+            <button type="button" className="tf-btn small" onClick={() => onInvestigate({ kind: 'route', id: route.id })}>
+              Show route
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (selection.kind === 'incident') {
+    const inc = sim.incidents.find((i) => i.id === selection.id);
+    if (!inc) return null;
+    const left = Math.max(0, Math.round(inc.startMin + inc.durationMin - sim.timeMinutes));
+    return (
+      <div className="tf-inspector">
+        <div className="tf-inspector-head">
+          <h3>{inc.label}</h3>
+          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+        </div>
+        <p className="tf-hint">Disruption · {inc.status}</p>
+        <dl>
+          <div className="tf-stat-row"><dt>Kind</dt><dd>{inc.kind}</dd></div>
+          {inc.status === 'active' && <div className="tf-stat-row"><dt>Remaining</dt><dd>~{left} min</dd></div>}
+          <div className="tf-stat-row"><dt>Rerouted</dt><dd>{inc.result?.rerouted.toLocaleString() ?? '—'}</dd></div>
+          {inc.replacementRouteId && <div className="tf-stat-row"><dt>Replacement</dt><dd>running</dd></div>}
+        </dl>
+        <div className="tf-draft-actions">
+          <button type="button" className="tf-btn small primary" onClick={onOpenDisrupt}>
+            Manage in Disrupt mode
+          </button>
+        </div>
       </div>
     );
   }
@@ -96,7 +210,7 @@ export default function Inspector({ selection, sim, onClose }: Props) {
     if (!st) return null;
     const routes = sim.routes.filter((r) => st.routeIds.includes(r.id));
     const interchange = st.routeIds.length > 1;
-    const catchment = stationCatchment(st, sim.city.zones, 800);
+    const catchment = stationCatchment(st, sim.city.zones, catchmentRadius ?? 800);
     return (
       <div className="tf-inspector">
         <div className="tf-inspector-head">
@@ -117,11 +231,24 @@ export default function Inspector({ selection, sim, onClose }: Props) {
           <div className="tf-stat-row"><dt>Alighted</dt><dd>{Math.round(st.alightedDay).toLocaleString()}</dd></div>
           <div className="tf-stat-row"><dt>Transfers</dt><dd>{Math.round(st.transfersDay).toLocaleString()}</dd></div>
         </dl>
-        <p className="tf-hint">Catchment (800m)</p>
+        <p className="tf-hint">Walking catchment</p>
+        <div className="tf-speeds" role="group" aria-label="Catchment radius">
+          {CATCHMENT_RADII.map((r) => (
+            <button
+              key={r}
+              type="button"
+              className={`tf-btn small${catchmentRadius === r ? ' active' : ''}`}
+              onClick={() => onCatchmentRadius(catchmentRadius === r ? null : r)}
+            >
+              {r}m
+            </button>
+          ))}
+        </div>
         <dl>
           <div className="tf-stat-row"><dt>Population</dt><dd>{catchment.population.toLocaleString()}</dd></div>
           <div className="tf-stat-row"><dt>Employment</dt><dd>{catchment.jobs.toLocaleString()}</dd></div>
           <div className="tf-stat-row"><dt>Utilization</dt><dd>{Math.round(catchment.utilization01 * 100)}%</dd></div>
+          <div className="tf-stat-row"><dt>Trips served</dt><dd>{Math.round(st.boardedDay).toLocaleString()}</dd></div>
         </dl>
         <StationDepartures sim={sim} stationId={st.id} />
       </div>
@@ -182,6 +309,19 @@ export default function Inspector({ selection, sim, onClose }: Props) {
             </dl>
           </>
         )}
+        <p className="tf-hint">Stops ({r.stationIds.length}) — click a stop to focus it</p>
+        <ol className="tf-stops">
+          {r.stationIds.map((sid) => {
+            const st = sim.stations.find((s) => s.id === sid);
+            return (
+              <li key={sid}>
+                <button type="button" className="tf-link" onClick={() => onFocusStation(sid)}>
+                  {st?.name ?? sid}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
       </div>
     );
   }
@@ -206,7 +346,15 @@ export default function Inspector({ selection, sim, onClose }: Props) {
           <div className="tf-stat-row"><dt>Attractiveness</dt><dd>{z.attractiveness.toFixed(0)}/100</dd></div>
           <div className="tf-stat-row"><dt>Pop. growth</dt><dd>{(z.popGrowthRate * 100).toFixed(1)}%/yr</dd></div>
           <div className="tf-stat-row"><dt>Job growth</dt><dd>{(z.jobGrowthRate * 100).toFixed(1)}%/yr</dd></div>
+          {zoneCoverage !== undefined && <div className="tf-stat-row"><dt>Transit coverage</dt><dd>{zoneCoverage}%</dd></div>}
+          {zoneTravel !== undefined && <div className="tf-stat-row"><dt>CBD travel</dt><dd>{zoneTravel === null ? 'unreachable' : `${Math.round(zoneTravel)} min`}</dd></div>}
         </dl>
+        <div className="tf-speeds" role="group" aria-label="District overlays">
+          <button type="button" className="tf-btn small" onClick={() => onOverlay('demand')}>Demand</button>
+          <button type="button" className="tf-btn small" onClick={() => onOverlay('accessibility')}>Access</button>
+          <button type="button" className="tf-btn small" onClick={() => onOverlay('growth')}>Growth</button>
+          <button type="button" className="tf-btn small" onClick={() => onOverlay('coverage')}>Coverage</button>
+        </div>
       </div>
     );
   }

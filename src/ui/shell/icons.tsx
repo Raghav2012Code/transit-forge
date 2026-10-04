@@ -100,6 +100,18 @@ export const IconInfo = (p: IconProps) => (
   <Svg {...p}><circle cx="8" cy="8" r="6.2" /><path d="M8 7.2v4M8 4.9v.1" /></Svg>
 );
 
+export const IconSearch = (p: IconProps) => (
+  <Svg {...p}><circle cx="7" cy="7" r="4.2" /><path d="M10.2 10.2 14 14" /></Svg>
+);
+
+export const IconMeasure = (p: IconProps) => (
+  <Svg {...p}><path d="M2.5 13.5 13.5 2.5" /><path d="M5.5 12.5l1.5 1.5M8 10l1.5 1.5M10.5 7.5 12 9M3.5 10.5l1 1" /></Svg>
+);
+
+export const IconInspect = (p: IconProps) => (
+  <Svg {...p}><path d="M1.8 8S4 4.2 8 4.2 14.2 8 14.2 8 12 11.8 8 11.8 1.8 8 1.8 8Z" /><circle cx="8" cy="8" r="1.8" /></Svg>
+);
+
 export const IconCheck = (p: IconProps) => (
   <Svg {...p}><path d="M3 8.4 6.4 11.8 13 4.6" /></Svg>
 );

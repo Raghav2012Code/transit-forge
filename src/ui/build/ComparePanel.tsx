@@ -22,9 +22,11 @@ interface Props {
   hasEdits: boolean;
   horizonYears: number;
   onHorizon: (y: number) => void;
+  splitView: boolean;
+  onSplitView: (v: boolean) => void;
 }
 
-export default function ComparePanel({ result, running, progress, onRun, viewing, onView, hasEdits, horizonYears, onHorizon }: Props) {
+export default function ComparePanel({ result, running, progress, onRun, viewing, onView, hasEdits, horizonYears, onHorizon, splitView, onSplitView }: Props) {
   return (
     <div className="tf-compare">
       <h3>Scenario compare</h3>
@@ -58,6 +60,15 @@ export default function ComparePanel({ result, running, progress, onRun, viewing
       </div>
       <button type="button" className="tf-btn small primary" disabled={!hasEdits || running} onClick={() => onRun(horizonYears)}>
         {running ? `Running… ${progress}` : horizonYears === 0 ? 'Run comparison' : `Run ${horizonYears}y comparison`}
+      </button>
+      <button
+        type="button"
+        className={`tf-btn small${splitView ? ' active' : ''}`}
+        disabled={!hasEdits}
+        title="Side-by-side baseline vs scenario viewports, one shared camera"
+        onClick={() => onSplitView(!splitView)}
+      >
+        {splitView ? 'Exit split view' : 'Split view: baseline | scenario'}
       </button>
       {result && (
         <>

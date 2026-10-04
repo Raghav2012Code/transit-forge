@@ -105,7 +105,7 @@ function Seg<T extends string>({
 
 export default function OverlaySwitch({ overlay, onChange, travelDest, onTravelDest, coverageThreshold, onCoverageThreshold, demandLayer, onDemandLayer }: Props) {
   return (
-    <div className="tf-layers">
+    <div className="tf-layers" data-tour="overlays">
       <h3>Overlay</h3>
       {GROUPS.map((g) => (
         <Seg key={g.title} label={g.title} items={g.items} active={overlay} onPick={onChange} />

@@ -372,7 +372,8 @@ export default function PlanningPanel(p: Props) {
       <Dock title="Shortcuts" defaultOpen={false}>
         <p className="tf-hint">
           Space play/pause · 1/2/3 speed · B build · D disrupt · A analytics · P plan ·
-          [ panel · Esc simulate · R reset
+          [ panel · Esc simulate · R reset · I inspect · / search · F focus · 0 overview ·
+          Ctrl+Z / Ctrl+Shift+Z undo/redo
         </p>
       </Dock>
     </>

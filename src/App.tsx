@@ -90,8 +90,21 @@ import ServicePanel from './ui/service/ServicePanel.tsx';
 import ModeSwitch, { type AppMode as Mode } from './ui/shell/ModeSwitch.tsx';
 import StatusBar from './ui/shell/StatusBar.tsx';
 import Legend from './ui/shell/Legend.tsx';
+import { APP_VERSION } from './version.ts';
+import { cameraPreset, poseFor, type PresetId, type TiltName, type CameraCmd } from './rendering/map/camera.ts';
+import { buildSearchIndex, type SearchEntry } from './rendering/map/searchIndex.ts';
+import { changeMarkers, problemMarkers, type MapMarker } from './rendering/map/markers.ts';
+import { formatDistance, snapStation, straightDistance } from './rendering/map/measure.ts';
+import { loadLayers, saveLayers } from './rendering/map/layerPrefs.ts';
+import { findShortestPath } from './simulation/transport/graph.ts';
+import NavWidget from './ui/map/NavWidget.tsx';
+import Minimap from './ui/map/Minimap.tsx';
+import { ContextMenu, HoverTooltip, type ContextAction } from './ui/map/MapChrome.tsx';
+import SearchPalette from './ui/map/SearchPalette.tsx';
+import CompareSplit from './ui/map/CompareSplit.tsx';
+import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './rendering/SceneView.tsx';
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
-import { IconClose, IconPlan } from './ui/shell/icons.tsx';
+import { IconClose, IconInspect, IconMeasure, IconPlan, IconSearch } from './ui/shell/icons.tsx';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
 import { headwayAt } from './simulation/service/servicePlan.ts';
 import { LOOP_ROUTES } from './simulation/passengers/passengers.ts';
@@ -126,7 +139,12 @@ export default function App() {
   const simRef = useRef<SimulationState>(snapshot);
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState<Speed>(1);
-  const [layers, setLayers] = useState<Layers>({ metro: true, rail: true, bus: true, roads: true, buildings: true });
+  const [layers, setLayers] = useState<Layers>(() => loadLayers());
+  // Layer preferences persist across sessions (map state, not sim state).
+  function onLayers(next: Layers) {
+    setLayers(next);
+    saveLayers(next);
+  }
   const [overlay, setOverlay] = useState<Overlay>('normal');
   const [selection, setSelection] = useState<Selection | null>(null);
   const [travelDest, setTravelDest] = useState<TravelDest>('cbd');
@@ -203,6 +221,34 @@ export default function App() {
   const toastSeq = useRef(1);
   const [railOpen, setRailOpen] = useState(true);
 
+  function pushToast(level: Toast['level'], text: string) {
+    const id = toastSeq.current++;
+    setToasts((t) => [{ id, level, text, time: formatClock(simRef.current.timeMinutes) }, ...t].slice(0, MAX_TOASTS));
+    window.setTimeout(() => {
+      setToasts((t) => t.filter((x) => x.id !== id));
+    }, TOAST_TTL_MS);
+  }
+
+  // ---- interactive map state (§3–§30) ----
+  const camSeq = useRef(1);
+  const [cameraCmd, setCameraCmd] = useState<CameraCmd | null>(null);
+  const [camInfo, setCamInfo] = useState<CameraInfo | null>(null);
+  const [tilt, setTilt] = useState<TiltName>('perspective');
+  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; title: string; actions: ContextAction[] } | null>(null);
+  const [catchmentRadius, setCatchmentRadius] = useState<number | null>(null);
+  const [measureTool, setMeasureTool] = useState(false);
+  const [measure, setMeasure] = useState<{ a: { x: number; z: number }; b: { x: number; z: number } | null } | null>(null);
+  const [measureHover, setMeasureHover] = useState<{ x: number; z: number } | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [inspectMode, setInspectMode] = useState(false);
+  const [splitView, setSplitView] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
+
+  function requestCameraPose(pos: [number, number, number], target: [number, number, number]) {
+    setCameraCmd({ seq: camSeq.current++, pose: { pos, target } });
+  }
+
   // Simulation loop: fixed 1-minute steps, decoupled from render rate.
   useEffect(() => {
     let raf = 0;
@@ -262,11 +308,26 @@ export default function App() {
     ];
   }, [playing, selection, overlay, mode, ops, snapshot, compareResult]);
 
-  // Keyboard shortcuts (ignored while typing).
+  // Keyboard shortcuts (ignored while typing; native undo kept in inputs).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA');
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && (e.key === 'z' || e.key === 'Z')) {
+        if (typing) return;
+        e.preventDefault();
+        if (e.shiftKey) doRedo();
+        else doUndo();
+        return;
+      }
+      if (mod && (e.key === 'y' || e.key === 'Y')) {
+        if (typing) return;
+        e.preventDefault();
+        doRedo();
+        return;
+      }
+      if (typing) return;
       if (e.key === ' ') {
         e.preventDefault();
         if (mode !== 'simulate') {
@@ -287,12 +348,28 @@ export default function App() {
       } else if (e.key === 'p' || e.key === 'P') {
         if (mode === 'plan') enterSimulate();
         else enterPlan();
+      } else if (e.key === 'i' || e.key === 'I') {
+        setInspectMode((v) => !v);
+      } else if (e.key === '/') {
+        e.preventDefault();
+        setSearchOpen(true);
+      } else if (e.key === 'f' || e.key === 'F') {
+        focusSelection();
+      } else if (e.key === '0' || e.key === 'Home') {
+        resetCamera();
       } else if (e.key === '[') {
         setRailOpen((r) => !r);
       } else if (e.key === ']') {
         if (!railOpen) setRailOpen(true);
       } else if (e.key === 'Escape') {
-        enterSimulate();
+        if (contextMenu) setContextMenu(null);
+        else if (searchOpen) setSearchOpen(false);
+        else if (measureTool) {
+          setMeasureTool(false);
+          setMeasure(null);
+          setMeasureHover(null);
+        } else if (inspectMode) setInspectMode(false);
+        else enterSimulate();
       } else if (e.key === 'r' || e.key === 'R') {
         resetAll();
       }
@@ -420,6 +497,114 @@ export default function App() {
     }),
     [bottlenecks, gaps, snapshot, critical],
   );
+  // ---- map anchors, markers, search (§7–§23, all derived, never stored) ----
+  const mapAnchors = useMemo(() => {
+    const stations = new Map(snapshot.stations.map((s) => [s.id, { x: s.pos.x, z: s.pos.z }]));
+    const zones = new Map(snapshot.city.zones.map((z) => [z.id, { x: z.center.x, z: z.center.z }]));
+    const routeMid = new Map<string, { x: number; z: number }>();
+    for (const r of snapshot.routes) {
+      const mid = r.stationIds[Math.floor(r.stationIds.length / 2)];
+      const p = mid ? stations.get(mid) : undefined;
+      if (p) routeMid.set(r.id, p);
+    }
+    const nodeById = new Map(snapshot.city.roadNodes.map((n) => [n.id, n.pos]));
+    const roadMid = new Map<string, { x: number; z: number }>();
+    for (const e of snapshot.city.roadEdges) {
+      const a = nodeById.get(e.a);
+      const b = nodeById.get(e.b);
+      if (a && b) roadMid.set(e.id, { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+    }
+    let cx = 0;
+    let cz = 0;
+    for (const z of snapshot.city.zones) {
+      cx += z.center.x;
+      cz += z.center.z;
+    }
+    const n = Math.max(1, snapshot.city.zones.length);
+    return { stations, zones, routeMid, roadMid, centroid: { x: cx / n, z: cz / n } };
+  }, [snapshot]);
+  const gapCoords = useMemo(() => {
+    const m = new Map<string, { x: number; z: number }>();
+    for (const g of gaps) m.set(`gap-${g.x}-${g.z}`, { x: g.x, z: g.z });
+    return m;
+  }, [gaps]);
+  const problemMarkerList: MapMarker[] = useMemo(
+    () => (mode === 'plan' && layers.problems ? problemMarkers(problems, mapAnchors, gapCoords) : []),
+    [mode, layers.problems, problems, mapAnchors, gapCoords],
+  );
+  const changeMarkerList: MapMarker[] = useMemo(
+    () =>
+      ops.length === 0
+        ? []
+        : changeMarkers(ops, mapAnchors, (id) => snapshot.routes.find((r) => r.id === id)?.name ?? baseNet.routes.find((r) => r.id === id)?.name ?? id).slice(0, 24),
+    [ops, mapAnchors, snapshot.routes, baseNet],
+  );
+  const searchEntries: SearchEntry[] = useMemo(() => {
+    const entries: SearchEntry[] = snapshot.stations.map((s) => ({
+      kind: 'station' as const,
+      id: s.id,
+      name: s.name,
+      typeLabel: s.routeIds.length > 1 ? 'Interchange station' : 'Station',
+      metric: `${Math.round(s.boardedDay).toLocaleString()} boarded`,
+      x: s.pos.x,
+      z: s.pos.z,
+    }));
+    for (const r of snapshot.routes) {
+      const mid = mapAnchors.routeMid.get(r.id);
+      entries.push({
+        kind: 'route' as const,
+        id: r.id,
+        name: r.name,
+        typeLabel: `${r.mode} line`,
+        metric: `${r.stationIds.length} stops · ${Math.round(snapshot.counters.routeBoardings[r.id] ?? 0).toLocaleString()} boardings`,
+        x: mid?.x ?? 0,
+        z: mid?.z ?? 0,
+      });
+    }
+    for (const z of snapshot.city.zones) {
+      entries.push({
+        kind: 'district' as const,
+        id: z.id,
+        name: z.name,
+        typeLabel: `District · ${z.kind}`,
+        metric: `${z.population.toLocaleString()} residents`,
+        x: z.center.x,
+        z: z.center.z,
+      });
+    }
+    const nodeById = new Map(snapshot.city.roadNodes.map((nn) => [nn.id, nn.pos]));
+    for (const e of snapshot.city.roadEdges) {
+      const a = nodeById.get(e.a);
+      const b = nodeById.get(e.b);
+      if (!a || !b) continue;
+      const st = snapshot.edgeState[e.id];
+      entries.push({
+        kind: 'road' as const,
+        id: e.id,
+        name: `${e.isBridge ? 'Bridge' : e.isArterial ? 'Arterial' : 'Local'} ${e.a.replace(/^rn-/, '').toUpperCase()}–${e.b.replace(/^rn-/, '').toUpperCase()}`,
+        typeLabel: `Road · ${e.lanes} lanes`,
+        metric: st ? `V/C ${Math.round(st.vc * 100) / 100}` : '',
+        x: (a.x + b.x) / 2,
+        z: (a.z + b.z) / 2,
+      });
+    }
+    return buildSearchIndex(entries);
+  }, [snapshot, mapAnchors]);
+  const catchmentView: CatchmentView | null = useMemo(() => {
+    if (catchmentRadius === null || selection?.kind !== 'station') return null;
+    const st = snapshot.stations.find((s) => s.id === selection.id);
+    return st ? { x: st.pos.x, z: st.pos.z, radii: [catchmentRadius] } : null;
+  }, [catchmentRadius, selection, snapshot]);
+  const measureView: MeasureView | null = useMemo(() => {
+    if (!measureTool) return null;
+    if (!measure) return { a: null, b: null, hover: null, label: 'Click a start point on the map (Esc cancels)' };
+    const end = measure.b ?? measureHover;
+    const label = end
+      ? formatDistance(straightDistance({ a: measure.a, b: end }))
+      : 'Click to set the second point (Esc cancels)';
+    return { a: measure.a, b: measure.b, hover: measure.b ? null : (measureHover ?? null), label };
+  }, [measureTool, measure, measureHover]);
+
   const recCtx: RecContext = useMemo(() => {
     const headway: Record<string, number> = {};
     for (const r of snapshot.routes) {
@@ -1123,6 +1308,307 @@ export default function App() {
     setNetworkKey((k) => k + 1);
   }
 
+  // ---- interactive map: camera, focus, search (§3–§5, §29) ----
+  function presetInput() {
+    return {
+      zones: snapshot.city.zones.map((z) => ({ id: z.id, kind: z.kind, center: { x: z.center.x, z: z.center.z }, radius: z.radius })),
+      central: (() => {
+        const st = snapshot.stations.find((s) => s.id === 'st-central');
+        return st ? { x: st.pos.x, z: st.pos.z } : null;
+      })(),
+    };
+  }
+
+  function applyCameraPreset(id: PresetId) {
+    const pose = cameraPreset(id, presetInput(), tilt);
+    requestCameraPose(pose.pos, pose.target);
+  }
+
+  function resetCamera() {
+    const pose = cameraPreset('overview', presetInput(), tilt);
+    requestCameraPose(pose.pos, pose.target);
+  }
+
+  function anchorOf(sel: Selection): { x: number; z: number } | null {
+    if (sel.kind === 'station') {
+      const st = snapshot.stations.find((s) => s.id === sel.id);
+      return st ? { x: st.pos.x, z: st.pos.z } : null;
+    }
+    if (sel.kind === 'zone') {
+      const z = snapshot.city.zones.find((zz) => zz.id === sel.id);
+      return z ? { x: z.center.x, z: z.center.z } : null;
+    }
+    if (sel.kind === 'route') return mapAnchors.routeMid.get(sel.id) ?? null;
+    if (sel.kind === 'road') return mapAnchors.roadMid.get(sel.id) ?? null;
+    if (sel.kind === 'vehicle') {
+      const vv = snapshot.vehicles.find((v) => v.id === sel.id);
+      return vv ? (mapAnchors.routeMid.get(vv.routeId) ?? null) : null;
+    }
+    if (sel.kind === 'incident') {
+      const inc = snapshot.incidents.find((i) => i.id === sel.id);
+      if (!inc) return null;
+      if (inc.targetStationId) {
+        const st = snapshot.stations.find((s) => s.id === inc.targetStationId);
+        if (st) return { x: st.pos.x, z: st.pos.z };
+      }
+      if (inc.targetRouteId) return mapAnchors.routeMid.get(inc.targetRouteId) ?? null;
+      return mapAnchors.centroid;
+    }
+    const m = problemMarkerList.find((mm) => mm.selId === sel.id);
+    return m ? { x: m.x, z: m.z } : mapAnchors.centroid;
+  }
+
+  function focusSelectionOf(sel: Selection) {
+    const at = anchorOf(sel);
+    if (!at) return;
+    const dist = sel.kind === 'zone' ? 320 : 170;
+    const pose = poseFor(at, dist, tilt);
+    requestCameraPose(pose.pos, pose.target);
+  }
+
+  function focusSelection() {
+    if (selection) focusSelectionOf(selection);
+  }
+
+  function focusStation(id: string) {
+    const st = snapshot.stations.find((s) => s.id === id);
+    if (!st) return;
+    setSelection({ kind: 'station', id });
+    const pose = poseFor({ x: st.pos.x, z: st.pos.z }, 170, tilt);
+    requestCameraPose(pose.pos, pose.target);
+  }
+
+  function investigateProblem(target: { kind: 'station' | 'route' | 'road' | 'zone'; id: string }) {
+    setSelection({ kind: target.kind, id: target.id });
+    const at =
+      target.kind === 'station'
+        ? (() => {
+            const st = snapshot.stations.find((s) => s.id === target.id);
+            return st ? { x: st.pos.x, z: st.pos.z } : null;
+          })()
+        : target.kind === 'zone'
+          ? mapAnchors.zones.get(target.id) ?? null
+          : target.kind === 'route'
+            ? mapAnchors.routeMid.get(target.id) ?? null
+            : mapAnchors.roadMid.get(target.id) ?? null;
+    if (at) {
+      const pose = poseFor(at, 220, tilt);
+      requestCameraPose(pose.pos, pose.target);
+    }
+    announceSelection({ kind: target.kind, id: target.id });
+  }
+
+  function announceSelection(sel: Selection | null) {
+    if (!sel) {
+      setAnnouncement('');
+      return;
+    }
+    const label =
+      sel.kind === 'station'
+        ? (snapshot.stations.find((s) => s.id === sel.id)?.name ?? sel.id)
+        : sel.kind === 'route'
+          ? (snapshot.routes.find((r) => r.id === sel.id)?.name ?? sel.id)
+          : sel.kind === 'zone'
+            ? (snapshot.city.zones.find((z) => z.id === sel.id)?.name ?? sel.id)
+            : sel.kind === 'vehicle'
+              ? `vehicle on ${snapshot.routes.find((r) => r.id === snapshot.vehicles.find((v) => v.id === sel.id)?.routeId)?.name ?? 'a route'}`
+              : sel.kind === 'incident'
+                ? (snapshot.incidents.find((i) => i.id === sel.id)?.label ?? 'disruption')
+                : (problems.find((p) => p.id === sel.id)?.title ?? 'planning problem');
+    setAnnouncement(`Selected ${sel.kind}: ${label}.`);
+  }
+
+  function minimapJump(x: number, z: number) {
+    const dist = camInfo ? camInfo.dist : 480;
+    const pose = poseFor({ x, z }, dist, tilt);
+    requestCameraPose(pose.pos, pose.target);
+  }
+
+  // ---- search (§29): pick focuses the camera, selects, and inspects ----
+  function pickSearchResult(e: SearchEntry) {
+    if (e.kind === 'district') setSelection({ kind: 'zone', id: e.id });
+    else setSelection({ kind: e.kind, id: e.id });
+    const pose = poseFor({ x: e.x, z: e.z }, e.kind === 'district' ? 320 : 170, tilt);
+    requestCameraPose(pose.pos, pose.target);
+    announceSelection(e.kind === 'district' ? { kind: 'zone', id: e.id } : { kind: e.kind, id: e.id });
+  }
+
+  // ---- context menu (§9): only actions that do something real ----
+  function menuTitle(sel: Selection): string {
+    if (sel.kind === 'station') return snapshot.stations.find((s) => s.id === sel.id)?.name ?? sel.id;
+    if (sel.kind === 'route') return snapshot.routes.find((r) => r.id === sel.id)?.name ?? sel.id;
+    if (sel.kind === 'zone') return snapshot.city.zones.find((z) => z.id === sel.id)?.name ?? sel.id;
+    if (sel.kind === 'vehicle') {
+      const vv = snapshot.vehicles.find((v) => v.id === sel.id);
+      return snapshot.routes.find((r) => r.id === vv?.routeId)?.name ?? 'Vehicle';
+    }
+    if (sel.kind === 'incident') return snapshot.incidents.find((i) => i.id === sel.id)?.label ?? 'Disruption';
+    return problems.find((p) => p.id === sel.id)?.title ?? 'Problem';
+  }
+
+  function upgradeRoad(edgeId: string) {
+    const sim = simRef.current;
+    const edge = sim.city.roadEdges.find((e) => e.id === edgeId);
+    if (!edge) return;
+    const kind = edge.lanes >= 6 ? null : edge.lanes >= 4 ? 'highway' : 'arterial';
+    if (!kind) {
+      pushToast('info', 'Road is already at highway standard.');
+      return;
+    }
+    const a = sim.city.roadNodes.find((n) => n.id === edge.a);
+    const b = sim.city.roadNodes.find((n) => n.id === edge.b);
+    if (!a || !b) return;
+    const r1 = pushOp(ops, redo, { type: 'removeRoad', edgeId });
+    const r2 = pushOp(r1.ops, r1.redo, {
+      type: 'addRoad',
+      nodes: [
+        { id: a.id, x: a.pos.x, z: a.pos.z },
+        { id: b.id, x: b.pos.x, z: b.pos.z },
+      ],
+      edges: [{ id: `re-up-${edgeId}`, a: a.id, b: b.id, kind }],
+    });
+    applyOps(r2.ops, r2.redo);
+    pushToast('good', `Road upgraded to ${kind}.`);
+  }
+
+  function startMetroFrom(stationId: string) {
+    enterBuild();
+    setTool('metro');
+    setDraftStations([stationId]);
+  }
+
+  function openContextMenu(sel: Selection, x: number, y: number) {
+    const acts: ContextAction[] = [];
+    const inspect: ContextAction = {
+      label: 'Inspect',
+      run: () => {
+        setSelection(sel);
+        announceSelection(sel);
+      },
+    };
+    const focus: ContextAction = { label: 'Focus (F)', run: () => focusSelectionOf(sel) };
+    if (sel.kind === 'station') {
+      acts.push(
+        inspect,
+        focus,
+        { label: 'Build connection from here', run: () => startMetroFrom(sel.id) },
+        {
+          label: catchmentRadius === 800 ? 'Hide catchment' : 'Show catchment (800m)',
+          run: () => {
+            setSelection(sel);
+            setCatchmentRadius(catchmentRadius === 800 ? null : 800);
+          },
+        },
+        { label: 'Show accessibility', run: () => setOverlay('accessibility') },
+      );
+    } else if (sel.kind === 'route') {
+      acts.push(
+        inspect,
+        focus,
+        {
+          label: 'Modify service',
+          run: () => {
+            setServiceRouteId(sel.id);
+            pushToast('info', 'Service panel now edits this route.');
+          },
+        },
+        {
+          label: 'Edit route (extend)',
+          run: () => {
+            enterBuild();
+            setTool('extend');
+            setExtendRouteId(sel.id);
+          },
+        },
+        { label: 'Show ridership', run: () => setOverlay('flow') },
+        { label: 'Show crowding', run: () => setOverlay('crowding') },
+      );
+    } else if (sel.kind === 'road') {
+      acts.push(
+        inspect,
+        focus,
+        { label: 'Upgrade road', run: () => upgradeRoad(sel.id) },
+        {
+          label: 'Draw road nearby',
+          run: () => {
+            enterBuild();
+            setTool('road');
+          },
+        },
+        { label: 'Show traffic', run: () => setOverlay('congestion') },
+        { label: 'Show congestion', run: () => setOverlay('congestion') },
+      );
+    } else if (sel.kind === 'zone') {
+      acts.push(
+        inspect,
+        focus,
+        { label: 'Show demand', run: () => setOverlay('demand') },
+        { label: 'Show accessibility', run: () => setOverlay('accessibility') },
+        { label: 'Show growth', run: () => setOverlay('growth') },
+        { label: 'Show coverage', run: () => setOverlay('coverage') },
+      );
+    } else if (sel.kind === 'vehicle') {
+      const vv = snapshot.vehicles.find((v) => v.id === sel.id);
+      acts.push(
+        inspect,
+        focus,
+        ...(vv
+          ? [{ label: 'Show route', run: () => investigateProblem({ kind: 'route' as const, id: vv.routeId }) }]
+          : []),
+      );
+    } else if (sel.kind === 'incident') {
+      acts.push(inspect, focus, { label: 'Manage in Disrupt mode', run: () => enterDisrupt() });
+    } else {
+      const problem = problems.find((p) => p.id === sel.id);
+      acts.push(
+        inspect,
+        ...(problem?.target
+          ? [{ label: 'Investigate cause', run: () => investigateProblem(problem.target as { kind: 'station' | 'route' | 'road' | 'zone'; id: string }) }]
+          : []),
+      );
+    }
+    setContextMenu({ x, y, title: menuTitle(sel), actions: acts });
+  }
+
+  // ---- measurement tool (§27) ----
+  function onMeasurePoint(x: number, z: number) {
+    setMeasure((m) => {
+      if (!m) return { a: { x: Math.round(x), z: Math.round(z) }, b: null };
+      if (!m.b) return { ...m, b: { x: Math.round(x), z: Math.round(z) } };
+      return { a: { x: Math.round(x), z: Math.round(z) }, b: null };
+    });
+  }
+
+  function measureNetworkNote(): string | null {
+    if (!measure?.b) return null;
+    const stations = snapshot.stations.map((s) => ({ id: s.id, x: s.pos.x, z: s.pos.z }));
+    const from = snapStation(measure.a, stations);
+    const to = snapStation(measure.b, stations);
+    if (!from || !to || from === to) return null;
+    const path = findShortestPath(snapshot.connections, from, to);
+    if (!path) return null;
+    const names = (id: string) => snapshot.stations.find((s) => s.id === id)?.name ?? id;
+    return `On-network ${names(from)} → ${names(to)}: ${(Math.round(path.totalMin * 10) / 10).toFixed(1)} min ride`;
+  }
+
+  // ---- undo / redo (§26, shared by buttons and keyboard) ----
+  function doUndo() {
+    if (ops.length === 0) return;
+    const r = undoOp(ops, redo);
+    applyOps(r.ops, r.redo);
+  }
+
+  function doRedo() {
+    if (redo.length === 0) return;
+    const r = redoOp(ops, redo);
+    applyOps(r.ops, r.redo);
+  }
+
+  // ---- static baseline sim for split-view comparison (§24) ----
+  const baseSim = useMemo(() => createSimulationFromParts(SEED, effBaseCity, baseNet), [effBaseCity, baseNet]);
+  const baseSimRef = useRef(baseSim);
+  baseSimRef.current = baseSim;
+
   // ---- build interactions (from the 3D view) ----
   const stationPos = useMemo(() => new Map(snapshot.stations.map((s) => [s.id, { x: s.pos.x, z: s.pos.z }])), [snapshot]);
   const disruptPresets = useMemo(
@@ -1527,7 +2013,7 @@ export default function App() {
           </span>
           <span className="tf-brand-name">
             <b>TransitForge</b>
-            <span>seed {SEED}</span>
+            <span>v{APP_VERSION} · seed {SEED}</span>
           </span>
         </div>
         <ModeSwitch mode={mode} onChange={selectMode} />
@@ -1558,26 +2044,106 @@ export default function App() {
           >
             {railOpen ? <IconClose /> : <IconPlan />}
           </button>
+          <button
+            type="button"
+            className={`tf-btn icon ghost${searchOpen ? ' active' : ''}`}
+            onClick={() => setSearchOpen((v) => !v)}
+            title="Search map (/)"
+            aria-label="Search map"
+            aria-pressed={searchOpen}
+          >
+            <IconSearch />
+          </button>
+          <button
+            type="button"
+            className={`tf-btn icon ghost${measureTool ? ' active' : ''}`}
+            onClick={() => {
+              setMeasureTool((v) => {
+                if (v) {
+                  setMeasure(null);
+                  setMeasureHover(null);
+                } else {
+                  pushToast('info', 'Measure: click two points on the map.');
+                }
+                return !v;
+              });
+            }}
+            title="Measure distance"
+            aria-label="Measure distance"
+            aria-pressed={measureTool}
+          >
+            <IconMeasure />
+          </button>
+          <button
+            type="button"
+            className={`tf-btn icon ghost${inspectMode ? ' active' : ''}`}
+            onClick={() => setInspectMode((v) => !v)}
+            title="Quick inspect (I)"
+            aria-label="Quick inspect"
+            aria-pressed={inspectMode}
+          >
+            <IconInspect />
+          </button>
         </div>
       </header>
       <main className="tf-main">
         <section className="tf-viewport">
+          {splitView ? (
+            <CompareSplit
+              baseSim={baseSim}
+              scenarioRef={simRef}
+              layers={layers}
+              overlay={overlay}
+              selection={selection}
+              onSelect={mode === 'build' ? () => {} : (sel) => {
+                setSelection(sel);
+                if (sel?.kind === 'route') setServiceRouteId(sel.id);
+                announceSelection(sel);
+              }}
+              networkKey={networkKey}
+              build={inspectMode ? null : buildIx}
+              analytics={analyticsView}
+              draft={draftView}
+              cameraCmd={cameraCmd}
+              onCamera={setCamInfo}
+              onHoverObject={setHoverInfo}
+              onContextPick={(sel, x, y) => openContextMenu(sel, x, y)}
+              problemMarkers={problemMarkerList}
+              changeMarkers={changeMarkerList}
+              catchment={catchmentView}
+              measure={measureView}
+              onClose={() => setSplitView(false)}
+            />
+          ) : (
           <SceneView
             simRef={simRef}
             layers={layers}
             overlay={overlay}
             selection={selection}
-            onSelect={mode === 'build' ? () => {} : (sel) => {
+            onSelect={mode === 'build' && !inspectMode ? () => {} : (sel) => {
               setSelection(sel);
               if (sel?.kind === 'route') setServiceRouteId(sel.id);
+              announceSelection(sel);
             }}
             networkKey={networkKey}
             ghosts={viewing === 'scenario' ? diff.removedStations : []}
             highlightRoutes={viewing === 'scenario' ? diff.addedRoutes : []}
-            build={buildIx}
+            build={inspectMode ? null : buildIx}
             draft={draftView}
             analytics={analyticsView}
+            cameraCmd={cameraCmd}
+            onCamera={setCamInfo}
+            onHoverObject={setHoverInfo}
+            onContextPick={(sel, x, y) => openContextMenu(sel, x, y)}
+            problemMarkers={problemMarkerList}
+            changeMarkers={changeMarkerList}
+            catchment={catchmentView}
+            measure={measureView}
+            measureActive={measureTool}
+            onMeasurePoint={onMeasurePoint}
+            onMeasureHover={(x, z) => setMeasureHover({ x, z })}
           />
+          )}
           <span className="tf-bracket tl" />
           <span className="tf-bracket tr" />
           <span className="tf-bracket bl" />
@@ -1605,18 +2171,83 @@ export default function App() {
                   ? 'plan mode · pick a brief, build, then submit for evaluation'
                   : 'drag orbit · right-drag pan · wheel zoom · click station/route/road/district'}
           </div>
-          <Legend overlay={overlay} demandLayer={demandLayer} />
+          <Legend
+            overlay={overlay}
+            demandLayer={demandLayer}
+            extras={{
+              problems: problemMarkerList.length > 0,
+              catchment: catchmentView !== null,
+              measure: measureView !== null,
+              changes: changeMarkerList.length > 0,
+              split: splitView,
+            }}
+          />
           <StatusBar stats={stats} viewing={viewing} incidents={stats.activeIncidents} opCost={stats.opCost} />
+          {!splitView && (
+            <>
+              <NavWidget
+                cam={camInfo}
+                tilt={tilt}
+                onTilt={setTilt}
+                onPreset={applyCameraPreset}
+                onReset={resetCamera}
+                onFocusSelection={focusSelection}
+                canFocus={selection !== null}
+              />
+              <Minimap
+                city={snapshot.city}
+                routes={snapshot.routes}
+                stations={snapshot.stations}
+                cam={camInfo}
+                selection={selection}
+                onJump={minimapJump}
+              />
+            </>
+          )}
+          <HoverTooltip hover={hoverInfo} />
+          <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
+          {searchOpen && (
+            <SearchPalette entries={searchEntries} onPick={pickSearchResult} onClose={() => setSearchOpen(false)} />
+          )}
+          {measureTool && (
+            <div className="tf-measure-bar" role="status">
+              <span>{measureView?.label ?? 'Click a start point on the map (Esc cancels)'}</span>
+              {measureNetworkNote() && <span className="tf-hint">{measureNetworkNote()}</span>}
+              <button type="button" className="tf-btn small" onClick={() => { setMeasureTool(false); setMeasure(null); setMeasureHover(null); }}>
+                Done
+              </button>
+            </div>
+          )}
+          {inspectMode && (
+            <div className="tf-overlay-hint tf-inspect-chip">
+              Quick inspect on · clicks select instead of building · I to exit
+            </div>
+          )}
+          <div className="tf-mobile-note">TransitForge works best on desktop — the full map needs room.</div>
+          <div className="tf-sr-only" aria-live="polite">{announcement}</div>
           {selection && (
             <div className="tf-inspector-card">
-              <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
+              <Inspector
+                selection={selection}
+                sim={snapshot}
+                onClose={() => setSelection(null)}
+                problems={problems}
+                onFocusStation={focusStation}
+                onInvestigate={investigateProblem}
+                onOverlay={setOverlay}
+                onOpenDisrupt={enterDisrupt}
+                catchmentRadius={catchmentRadius}
+                onCatchmentRadius={setCatchmentRadius}
+                zoneCoverage={selection.kind === 'zone' ? coverage.perZone.find((z) => z.zoneId === selection.id)?.pct : undefined}
+                zoneTravel={selection.kind === 'zone' ? (access.zones.find((z) => z.zoneId === selection.id)?.toCBD ?? null) : undefined}
+              />
             </div>
           )}
         </section>
         <aside className="tf-panel">
           {mode === 'simulate' ? (
             <>
-              <LayerToggles layers={layers} onChange={setLayers} />
+              <LayerToggles layers={layers} onChange={onLayers} />
               <OverlaySwitch
                 overlay={overlay}
                 onChange={setOverlay}
@@ -1746,14 +2377,8 @@ export default function App() {
                 onRoadKind={setRoadKind}
                 canUndo={ops.length > 0}
                 canRedo={redo.length > 0}
-                onUndo={() => {
-                  const r = undoOp(ops, redo);
-                  applyOps(r.ops, r.redo);
-                }}
-                onRedo={() => {
-                  const r = redoOp(ops, redo);
-                  applyOps(r.ops, r.redo);
-                }}
+                onUndo={doUndo}
+                onRedo={doRedo}
                 opCount={ops.length}
                 scenarioCost={formatCost(mod.cost)}
               />
@@ -1793,6 +2418,8 @@ export default function App() {
                 hasEdits={ops.length > 0}
                 horizonYears={compareHorizon}
                 onHorizon={setCompareHorizon}
+                splitView={splitView}
+                onSplitView={setSplitView}
               />
             </>
           )}
