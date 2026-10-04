@@ -96,6 +96,15 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
         ]}
       />
       <Section
+        title="Finance"
+        rows={[
+          ['Fare revenue', `${stats.revenue.toLocaleString()} OCU`],
+          ['Metro / rail / bus', `${stats.revenueMetro.toLocaleString()} / ${stats.revenueRail.toLocaleString()} / ${stats.revenueBus.toLocaleString()}`],
+          ['Cost recovery', `${stats.costRecovery}%`],
+          ['Subsidy', `${stats.subsidy.toLocaleString()} OCU`],
+        ]}
+      />
+      <Section
         title="Service"
         rows={[
           ['Active vehicles', String(stats.vehicleCount)],

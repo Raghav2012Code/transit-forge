@@ -56,7 +56,12 @@ function bundleOf(
 }
 
 /** Shared live/project constraint inputs (same function for UI + submit). */
-export function constraintInputs(ops: EditOp[], mod: ModifiedNetwork, opCostPerDay: number): ConstraintInputs {
+export function constraintInputs(
+  ops: EditOp[],
+  mod: ModifiedNetwork,
+  opCostPerDay: number,
+  subsidyPerDay: number,
+): ConstraintInputs {
   const newStations = ops.filter((o) => o.type === 'addStation').length;
   const affected = new Set<string>();
   for (const op of ops) {
@@ -66,7 +71,7 @@ export function constraintInputs(ops: EditOp[], mod: ModifiedNetwork, opCostPerD
       if (d <= z.radius + 800) affected.add(z.id);
     }
   }
-  return { constructionCost: mod.cost, opCostPerDay: opCostPerDay, newStations, districtsAffected: affected.size };
+  return { constructionCost: mod.cost, opCostPerDay, subsidyPerDay, newStations, districtsAffected: affected.size };
 }
 
 /** Evaluate a plan: real runs, real metrics, real verdict. Deterministic. */
@@ -149,7 +154,7 @@ export function evaluatePlan(input: {
   );
   const constraintResults = evaluateConstraints(
     input.constraints,
-    constraintInputs(input.ops, mod, modStats.opCost),
+    constraintInputs(input.ops, mod, modStats.opCost, modStats.subsidy),
   );
   const score = planningScore(modStats, modAccess, modCoverage);
   const passed = objectiveResults.every((r) => r.passed) && constraintResults.every((r) => r.passed);

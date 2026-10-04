@@ -36,6 +36,12 @@ import {
 } from '../service/timetable.ts';
 import { tripCancelled, tripDelayMin } from '../service/reliability.ts';
 import {
+  creditCompletedFare,
+  fareModeFor,
+  tripFare,
+  type FarePolicy,
+} from '../economics/fares.ts';
+import {
   hopAheadBlocked,
   legBlocked,
   legBoardableFrom,
@@ -69,6 +75,7 @@ export interface PassengerWorld {
   busRoadMap: Record<string, string[]>;
   service: Record<string, ServicePlan>;
   serviceOffsets: Record<string, number>;
+  fares: FarePolicy;
   closures: DerivedClosures;
 }
 
@@ -155,6 +162,7 @@ function finishJourney(
   w.counters.totalTravelMin += p.travelMin;
   w.counters.totalWaitMin += p.waitMin;
   w.counters.totalTransfers += p.transfers;
+  creditCompletedFare(w.counters, p.fareRouteId, p.fareMode, p.farePaid);
   if (st) st.alightedDay++;
 }
 
@@ -230,7 +238,12 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         const drive = driveAccessMin(w.city, oz, dz, w.zoneRoadAccess);
         const [draw, rng2] = rngNext(rng);
         rng = rng2;
-        if (chooseMode(draw, transitEstimate(trip.totalMin, headways), trip.legs.length - 1, road.totalMin + drive, dz.kind) === 'car') {
+        // Entry-mode pricing: the trip costs its first leg's mode fare, locked
+        // in now for both mode choice and the revenue counted at arrival.
+        const firstRoute = routeById.get(trip.legs[0].routeId);
+        const fareMode = fareModeFor(firstRoute?.mode ?? 'bus');
+        const fare = tripFare(fareMode, w.fares);
+        if (chooseMode(draw, transitEstimate(trip.totalMin, headways), trip.legs.length - 1, road.totalMin + drive, dz.kind, fare) === 'car') {
           if (spawnCarTrip(w, oz, dz, drive)) continue;
           // Car spawn failed (cap): fall through to transit.
         }
@@ -245,6 +258,8 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
       }
       const st = stationById.get(fromSt);
       const access = st ? walkMin(oz.center.x, oz.center.z, st.pos.x, st.pos.z) : 2;
+      const entryRoute = routeById.get(legs[0].routeId);
+      const entryMode = fareModeFor(entryRoute?.mode ?? 'bus');
       w.passengers.push({
         id: w.nextPassengerId++,
         originZone: pair.from,
@@ -263,6 +278,9 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         transfers: legs.length - 1,
         arriveMin: null,
         strandedMin: 0,
+        farePaid: tripFare(entryMode, w.fares),
+        fareRouteId: legs[0].routeId,
+        fareMode: entryMode,
       });
       w.counters.generated++;
     }
@@ -534,6 +552,7 @@ function alightAt(
       w.counters.totalTravelMin += p.travelMin;
       w.counters.totalWaitMin += p.waitMin;
       w.counters.totalTransfers += p.transfers;
+      creditCompletedFare(w.counters, p.fareRouteId, p.fareMode, p.farePaid);
     } else {
       p.legIndex++;
       p.state = 'TRANSFERRING';

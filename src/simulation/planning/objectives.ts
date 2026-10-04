@@ -12,6 +12,7 @@ export type MetricKey =
   | 'avg-travel' | 'avg-wait' | 'peak-crowding' | 'transit-share' | 'car-share'
   | 'congestion' | 'accessibility' | 'coverage' | 'denied' | 'op-cost'
   | 'construction-cost' | 'population' | 'jobs' | 'resilience-score'
+  | 'revenue' | 'cost-recovery' | 'subsidy'
   | 'access-zone' | 'crowd-route' | 'road-vc';
 
 export type CompareOp = '<' | '>' | '<=' | '>=';
@@ -29,7 +30,7 @@ export interface Objective {
   horizonYears: number;
 }
 
-export type ConstraintKind = 'budget' | 'op-cost' | 'stations' | 'districts';
+export type ConstraintKind = 'budget' | 'op-cost' | 'subsidy' | 'stations' | 'districts';
 
 export interface PlanConstraint {
   id: string;
@@ -63,6 +64,9 @@ export function readMetric(b: MetricsBundle, metric: MetricKey, targetId?: strin
     case 'coverage': return b.coverage.pct;
     case 'denied': return s.deniedBoardings;
     case 'op-cost': return s.opCost;
+    case 'revenue': return s.revenue;
+    case 'cost-recovery': return s.costRecovery;
+    case 'subsidy': return s.subsidy;
     case 'construction-cost': return b.constructionCost;
     case 'population': return s.population;
     case 'jobs': return s.jobs;
@@ -91,9 +95,10 @@ export function metricUnit(metric: MetricKey): string {
   switch (metric) {
     case 'avg-travel': case 'avg-wait': return ' min';
     case 'peak-crowding': case 'transit-share': case 'car-share':
-    case 'accessibility': case 'coverage': case 'resilience-score': return '%';
+    case 'accessibility': case 'coverage': case 'resilience-score':
+    case 'cost-recovery': return '%';
     case 'denied': case 'population': case 'jobs': return '';
-    case 'op-cost': return ' OCU';
+    case 'op-cost': case 'revenue': case 'subsidy': return ' OCU';
     case 'construction-cost': return ' ₹';
     case 'access-zone': return ' pts';
     case 'crowd-route': case 'road-vc': return '%';
@@ -150,6 +155,7 @@ export interface ConstraintResult {
 export interface ConstraintInputs {
   constructionCost: number;
   opCostPerDay: number;
+  subsidyPerDay: number;
   newStations: number;
   districtsAffected: number;
 }
@@ -163,6 +169,7 @@ export function evaluateConstraints(
     const value =
       c.kind === 'budget' ? inputs.constructionCost
       : c.kind === 'op-cost' ? inputs.opCostPerDay
+      : c.kind === 'subsidy' ? inputs.subsidyPerDay
       : c.kind === 'stations' ? inputs.newStations
       : inputs.districtsAffected;
     return { constraintId: c.id, value, passed: value <= c.limit };

@@ -35,6 +35,8 @@ function bundle(over: Partial<MetricsBundle> = {}): MetricsBundle {
       roadTrips: 4000, roadCompleted: 3800, activeCars: 150, avgRoadMin: 12, avgCongestion: 0.6,
       worstRoad: 'R1', worstVC: 0.9, transitShare: 55, carShare: 45, avgTransitMin: 28,
       deniedBoardings: 50, avgOcc: 60, vehKm: 500, vehHr: 40, opCost: 8000, opCostPerPax: 1.5,
+      revenue: 4000, revenueMetro: 2000, revenueRail: 1200, revenueBus: 800,
+      costRecovery: 50, subsidy: 4000,
       avgHeadway: 8, totalDelayMin: 100, rerouted: 0, strandedNow: 0, strandedPeak: 0,
       cancelledTrips: 0, activeIncidents: 0,
     },
@@ -84,17 +86,28 @@ describe('objectives', () => {
 });
 
 describe('constraints', () => {
-  it('enforces budget, operating cost, and infrastructure limits', () => {
+  it('enforces budget, operating cost, subsidy, and infrastructure limits', () => {
     const cons = [
       { id: 'c1', label: 'Budget', kind: 'budget' as const, limit: 1000 },
       { id: 'c2', label: 'Op cost', kind: 'op-cost' as const, limit: 9000 },
+      { id: 'c2b', label: 'Subsidy', kind: 'subsidy' as const, limit: 5000 },
       { id: 'c3', label: 'Stations', kind: 'stations' as const, limit: 2 },
       { id: 'c4', label: 'Districts', kind: 'districts' as const, limit: 5 },
     ];
-    const pass = evaluateConstraints(cons, { constructionCost: 800, opCostPerDay: 8000, newStations: 2, districtsAffected: 3 });
+    const pass = evaluateConstraints(cons, { constructionCost: 800, opCostPerDay: 8000, subsidyPerDay: 4000, newStations: 2, districtsAffected: 3 });
     expect(pass.every((r) => r.passed)).toBe(true);
-    const fail = evaluateConstraints(cons, { constructionCost: 1200, opCostPerDay: 8000, newStations: 2, districtsAffected: 3 });
+    const fail = evaluateConstraints(cons, { constructionCost: 1200, opCostPerDay: 8000, subsidyPerDay: 4000, newStations: 2, districtsAffected: 3 });
     expect(fail.find((r) => r.constraintId === 'c1')?.passed).toBe(false);
+    const over = evaluateConstraints(cons, { constructionCost: 800, opCostPerDay: 8000, subsidyPerDay: 6000, newStations: 2, districtsAffected: 3 });
+    expect(over.find((r) => r.constraintId === 'c2b')?.passed).toBe(false);
+    expect(over.find((r) => r.constraintId === 'c2b')?.value).toBe(6000);
+  });
+
+  it('reads the financial objective metrics from stats', () => {
+    const b = bundle();
+    expect(readMetric(b, 'revenue')).toBe(4000);
+    expect(readMetric(b, 'cost-recovery')).toBe(50);
+    expect(readMetric(b, 'subsidy')).toBe(4000);
   });
 });
 
@@ -312,6 +325,8 @@ describe('intervention summary and reports', () => {
       intervention: ev.intervention,
       constructionCost: ev.mod.cost,
       opCost: ev.plan.stats.opCost,
+      revenue: ev.plan.stats.revenue,
+      subsidy: ev.plan.stats.subsidy,
       score: ev.score,
     };
     const r1 = buildReport(input);
@@ -321,11 +336,12 @@ describe('intervention summary and reports', () => {
     expect(r1.performance.length).toBeGreaterThan(0);
     expect(r1.cost.construction.length).toBeGreaterThan(0);
     const text = reportToText(r1);
-    for (const section of ['PROBLEM', 'INTERVENTION', 'OBJECTIVES', 'PERFORMANCE', 'TRADEOFFS', 'COST', 'SCORE']) {
+    for (const section of ['PROBLEM', 'INTERVENTION', 'OBJECTIVES', 'PERFORMANCE', 'TRADEOFFS', 'COST', 'FINANCE', 'SCORE']) {
       expect(text).toContain(section);
     }
     expect(reportToJson(r1)).toContain(r1.verdict);
     expect(reportToHtml(r1)).toContain('<html>');
+    expect(reportToHtml(r1)).toContain('Finance');
   });
 
   it('evaluates a 1-year horizon plan', () => {

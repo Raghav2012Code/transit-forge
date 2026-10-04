@@ -65,6 +65,9 @@ export function summarizeOps(
         service.push(`${base?.name ?? op.routeId}: ${bits}`);
         break;
       }
+      case 'setFares':
+        service.push(`Fares: metro ${op.fares.metro} · rail ${op.fares.rail} · bus ${op.fares.bus} OCU`);
+        break;
       case 'scheduleIncident':
         infra.push(`◷ Planned disruption: ${op.incident.label}`);
         break;

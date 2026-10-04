@@ -65,6 +65,7 @@ import {
   type Scenario,
   type ServicePatch,
 } from './simulation/scenario/scenario.ts';
+import { sanitizeFares, type FarePolicy } from './simulation/economics/fares.ts';
 import { deleteScenario, duplicateScenario, listScenarios, saveScenario } from './simulation/scenario/store.ts';
 import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
@@ -403,7 +404,7 @@ export default function App() {
     [activeBrief, liveBundle, baselineBundle],
   );
   const liveConstraintResults = useMemo(
-    () => (activeBrief ? evaluateConstraints(activeBrief.constraints, constraintInputs(ops, mod, stats.opCost)) : []),
+    () => (activeBrief ? evaluateConstraints(activeBrief.constraints, constraintInputs(ops, mod, stats.opCost, stats.subsidy)) : []),
     [activeBrief, ops, mod, stats],
   );
   const problems = useMemo(
@@ -594,6 +595,23 @@ export default function App() {
     reconcileFleet(sim, routeId);
     if (viewing === 'base') setViewing('scenario');
     const r = pushOp(ops, redo, { type: 'setService', routeId, patch: sanitizeServicePatch(patch, mode) });
+    setOps(r.ops);
+    setRedo(r.redo);
+    setCompareResult(null);
+    setSnapshot({ ...sim });
+  }
+
+  // ---- live fare editing ----
+  // Fares apply to the running sim immediately (new boardings lock in the new
+  // fare; trips already underway keep theirs) and are logged as a setFares op
+  // so scenarios, undo, and compare stay exact. Like service edits, this does
+  // not reset the day.
+  function onFarePolicy(fares: FarePolicy) {
+    const sim = simRef.current;
+    const next = sanitizeFares(fares);
+    sim.fares = next;
+    if (viewing === 'base') setViewing('scenario');
+    const r = pushOp(ops, redo, { type: 'setFares', fares: next });
     setOps(r.ops);
     setRedo(r.redo);
     setCompareResult(null);
@@ -852,6 +870,8 @@ export default function App() {
       intervention: ev.intervention,
       constructionCost: ev.mod.cost,
       opCost: ev.plan.stats.opCost,
+      revenue: ev.plan.stats.revenue,
+      subsidy: ev.plan.stats.subsidy,
       score: ev.score,
     });
     setEvaluation({ report, rows: ev.rows, resilienceRows: ev.resilienceRows, score: ev.score });
@@ -1613,6 +1633,7 @@ export default function App() {
                 selectedRouteId={serviceRouteId}
                 onSelectRoute={setServiceRouteId}
                 onPatch={onServicePatch}
+                onFares={onFarePolicy}
               />
               <AnalyticsPanel
                 access={access}

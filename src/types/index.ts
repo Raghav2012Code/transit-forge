@@ -145,6 +145,12 @@ export interface Passenger {
   strandedMin: number;
   transfers: number;
   arriveMin: number | null;
+  /** Fare locked in at boarding (entry-mode pricing, OCU). Counted on arrival. */
+  farePaid: number;
+  /** First-leg route whose mode priced the trip. */
+  fareRouteId: string;
+  /** First-leg mode ('road' legs price as bus). */
+  fareMode: 'metro' | 'rail' | 'bus';
 }
 
 /** Day-long aggregate counters, updated incrementally by the step function. */
@@ -178,6 +184,12 @@ export interface TripCounters {
   incidentDelayMin: number;
   /** Trips abandoned after long stranding. */
   cancelledTrips: number;
+  /** Fare revenue from completed trips only (OCU, simulated-agent scale). */
+  revenueTotal: number;
+  /** Revenue attributed by entry mode. */
+  revenueByMode: Record<string, number>;
+  /** Revenue attributed by entry route. */
+  revenueByRoute: Record<string, number>;
 }
 
 export type CongestionLevel = 'free' | 'light' | 'moderate' | 'heavy' | 'severe';
@@ -296,6 +308,15 @@ export interface SimStats {
   vehHr: number;
   opCost: number;
   opCostPerPax: number;
+  /** Fare revenue from completed trips (OCU). */
+  revenue: number;
+  revenueMetro: number;
+  revenueRail: number;
+  revenueBus: number;
+  /** Revenue / operating cost in percent (can exceed 100). */
+  costRecovery: number;
+  /** Operating cost minus revenue, floored at zero (OCU). */
+  subsidy: number;
   avgHeadway: number;
   totalDelayMin: number;
   rerouted: number;

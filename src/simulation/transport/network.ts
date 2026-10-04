@@ -2,6 +2,7 @@
 // so geography stays recognizable. All lines exist here as data first;
 // rendering derives meshes from this model.
 import type { Connection, Station, TransportMode, TransportRoute, Vec3 } from '../../types/index.ts';
+import type { FarePolicy } from '../economics/fares.ts';
 
 function v(x: number, z: number): Vec3 {
   return { x, y: 0, z };
@@ -87,6 +88,8 @@ export interface NetworkData {
   routeLengths: Map<string, number>;
   /** Cumulative station distances (meters) per route, aligned with stationIds. */
   routeCumDist: Map<string, number[]>;
+  /** Fare policy override (absent = free-transit default at sim build). */
+  fares?: FarePolicy;
 }
 
 export function buildNetwork(): NetworkData {

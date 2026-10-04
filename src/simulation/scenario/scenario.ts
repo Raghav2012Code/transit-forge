@@ -2,6 +2,7 @@
 // The base is never mutated; applying ops yields the modified network.
 // Undo/redo replays the op log (no state snapshots needed).
 import type { TransportMode } from '../../types/index.ts';
+import type { FarePolicy } from '../economics/fares.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
 import type { IncidentConfig } from '../incidents/incidents.ts';
 import { clampHeadway } from '../service/servicePlan.ts';
@@ -89,6 +90,7 @@ export type EditOp =
     }
   | { type: 'removeRoad'; edgeId: string }
   | { type: 'setService'; routeId: string; patch: ServicePatch }
+  | { type: 'setFares'; fares: FarePolicy }
   | { type: 'scheduleIncident'; incident: IncidentConfig };
 
 export interface Scenario {

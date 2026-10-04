@@ -173,6 +173,9 @@ export function compareHorizons(
     numRow('Accessibility', b.accessScore, m.accessScore, ' pts', 'up'),
     numRow('Transit share', b.stats.transitShare, m.stats.transitShare, '%', 'up'),
     numRow('Op. cost', b.stats.opCost, m.stats.opCost, ' OCU', null, 0),
+    numRow('Fare revenue', b.stats.revenue, m.stats.revenue, ' OCU', 'up', 0),
+    numRow('Cost recovery', b.stats.costRecovery, m.stats.costRecovery, '%', 'up'),
+    numRow('Subsidy', b.stats.subsidy, m.stats.subsidy, ' OCU', 'down', 0),
     {
       label: 'Construction cost',
       base: formatCost(0),
@@ -226,6 +229,9 @@ export function buildCompareRows(base: SimStats, mod: SimStats, costBase: number
     numRow('Car share', base.carShare, mod.carShare, '%', 'down'),
     numRow('Avg congestion', base.avgCongestion, mod.avgCongestion, '', 'down', 2),
     numRow('Transit boardings', base.boardingsTotal, mod.boardingsTotal, '', 'up', 0),
+    numRow('Fare revenue', base.revenue, mod.revenue, ' OCU', 'up', 0),
+    numRow('Cost recovery', base.costRecovery, mod.costRecovery, '%', 'up'),
+    numRow('Subsidy', base.subsidy, mod.subsidy, ' OCU', 'down', 0),
     {
       label: 'Crowded station',
       base: `${base.crowdedStation} (${base.crowdedCount})`,

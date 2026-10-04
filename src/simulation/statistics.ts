@@ -1,5 +1,6 @@
 import type { SimStats } from '../types/index.ts';
 import type { SimulationState } from './index.ts';
+import { costRecoveryPct, subsidyFor } from './economics/fares.ts';
 import { operatingCost } from './service/costs.ts';
 import { routeEffectiveHeadway } from './service/timetable.ts';
 import { LOOP_ROUTES } from './passengers/passengers.ts';
@@ -100,11 +101,12 @@ export function computeStats(sim: SimulationState): SimStats {
   };
 }
 
-/** Service-level metrics from vehicle telemetry + operating costs. */
+/** Service-level metrics from vehicle telemetry + operating costs + fares. */
 function serviceStats(sim: SimulationState): Pick<
   SimStats,
   'deniedBoardings' | 'avgOcc' | 'vehKm' | 'vehHr' | 'opCost' | 'opCostPerPax' | 'avgHeadway' | 'totalDelayMin'
   | 'rerouted' | 'strandedNow' | 'strandedPeak' | 'cancelledTrips' | 'activeIncidents'
+  | 'revenue' | 'revenueMetro' | 'revenueRail' | 'revenueBus' | 'costRecovery' | 'subsidy'
 > {
   const c = sim.counters;
   let occSum = 0;
@@ -138,13 +140,21 @@ function serviceStats(sim: SimulationState): Pick<
   const completed = Math.max(1, c.completed);
   let strandedNow = 0;
   for (const p of sim.passengers) if (p.state === 'STRANDED') strandedNow++;
+  const revenue = Math.round(c.revenueTotal);
+  const opCostRounded = Math.round(opCost);
   return {
     deniedBoardings: c.deniedBoardings,
     avgOcc: Math.round(avgOcc * 1000) / 10,
     vehKm: Math.round(vehKm * 10) / 10,
     vehHr: Math.round(vehHr * 10) / 10,
-    opCost: Math.round(opCost),
+    opCost: opCostRounded,
     opCostPerPax: Math.round((opCost / completed) * 100) / 100,
+    revenue,
+    revenueMetro: Math.round(c.revenueByMode.metro ?? 0),
+    revenueRail: Math.round(c.revenueByMode.rail ?? 0),
+    revenueBus: Math.round(c.revenueByMode.bus ?? 0),
+    costRecovery: costRecoveryPct(revenue, opCostRounded),
+    subsidy: subsidyFor(revenue, opCostRounded),
     avgHeadway: headwayN > 0 ? Math.round((headwaySum / headwayN) * 10) / 10 : 0,
     totalDelayMin: Math.round(c.totalDelayMin),
     rerouted: c.rerouted,

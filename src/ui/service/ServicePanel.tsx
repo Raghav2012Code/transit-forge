@@ -2,6 +2,7 @@
 // consequences derived from live simulation state (no hard-coded estimates).
 import type { SimulationState } from '../../simulation/index.ts';
 import type { ServicePatch } from '../../simulation/scenario/scenario.ts';
+import { MAX_FARE, type FarePolicy } from '../../simulation/economics/fares.ts';
 import { clampHeadway } from '../../simulation/service/servicePlan.ts';
 import { effectiveHeadway, fleetRequired } from '../../simulation/service/timetable.ts';
 import { routeServiceMath } from '../../simulation/service/routeService.ts';
@@ -13,6 +14,7 @@ interface Props {
   selectedRouteId: string | null;
   onSelectRoute: (id: string) => void;
   onPatch: (routeId: string, patch: ServicePatch) => void;
+  onFares: (fares: FarePolicy) => void;
 }
 
 const QUICK_HEADWAYS: Record<string, number[]> = {
@@ -51,7 +53,7 @@ function Stepper({ label, value, display, onChange, min, max, step = 1 }: {
   );
 }
 
-export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPatch }: Props) {
+export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPatch, onFares }: Props) {
   const routeId = selectedRouteId ?? sim.routes[0]?.id ?? '';
   const math = routeId ? routeServiceMath(sim, routeId) : null;
   const route = sim.routes.find((r) => r.id === routeId);
@@ -147,6 +149,20 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
         Synchronize transfers
       </label>
 
+      <h5>Fares (OCU / trip, all routes)</h5>
+      <dl>
+        <Stepper label="Metro fare" value={sim.fares.metro} display={`${sim.fares.metro} OCU`}
+          min={0} max={MAX_FARE} onChange={(v) => onFares({ ...sim.fares, metro: v })} />
+        <Stepper label="Rail fare" value={sim.fares.rail} display={`${sim.fares.rail} OCU`}
+          min={0} max={MAX_FARE} onChange={(v) => onFares({ ...sim.fares, rail: v })} />
+        <Stepper label="Bus fare" value={sim.fares.bus} display={`${sim.fares.bus} OCU`}
+          min={0} max={MAX_FARE} onChange={(v) => onFares({ ...sim.fares, bus: v })} />
+      </dl>
+      <p className="tf-hint">
+        One ticket at the entry mode; transfers are free. Higher fares push riders
+        to cars, and denied or unfinished trips earn nothing.
+      </p>
+
       <h5>Reliability</h5>
       <dl>
         <Stepper label="Delay prob" value={plan.reliability.delayProb} display={`${Math.round(plan.reliability.delayProb * 100)}%`}
@@ -169,7 +185,13 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
         <div className="tf-stat-row"><dt>Denied boardings</dt><dd>{math.denied.toLocaleString()}</dd></div>
         <div className="tf-stat-row"><dt>Op. cost/day</dt><dd>{Math.round(math.dayCost).toLocaleString()} OCU</dd></div>
         <div className="tf-stat-row"><dt>Cost / pax</dt><dd>{math.costPerPax.toFixed(2)} OCU</dd></div>
+        <div className="tf-stat-row"><dt>Revenue</dt><dd>{math.revenue.toLocaleString()} OCU</dd></div>
+        <div className="tf-stat-row"><dt>Cost recovery</dt><dd>{math.recovery.toFixed(1)}%</dd></div>
+        <div className="tf-stat-row"><dt>Break-even fare</dt><dd>{math.breakEven.toFixed(2)} OCU</dd></div>
       </dl>
+      <p className="tf-hint">
+        Break-even holds ridership fixed — a real fare rise earns less than shown.
+      </p>
     </Dock>
   );
 }

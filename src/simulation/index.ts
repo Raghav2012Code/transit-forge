@@ -37,6 +37,7 @@ import {
   type IncidentConfig,
 } from './incidents/incidents.ts';
 import type { Incident, IncidentEvent } from '../types/index.ts';
+import { DEFAULT_FARES, type FarePolicy } from './economics/fares.ts';
 
 export interface SimulationState {
   seed: number;
@@ -65,6 +66,8 @@ export interface SimulationState {
   busRouteCongestion: Record<string, number>;
   /** Operating configuration per route (infrastructure lives on TransportRoute). */
   service: Record<string, ServicePlan>;
+  /** Flat fare per transit mode (OCU per trip, entry-mode pricing). */
+  fares: FarePolicy;
   /** Deterministic departure phase per route (0 for synced routes). */
   serviceOffsets: Record<string, number>;
   /** Disruption incidents (live + scheduled + resolved history). */
@@ -119,6 +122,9 @@ function emptyCounters(routeIds: string[]): TripCounters {
     strandedMin: 0,
     incidentDelayMin: 0,
     cancelledTrips: 0,
+    revenueTotal: 0,
+    revenueByMode: {},
+    revenueByRoute: {},
   };
 }
 
@@ -173,6 +179,7 @@ export function createSimulationFromParts(
     routeCumDist: Map<string, number[]>;
     service?: Record<string, ServicePlan>;
     incidents?: IncidentConfig[];
+    fares?: FarePolicy;
   },
   serviceOverrides?: Record<string, ServicePlan>,
 ): SimulationState {
@@ -214,6 +221,7 @@ export function createSimulationFromParts(
     roadCache: new Map(),
     busRouteCongestion: {},
     service,
+    fares: net.fares ? { ...net.fares } : { ...DEFAULT_FARES },
     serviceOffsets,
     incidents: (net.incidents ?? []).map((cfg, i) => ({
       ...cfg,

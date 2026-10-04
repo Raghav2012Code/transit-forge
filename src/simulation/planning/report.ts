@@ -17,7 +17,7 @@ export interface PlanReport {
   constraints: { label: string; value: string; limit: string; passed: boolean }[];
   performance: CompareRow[];
   tradeoffs: { improved: string[]; worsened: string[] };
-  cost: { construction: string; operating: string };
+  cost: { construction: string; operating: string; revenue: string; subsidy: string };
   resilience: CompareRow[] | null;
   score: PlanningScore;
 }
@@ -36,6 +36,8 @@ export function buildReport(input: {
   intervention: InterventionSummary;
   constructionCost: number;
   opCost: number;
+  revenue: number;
+  subsidy: number;
   score: PlanningScore;
 }): PlanReport {
   const byId = new Map(input.objectiveResults.map((r) => [r.objectiveId, r]));
@@ -78,7 +80,12 @@ export function buildReport(input: {
     constraints,
     performance: input.comparisonRows,
     tradeoffs: { improved, worsened },
-    cost: { construction: formatCost(input.constructionCost), operating: `${Math.round(input.opCost).toLocaleString()} OCU/day` },
+    cost: {
+      construction: formatCost(input.constructionCost),
+      operating: `${Math.round(input.opCost).toLocaleString()} OCU/day`,
+      revenue: `${Math.round(input.revenue).toLocaleString()} OCU/day`,
+      subsidy: `${Math.round(input.subsidy).toLocaleString()} OCU/day`,
+    },
     resilience: input.resilienceRows,
     score: input.score,
   };
@@ -117,6 +124,7 @@ export function reportToText(report: PlanReport): string {
   lines.push(`Worsened: ${report.tradeoffs.worsened.join('; ') || '—'}`);
   lines.push('');
   lines.push(`COST: ${report.cost.construction} construction · ${report.cost.operating} operating`);
+  lines.push(`FINANCE: ${report.cost.revenue} revenue · ${report.cost.subsidy} subsidy`);
   if (report.resilience) {
     lines.push('');
     lines.push('RESILIENCE');
@@ -140,6 +148,7 @@ export function reportToHtml(report: PlanReport): string {
     `<h2>Constraints</h2><ul>${report.constraints.map((c) => `<li class="${c.passed ? 'pass' : 'fail'}">${esc(c.label)}: ${esc(c.value)} (limit ${esc(c.limit)})</li>`).join('')}</ul>` +
     `<h2>Performance</h2><table><tr><th>Metric</th><th>Base</th><th>Plan</th><th>Change</th></tr>${report.performance.map((r) => `<tr><td>${esc(r.label)}</td><td>${esc(r.base)}</td><td>${esc(r.mod)}</td><td>${esc(r.delta)}</td></tr>`).join('')}</table>` +
     `<h2>Cost</h2><p>${esc(report.cost.construction)} construction · ${esc(report.cost.operating)} operating</p>` +
+    `<h2>Finance</h2><p>${esc(report.cost.revenue)} revenue · ${esc(report.cost.subsidy)} subsidy</p>` +
     `<h2>Score: ${report.score.total}</h2><ul>${report.score.parts.map((p) => `<li>${esc(p.label)} ${p.value} × ${Math.round(p.weight * 100)}%</li>`).join('')}</ul>` +
     `</body></html>`;
 }

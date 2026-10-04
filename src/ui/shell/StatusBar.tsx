@@ -53,6 +53,9 @@ export default function StatusBar({ stats, viewing, incidents, opCost }: Props) 
       <div className="tf-status-cell">
         <span>op cost</span><b>{opCost.toLocaleString()}</b>
       </div>
+      <div className="tf-status-cell">
+        <span>recovery</span><b className={stats.costRecovery >= 60 ? 'good' : stats.costRecovery >= 30 ? 'warn' : 'bad'}>{stats.costRecovery}%</b>
+      </div>
       <div className={`tf-status-cell${incidents > 0 ? ' bad' : ''}`}>
         <span>incidents</span><b>{incidents}</b>
       </div>

@@ -2,6 +2,7 @@
 // needs derived operating figures from live simulation state.
 import type { SimulationState } from '../index.ts';
 import { LOOP_ROUTES } from '../passengers/passengers.ts';
+import { breakEvenFare, costRecoveryPct } from '../economics/fares.ts';
 import { operatingCost } from './costs.ts';
 import { headwayAt } from './servicePlan.ts';
 import { cycleMin, effectiveHeadway, fleetRequired } from './timetable.ts';
@@ -23,6 +24,17 @@ export interface ServiceMath {
   peakOcc: number;
   denied: number;
   boarded: number;
+  /** Actual fare revenue attributed to this route (completions only). */
+  revenue: number;
+  /** Actual operating cost from telemetry (same basis as revenue). */
+  routeOpCost: number;
+  /** Revenue / actual operating cost in percent. */
+  recovery: number;
+  /**
+   * Fare that would cover this route at current ridership. Informational:
+   * holds ridership fixed, so a real fare rise earns less.
+   */
+  breakEven: number;
 }
 
 /** Derived operating figures for one route, or null when unknown. */
@@ -50,6 +62,10 @@ export function routeServiceMath(sim: SimulationState, routeId: string): Service
   const oneWayHr = cycle / 2 / 60;
   const dayCost = operatingCost(route.mode, departures * oneWayHr, (departures * length) / 1000, assigned);
   const boarded = sim.counters.routeBoardings[route.id] ?? 0;
+  const revenue = Math.round(sim.counters.revenueByRoute[route.id] ?? 0);
+  const hr = sim.counters.routeVehHr[route.id] ?? 0;
+  const km = sim.counters.routeVehKm[route.id] ?? 0;
+  const routeOpCost = Math.round(operatingCost(route.mode, hr, km, assigned));
   return {
     routeId,
     length, slow, cycle, scheduled, fleet, assigned,
@@ -59,5 +75,9 @@ export function routeServiceMath(sim: SimulationState, routeId: string): Service
     peakOcc: (sim.counters.routePeakOcc[route.id] ?? 0) * 100,
     denied: sim.counters.routeDenied[route.id] ?? 0,
     boarded,
+    revenue,
+    routeOpCost,
+    recovery: costRecoveryPct(revenue, routeOpCost),
+    breakEven: breakEvenFare(routeOpCost, boarded),
   };
 }

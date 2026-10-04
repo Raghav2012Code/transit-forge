@@ -60,7 +60,18 @@ npm run build
   redundancy analysis, resilience-vs-base compare, status overlay + markers,
   event timeline. 87 tests passing. Verified: segment closure → 102 rerouted,
   network-wide road congestion, full recovery with measured deltas.
-- Next: advanced economics.
+- v1.2 economics: per-mode flat fares (OCU, entry-mode pricing, transfers free)
+  with live steppers, fare locked at boarding, revenue counted from completions
+  only (denied/stranded/cancelled earn nothing), cost recovery + subsidy in
+  stats, Finance section, and status strip, elasticity in mode choice (smooth,
+  bounded, zero-fare baseline bit-identical), per-route revenue/recovery/
+  break-even hints, revenue + cost-recovery objectives, subsidy-cap constraint,
+  setFares scenario op with undo/redo + compare + report coverage (FINANCE
+  section in text/HTML/JSON). Free-transit default preserves all baselines.
+- v1.1.1 vehicle-path fix: vehicle meshes ride the same smoothed curve the
+  route-line tube is drawn from (fraction-of-route mapping, timing unchanged);
+  replacement shuttles deployed mid-day now get path entries so they render
+  on their line. 117 tests passing.
 - v1.0 planning campaign: objectives + constraints evaluated against live and
   simulated metrics, 7 procedural briefs with difficulty tiers, ranked city
   problems with drill-down, rule-based recommendations with Why, intervention

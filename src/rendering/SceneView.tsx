@@ -387,7 +387,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       lastFrame = now;
       const cur = simRef.current;
       if (cur) {
-        syncVehicleMeshes(rig, cur.vehicles, cur.routes);
+        syncVehicleMeshes(rig, cur.vehicles, cur.routes, cur.stations);
         updateVehicles(rig, cur.vehicles);
         updateCarRig(carRig, cur.cars, edgeLen);
         rebuildDraft();

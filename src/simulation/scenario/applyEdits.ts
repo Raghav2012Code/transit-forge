@@ -12,6 +12,7 @@ import { connectionsForRoute, type NetworkData } from '../transport/network.ts';
 import { defaultPlanFor } from '../service/servicePlan.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
 import { COST_RATES, mergeServicePatch, sanitizeServicePatch, type EditOp, type RoadKind } from './scenario.ts';
+import { DEFAULT_FARES, sanitizeFares, type FarePolicy } from '../economics/fares.ts';
 import type { IncidentConfig } from '../incidents/incidents.ts';
 
 export interface ModifiedNetwork {
@@ -25,6 +26,8 @@ export interface ModifiedNetwork {
   warnings: string[];
   /** Operating configuration per surviving route (defaults + setService ops). */
   service: Record<string, ServicePlan>;
+  /** Fare policy (DEFAULT_FARES unless a setFares op says otherwise). */
+  fares: FarePolicy;
   /** Scheduled incidents from scheduleIncident ops (validated). */
   incidents: IncidentConfig[];
 }
@@ -307,6 +310,12 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
     service[r.id] = mergeServicePatch(service[r.id], sanitizeServicePatch(op.patch, mode));
   }
 
+  // Fare policy: last setFares op wins (sanitized, never throws).
+  let fares: FarePolicy = { ...DEFAULT_FARES };
+  for (const op of ops) {
+    if (op.type === 'setFares') fares = sanitizeFares(op.fares);
+  }
+
   // Scheduled incidents: validated against the final network, never throw.
   const incidents: IncidentConfig[] = [];
   const routeIdSet = new Set(routes.map((r) => r.id));
@@ -331,6 +340,7 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
     cost: Math.round(cost),
     warnings,
     service,
+    fares,
     incidents,
   };
 }

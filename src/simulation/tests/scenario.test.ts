@@ -152,7 +152,10 @@ describe('scenario comparison', () => {
     expect(baseStats.generated).toBeGreaterThan(0);
     expect(modStats.generated).toBeGreaterThan(0);
     const rows = buildCompareRows(baseStats, modStats, 0, mod.cost);
-    expect(rows.length).toBe(9);
+    expect(rows.length).toBe(12);
+    expect(rows.some((r) => r.label === 'Fare revenue')).toBe(true);
+    expect(rows.some((r) => r.label === 'Cost recovery')).toBe(true);
+    expect(rows.some((r) => r.label === 'Subsidy')).toBe(true);
     expect(rows[rows.length - 1].mod).not.toBe('₹0L');
   });
 });
