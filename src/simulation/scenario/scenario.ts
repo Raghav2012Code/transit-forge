@@ -3,6 +3,7 @@
 // Undo/redo replays the op log (no state snapshots needed).
 import type { TransportMode } from '../../types/index.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
+import type { IncidentConfig } from '../incidents/incidents.ts';
 import { clampHeadway } from '../service/servicePlan.ts';
 
 export type RoadKind = 'local' | 'arterial' | 'highway';
@@ -87,7 +88,8 @@ export type EditOp =
       edges: { id: string; a: string; b: string; kind: RoadKind }[];
     }
   | { type: 'removeRoad'; edgeId: string }
-  | { type: 'setService'; routeId: string; patch: ServicePatch };
+  | { type: 'setService'; routeId: string; patch: ServicePatch }
+  | { type: 'scheduleIncident'; incident: IncidentConfig };
 
 export interface Scenario {
   version: 1;

@@ -35,16 +35,15 @@ npm run build
 
 ## Status
 
-- v0.8 city growth: land-use capacity per district, deterministic yearly
-  growth (lagged accessibility memory, city-relative attractiveness, logistic
-  capacity dampening, fixed city budget — no runaway), trip purposes on all
-  trips, demand auto-regenerates from population, separate growth clock
-  (+1/5/10/20y advances), horizon compare (1/5/10/20y base-vs-scenario with
-  population/jobs/ridership/access rows), labeled forecasts, density/
-  development/growth/demand heatmaps, demand purpose layers, district growth
-  inspector, warnings + rule-based recommendations, timeline charts.
-  70 tests passing. Verified: 5y → pop +10.4%, demand +10.4%; airport express
-  5y → access +0.8, transit +2.2pp, crowding +25%.
+- v0.9 disruptions & resilience: 8 incident kinds (station/segment/route/
+  service/delay/road/capacity/bridge) with scheduled→active→recovering→
+  resolved lifecycle, Disrupt mode with map targeting, live rerouting with
+  STRANDED state + 45-min abandon, vehicle hold/park/terminate, boarding
+  guards, replacement shuttles from a 12-bus pool, road closures with car
+  replan + abandon, transparent resilience scores, structural criticality +
+  redundancy analysis, resilience-vs-base compare, status overlay + markers,
+  event timeline. 87 tests passing. Verified: segment closure → 102 rerouted,
+  network-wide road congestion, full recovery with measured deltas.
 - Next: advanced economics.
 
 ## Known limitations (v0.4 candidates)

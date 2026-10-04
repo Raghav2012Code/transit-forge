@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
-import { createSimulation, createSimulationFromParts, stepSimulation, type SimulationState } from './simulation/index.ts';
+import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
 import { computeAccessibility } from './simulation/analytics/accessibility.ts';
 import { computeCoverage } from './simulation/analytics/coverage.ts';
 import { findBottlenecks } from './simulation/analytics/bottlenecks.ts';
@@ -10,7 +10,15 @@ import { findTransitGaps } from './simulation/analytics/gaps.ts';
 import { planningScore, populationImpact } from './simulation/analytics/impact.ts';
 import { samplePoint, type SeriesPoint } from './simulation/analytics/series.ts';
 import { applyEdits } from './simulation/scenario/applyEdits.ts';
-import { compareHorizons, compareScenarios } from './simulation/scenario/compare.ts';
+import { compareHorizons, compareResilience, compareScenarios } from './simulation/scenario/compare.ts';
+import {
+  deployReplacement,
+  incidentPresets,
+  type IncidentConfig,
+} from './simulation/incidents/incidents.ts';
+import { validateIncidentConfig } from './simulation/scenario/applyEdits.ts';
+import { criticalityAnalysis, type CriticalItem } from './simulation/analytics/resilience.ts';
+import type { CompareRow } from './simulation/scenario/compare.ts';
 import {
   BASE_YEAR,
   forecastGrowth,
@@ -52,6 +60,8 @@ import ChartsPanel from './ui/analytics/ChartsPanel.tsx';
 import { buildUtilization } from './simulation/analytics/utilization.ts';
 import BuildPanel, { type BuildTool } from './ui/build/BuildPanel.tsx';
 import ComparePanel, { type CompareResult } from './ui/build/ComparePanel.tsx';
+import DisruptPanel from './ui/disrupt/DisruptPanel.tsx';
+import { EMPTY_DRAFT, type IncidentDraft } from './ui/disrupt/draft.ts';
 import GrowthPanel, { type ForecastView } from './ui/growth/GrowthPanel.tsx';
 import type { Zone } from './types/index.ts';
 import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
@@ -64,7 +74,7 @@ const SEED = 1337;
 const TICKS_PER_SEC: Record<Speed, number> = { 1: 2, 5: 8, 20: 24 };
 const ROAD_SNAP_M = 45;
 
-type Mode = 'simulate' | 'build';
+type Mode = 'simulate' | 'build' | 'disrupt';
 
 interface PendingDelete {
   kind: 'station' | 'route' | 'road';
@@ -348,6 +358,238 @@ export default function App() {
     }
   }
 
+  // ---- disruptions ----
+  const [incidentDraft, setIncidentDraft] = useState<IncidentDraft>(EMPTY_DRAFT);
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
+  const [critical, setCritical] = useState<CriticalItem[] | null>(null);
+  const [resilienceRows, setResilienceRows] = useState<CompareRow[] | null>(null);
+  const [resilienceRunning, setResilienceRunning] = useState(false);
+
+  function draftToConfig(d: IncidentDraft): IncidentConfig {
+    const sev = d.severity === 'low' ? 0.3 : d.severity === 'medium' ? 0.6 : 0.9;
+    const base = {
+      id: '',
+      label: incidentLabel(d, snapshot),
+      startMin: Math.round(snapshot.timeMinutes + d.startInMin),
+      durationMin: d.durationMin,
+      recoveryMin: d.recoveryMin,
+      severity01: sev,
+    };
+    switch (d.kind) {
+      case 'station-closure':
+        return { ...base, kind: d.kind, targetStationId: d.targetStationId };
+      case 'segment-closure':
+        return { ...base, kind: d.kind, targetRouteId: d.targetRouteId, segFrom: d.segFrom, segTo: d.segTo };
+      case 'route-suspension':
+        return { ...base, kind: d.kind, targetRouteId: d.targetRouteId };
+      case 'reduced-service':
+        return { ...base, kind: d.kind, targetRouteId: d.targetRouteId, headwayMult: d.headwayMult };
+      case 'major-delay':
+        return { ...base, kind: d.kind, targetRouteId: d.targetRouteId, delayMin: d.delayMin };
+      case 'road-closure':
+      case 'bridge-closure':
+        return { ...base, kind: d.kind, edgeIds: d.edgeId ? [d.edgeId] : [] };
+      case 'road-capacity':
+        return { ...base, kind: d.kind, edgeIds: d.edgeId ? [d.edgeId] : [], capacityMult: d.capacityMult };
+    }
+  }
+
+  function incidentLabel(d: IncidentDraft, sim: SimulationState): string {
+    const route = sim.routes.find((r) => r.id === d.targetRouteId)?.name ?? d.targetRouteId;
+    const station = sim.stations.find((s) => s.id === d.targetStationId)?.name ?? d.targetStationId;
+    switch (d.kind) {
+      case 'station-closure': return `${station || 'Station'} closure`;
+      case 'segment-closure': return `${route || 'Route'} segment closure`;
+      case 'route-suspension': return `${route || 'Route'} suspension`;
+      case 'reduced-service': return `${route || 'Route'} reduced service`;
+      case 'major-delay': return `${route || 'Route'} major delay`;
+      case 'road-closure': return `Road closure ${d.edgeId}`;
+      case 'road-capacity': return `Road capacity cut ${d.edgeId}`;
+      case 'bridge-closure': return `Bridge closure ${d.edgeId}`;
+    }
+  }
+
+  function validateDraft(d: IncidentDraft, sim: SimulationState): string | null {
+    if (d.kind === 'station-closure' && !d.targetStationId) return 'Choose a station.';
+    if ((d.kind === 'segment-closure' || d.kind === 'route-suspension' || d.kind === 'reduced-service' || d.kind === 'major-delay') && !d.targetRouteId) return 'Choose a route.';
+    if (d.kind === 'segment-closure' && (!d.segFrom || !d.segTo || d.segFrom === d.segTo)) return 'Choose two different segment endpoints.';
+    if ((d.kind === 'road-closure' || d.kind === 'road-capacity' || d.kind === 'bridge-closure') && !d.edgeId) return 'Choose a road.';
+    const cfg = draftToConfig(d);
+    const problems = validateIncidentConfig(
+      cfg,
+      new Set(sim.stations.map((s) => s.id)),
+      new Set(sim.routes.map((r) => r.id)),
+      new Set(sim.roadGraph.edges.map((e) => e.id)),
+    );
+    return problems.length > 0 ? problems.join('; ') : null;
+  }
+
+  function createIncident() {
+    const sim = simRef.current;
+    const problem = validateDraft(incidentDraft, sim);
+    if (problem) return;
+    const cfg = draftToConfig(incidentDraft);
+    if (incidentDraft.withReplacement && (incidentDraft.kind === 'segment-closure' || incidentDraft.kind === 'route-suspension' || incidentDraft.kind === 'station-closure')) {
+      const rep = replacementEndpoints(incidentDraft, sim);
+      if (rep) {
+        cfg.replacement = {
+          fromStationId: rep[0],
+          toStationId: rep[1],
+          buses: Math.min(incidentDraft.repBuses, sim.emergencyBusesFree),
+          headwayMin: incidentDraft.repHeadwayMin,
+          capacity: 70,
+        };
+      }
+    }
+    const id = `inc-${sim.nextIncidentId}`;
+    sim.nextIncidentId++;
+    sim.incidents.push({
+      ...cfg,
+      id,
+      status: 'scheduled',
+      activeTicks: 0,
+      baselineWaiting: 0,
+      recovered90: false,
+    });
+    sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
+    setSelectedIncidentId(id);
+    setIncidentDraft(EMPTY_DRAFT);
+    setSnapshot({ ...sim });
+  }
+
+  /** Shuttle endpoints for a draft: closure span, or the station itself. */
+  function replacementEndpoints(d: IncidentDraft, sim: SimulationState): [string, string] | null {
+    if (d.kind === 'segment-closure' && d.segFrom && d.segTo) return [d.segFrom, d.segTo];
+    if (d.kind === 'route-suspension' && d.targetRouteId) {
+      const r = sim.routes.find((x) => x.id === d.targetRouteId);
+      if (r && r.stationIds.length >= 2) return [r.stationIds[0], r.stationIds[r.stationIds.length - 1]];
+    }
+    if (d.kind === 'station-closure' && d.targetStationId) {
+      const routes = sim.routes.filter((r) => r.stationIds.includes(d.targetStationId));
+      const r = routes[0];
+      if (!r) return null;
+      const i = r.stationIds.indexOf(d.targetStationId);
+      const a = r.stationIds[Math.max(0, i - 1)];
+      const b = r.stationIds[Math.min(r.stationIds.length - 1, i + 1)];
+      if (a !== b) return [a, b];
+    }
+    return null;
+  }
+
+  /** Fill the draft target from the current map selection. */
+  function useSelectionForDraft() {
+    const sel = selection;
+    if (!sel) return;
+    if (sel.kind === 'station') {
+      const d = { ...incidentDraft };
+      if (d.kind === 'station-closure') d.targetStationId = sel.id;
+      else if (d.kind === 'segment-closure') {
+        if (!d.segFrom) {
+          d.segFrom = sel.id;
+          d.segTo = '';
+        } else if (d.segFrom !== sel.id) d.segTo = sel.id;
+      }
+      setIncidentDraft(d);
+    } else if (sel.kind === 'route') {
+      setIncidentDraft({ ...incidentDraft, targetRouteId: sel.id });
+    } else if (sel.kind === 'road') {
+      setIncidentDraft({ ...incidentDraft, edgeId: sel.id });
+    }
+  }
+
+  function resolveIncident(id: string) {
+    const sim = simRef.current;
+    const inc = sim.incidents.find((i) => i.id === id);
+    if (!inc) return;
+    if (inc.status === 'scheduled') {
+      sim.incidents = sim.incidents.filter((i) => i.id !== id);
+      sim.events.push({ t: sim.timeMinutes, text: `${inc.label} — cancelled before start`, level: 'info' });
+    } else if (inc.status === 'active') {
+      // End now: recovery window starts immediately.
+      inc.durationMin = Math.max(0, sim.timeMinutes - inc.startMin);
+    }
+    if (selectedIncidentId === id && inc.status !== 'active' && inc.status !== 'recovering') setSelectedIncidentId(null);
+    setSnapshot({ ...sim });
+  }
+
+  function deployReplacementFor(id: string) {
+    const sim = simRef.current;
+    const inc = sim.incidents.find((i) => i.id === id);
+    if (!inc || !inc.replacement || inc.replacementRouteId) return;
+    const events = deployReplacement(sim, inc);
+    for (const e of events) {
+      sim.events.push(e);
+      while (sim.events.length > 200) sim.events.shift();
+    }
+    setSnapshot({ ...sim });
+  }
+
+  function boostFrequency(routeId: string) {
+    const sim = simRef.current;
+    const plan = sim.service[routeId];
+    if (!plan) return;
+    onServicePatch(routeId, {
+      peakHeadwayMin: Math.max(3, Math.round(plan.peakHeadwayMin / 2)),
+      offPeakHeadwayMin: Math.max(5, Math.round(plan.offPeakHeadwayMin / 2)),
+    });
+  }
+
+  function applyPreset(key: string) {
+    const sim = simRef.current;
+    const presets = incidentPresets({ routes: sim.routes, stations: sim.stations, routeLengths: sim.routeLengths });
+    const p = presets.find((x) => x.key === key);
+    if (!p) return;
+    const cfg = p.build(Math.round(sim.timeMinutes + 5));
+    const id = `inc-${sim.nextIncidentId}`;
+    sim.nextIncidentId++;
+    sim.incidents.push({ ...cfg, id, status: 'scheduled', activeTicks: 0, baselineWaiting: 0, recovered90: false });
+    sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
+    setSelectedIncidentId(id);
+    setSnapshot({ ...sim });
+  }
+
+  function analyzeCritical() {
+    const sim = simRef.current;
+    setCritical(criticalityAnalysis({
+      zones: sim.city.zones,
+      stations: sim.stations,
+      connections: sim.connections,
+      routes: sim.routes,
+      roadGraph: sim.roadGraph,
+      zoneRoadAccess: sim.zoneRoadAccess,
+      city: sim.city,
+    }));
+  }
+
+  async function compareResilienceLive() {
+    if (resilienceRunning) return;
+    const sim = simRef.current;
+    const inc = sim.incidents.find((i) => i.id === selectedIncidentId) ?? sim.incidents.find((i) => i.status === 'active');
+    if (!inc) return;
+    setResilienceRunning(true);
+    await new Promise((r) => setTimeout(r, 30));
+    const cfg: IncidentConfig = {
+      id: inc.id,
+      kind: inc.kind,
+      label: inc.label,
+      targetRouteId: inc.targetRouteId,
+      targetStationId: inc.targetStationId,
+      segFrom: inc.segFrom,
+      segTo: inc.segTo,
+      edgeIds: inc.edgeIds ? [...inc.edgeIds] : undefined,
+      startMin: 500,
+      durationMin: inc.durationMin,
+      recoveryMin: inc.recoveryMin,
+      severity01: inc.severity01,
+      headwayMult: inc.headwayMult,
+      delayMin: inc.delayMin,
+      capacityMult: inc.capacityMult,
+    };
+    const cmp = compareResilience(SEED, baseCity, baseNet, mod.city, mod, cfg, 240);
+    setResilienceRows(cmp.rows);
+    setResilienceRunning(false);
+  }
+
   // ---- scenario application ----
   function resetSimTo(city: typeof baseCity, net: typeof baseNet) {
     simRef.current = createSimulationFromParts(SEED, city, net);
@@ -389,6 +631,11 @@ export default function App() {
     clearDraft();
   }
 
+  function enterDisrupt() {
+    setMode('disrupt');
+    setPlaying(false);
+  }
+
   function enterSimulate() {
     setMode('simulate');
     clearDraft();
@@ -404,6 +651,10 @@ export default function App() {
 
   // ---- build interactions (from the 3D view) ----
   const stationPos = useMemo(() => new Map(snapshot.stations.map((s) => [s.id, { x: s.pos.x, z: s.pos.z }])), [snapshot]);
+  const disruptPresets = useMemo(
+    () => incidentPresets({ routes: snapshot.routes, stations: snapshot.stations, routeLengths: snapshot.routeLengths }),
+    [snapshot],
+  );
 
   function handleBuildPick(sel: Selection) {
     if (tool === 'metro' || tool === 'bus') {
@@ -737,7 +988,32 @@ export default function App() {
           onMapClick: handleMapClick,
           onHover: handleHover,
         }
-      : null;
+      : mode === 'disrupt'
+        ? {
+            pickKinds: ['station', 'route', 'road'] as Selection['kind'][],
+            onPick: (sel: Selection) => {
+              setSelection(sel);
+              if (sel.kind === 'route') setServiceRouteId(sel.id);
+              setIncidentDraft((prev) => {
+                const d = { ...prev };
+                if (sel.kind === 'station') {
+                  if (d.kind === 'station-closure') d.targetStationId = sel.id;
+                  else if (d.kind === 'segment-closure') {
+                    if (!d.segFrom) { d.segFrom = sel.id; d.segTo = ''; }
+                    else if (d.segFrom !== sel.id) d.segTo = sel.id;
+                  }
+                } else if (sel.kind === 'route') {
+                  d.targetRouteId = sel.id;
+                } else if (sel.kind === 'road') {
+                  d.edgeId = sel.id;
+                }
+                return d;
+              });
+            },
+            onMapClick: () => {},
+            onHover: () => {},
+          }
+        : null;
 
   const draftHint =
     tool === 'metro'
@@ -767,6 +1043,9 @@ export default function App() {
           <button type="button" className={`tf-btn small${mode === 'build' ? ' active' : ''}`} onClick={enterBuild}>
             Build
           </button>
+          <button type="button" className={`tf-btn small${mode === 'disrupt' ? ' active' : ''}`} onClick={enterDisrupt}>
+            Disrupt
+          </button>
         </div>
         <SimControls
           playing={playing}
@@ -774,7 +1053,7 @@ export default function App() {
           tick={snapshot.tick}
           timeMinutes={snapshot.timeMinutes}
           onToggle={() => {
-            if (mode === 'build') {
+            if (mode === 'build' || mode === 'disrupt') {
               enterSimulate();
               setPlaying(true);
             } else setPlaying((p) => !p);
@@ -801,10 +1080,10 @@ export default function App() {
             layers={layers}
             overlay={overlay}
             selection={selection}
-            onSelect={mode === 'simulate' ? (sel) => {
+            onSelect={mode === 'build' ? () => {} : (sel) => {
               setSelection(sel);
               if (sel?.kind === 'route') setServiceRouteId(sel.id);
-            } : () => {}}
+            }}
             networkKey={networkKey}
             ghosts={viewing === 'scenario' ? diff.removedStations : []}
             highlightRoutes={viewing === 'scenario' ? diff.addedRoutes : []}
@@ -815,7 +1094,9 @@ export default function App() {
           <div className="tf-overlay-hint">
             {mode === 'build'
               ? 'build mode · sim paused · edits reset the day'
-              : 'drag orbit · right-drag pan · wheel zoom · click station/route/road/district'}
+              : mode === 'disrupt'
+                ? 'disrupt mode · sim paused · click infrastructure to target it'
+                : 'drag orbit · right-drag pan · wheel zoom · click station/route/road/district'}
           </div>
         </section>
         <aside className="tf-panel">
@@ -863,6 +1144,31 @@ export default function App() {
               />
               <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
               <DebugPanel sim={snapshot} />
+            </>
+          ) : mode === 'disrupt' ? (
+            <>
+              <DisruptPanel
+                sim={snapshot}
+                draft={incidentDraft}
+                onDraft={setIncidentDraft}
+                onCreate={createIncident}
+                onUseSelection={useSelectionForDraft}
+                selection={selection}
+                incidents={snapshot.incidents}
+                selectedIncidentId={selectedIncidentId}
+                onSelectIncident={setSelectedIncidentId}
+                onResolve={resolveIncident}
+                onDeployReplacement={deployReplacementFor}
+                onBoostFrequency={boostFrequency}
+                presets={disruptPresets}
+                onPreset={applyPreset}
+                critical={critical}
+                onAnalyze={analyzeCritical}
+                resilienceRows={resilienceRows}
+                resilienceRunning={resilienceRunning}
+                onCompareResilience={compareResilienceLive}
+              />
+              <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
             </>
           ) : (
             <>

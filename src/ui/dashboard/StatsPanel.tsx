@@ -81,6 +81,18 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
           ['Cost / pax', `${stats.opCostPerPax} OCU`],
         ]}
       />
+      {(stats.activeIncidents > 0 || stats.rerouted > 0) && (
+        <Section
+          title="Disruptions"
+          rows={[
+            ['Active incidents', String(stats.activeIncidents)],
+            ['Rerouted', stats.rerouted.toLocaleString()],
+            ['Stranded now', stats.strandedNow.toLocaleString()],
+            ['Stranded peak', stats.strandedPeak.toLocaleString()],
+            ['Cancelled trips', stats.cancelledTrips.toLocaleString()],
+          ]}
+        />
+      )}
     </>
   );
 }

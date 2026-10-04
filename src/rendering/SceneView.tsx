@@ -25,7 +25,8 @@ export type Overlay =
   | 'normal' | 'flow' | 'load' | 'congestion'
   | 'accessibility' | 'traveltime' | 'coverage' | 'bottlenecks'
   | 'frequency' | 'crowding'
-  | 'popdensity' | 'jobdensity' | 'development' | 'growth' | 'demand';
+  | 'popdensity' | 'jobdensity' | 'development' | 'growth' | 'demand'
+  | 'status';
 
 export type AccessGradeKey = 'excellent' | 'good' | 'moderate' | 'poor' | 'very poor';
 
@@ -278,6 +279,62 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     }
     scene.add(ghostGroup);
 
+    // Incident markers: rebuilt when the active incident set changes.
+    const incidentGroup = new THREE.Group();
+    incidentGroup.name = 'incidents';
+    scene.add(incidentGroup);
+    let lastIncidentSig = '';
+    const markerMat = (color: number) =>
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9 });
+    const rebuildIncidentMarkers = (sig: string) => {
+      if (sig === lastIncidentSig) return;
+      lastIncidentSig = sig;
+      incidentGroup.clear();
+      const sim = simRef.current;
+      if (!sim) return;
+      for (const inc of sim.incidents) {
+        if (inc.status !== 'active') continue;
+        const spots: THREE.Vector3[] = [];
+        if (inc.targetStationId) {
+          const m = net.stationMeshById.get(inc.targetStationId);
+          if (m) spots.push(m.position.clone().setY(10));
+        }
+        for (const e of inc.edgeIds ?? []) {
+          const m = city.roadMeshById.get(e);
+          if (m) spots.push(m.position.clone().setY(6));
+        }
+        if (inc.targetRouteId && !inc.targetStationId && (inc.edgeIds ?? []).length === 0) {
+          const r = sim.routes.find((x) => x.id === inc.targetRouteId);
+          const mid = r?.stationIds[Math.floor(r.stationIds.length / 2)];
+          const m = mid ? net.stationMeshById.get(mid) : undefined;
+          if (m) spots.push(m.position.clone().setY(12));
+        }
+        for (const p of spots) {
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(7, 1, 8, 32), markerMat(0xef4444));
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.copy(p);
+          ring.userData.incidentMarker = true;
+          incidentGroup.add(ring);
+        }
+        // Replacement shuttle line between its endpoint stations.
+        if (inc.replacementRouteId) {
+          const rep = inc.replacement;
+          const a = rep ? net.stationMeshById.get(rep.fromStationId) : undefined;
+          const b = rep ? net.stationMeshById.get(rep.toStationId) : undefined;
+          if (a && b) {
+            const line = new THREE.Line(
+              new THREE.BufferGeometry().setFromPoints([
+                a.position.clone().setY(9),
+                b.position.clone().setY(9),
+              ]),
+              new THREE.LineBasicMaterial({ color: 0xf472b6 }),
+            );
+            incidentGroup.add(line);
+          }
+        }
+      }
+    };
+
     // Draft preview: route/road path + hover marker, rebuilt when draft changes.
     const draftGroup = new THREE.Group();
     draftGroup.name = 'draft';
@@ -342,6 +399,21 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             mat.color.setHex(CONGESTION_COLORS[level]);
             mat.emissive.setHex(CONGESTION_COLORS[level]);
             mat.emissiveIntensity = 0.45;
+          } else if (ov === 'status') {
+            const st = cur.edgeState[id];
+            if (st?.closed) {
+              mat.color.setHex(0xef4444);
+              mat.emissive.setHex(0xef4444);
+              mat.emissiveIntensity = 0.8 + 0.4 * Math.sin(elapsed * 5);
+            } else if (st && st.capMult < 1) {
+              mat.color.setHex(0xfb923c);
+              mat.emissive.setHex(0xfb923c);
+              mat.emissiveIntensity = 0.5;
+            } else {
+              mat.color.setHex(mesh.userData.baseColor as number);
+              mat.emissive.setHex(mesh.userData.baseColor as number);
+              mat.emissiveIntensity = 0;
+            }
           } else {
             mat.color.setHex(mesh.userData.baseColor as number);
             mat.emissive.setHex(mesh.userData.baseColor as number);
@@ -381,8 +453,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             mat.color.copy(routeBase).lerp(routeHot, f * 0.3);
             mat.emissive.copy(routeBase);
             mat.emissiveIntensity = 0.15 + 2.2 * f;
-          } else if (ov === 'crowding') {
-            // Live occupancy: frequent-but-empty looks different from packed.
+          } else if (ov === 'crowding') {            // Live occupancy: frequent-but-empty looks different from packed.
             const occ = occN[id] ? occSum[id] / occN[id] : 0;
             routeBase.set(mesh.userData.baseColor as string);
             if (occ >= 0.9) {
@@ -397,6 +468,25 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
               mat.color.copy(routeBase);
               mat.emissive.copy(routeBase);
               mat.emissiveIntensity = 0.25;
+            }
+          } else if (ov === 'status') {
+            // Network status: suspended red, reduced amber, else base.
+            const suspended = cur.closures.suspendedRoutes.has(id);
+            const reduced = (cur.closures.headwayMult.get(id) ?? 1) > 1;
+            if (suspended) {
+              mat.color.setHex(0xef4444);
+              mat.emissive.setHex(0xef4444);
+              mat.emissiveIntensity = 1.2 + 0.6 * Math.sin(elapsed * 5);
+            } else if (reduced) {
+              routeBase.set(mesh.userData.baseColor as string);
+              mat.color.copy(routeBase).lerp(routeHot, 0.3);
+              mat.emissive.setHex(0xfb923c);
+              mat.emissiveIntensity = 0.9;
+            } else {
+              routeBase.set(mesh.userData.baseColor as string);
+              mat.color.copy(routeBase);
+              mat.emissive.copy(routeBase);
+              mat.emissiveIntensity = 0.35;
             }
           } else {
             routeBase.set(mesh.userData.baseColor as string);
@@ -471,8 +561,16 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             mat.emissiveIntensity = 1.2 + 0.8 * Math.sin(elapsed * 5);
             sc = Math.max(sc, 1.35);
           }
+          if (ov === 'status' && cur.closures.closedStations.has(id)) {
+            mat.color.setHex(0xef4444);
+            mat.emissive.setHex(0xef4444);
+            mat.emissiveIntensity = 1.2 + 0.6 * Math.sin(elapsed * 5);
+            sc = Math.max(sc, 1.3);
+          }
           mesh.scale.set(sc, 1, sc);
         }
+        // Incident markers follow the active incident set.
+        rebuildIncidentMarkers(cur.closureSig);
         const sel = selectionRef.current;
         if (sel && (sel.kind === 'station' || sel.kind === 'zone')) {
           const st = byId.get(sel.id);

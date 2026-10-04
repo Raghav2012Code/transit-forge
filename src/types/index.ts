@@ -111,7 +111,7 @@ export interface VehicleState {
   trips: number;
 }
 
-export type PassengerState = 'WALKING' | 'WAITING' | 'ON_VEHICLE' | 'TRANSFERRING' | 'ARRIVED';
+export type PassengerState = 'WALKING' | 'WAITING' | 'ON_VEHICLE' | 'TRANSFERRING' | 'ARRIVED' | 'STRANDED';
 
 /** One ride between two stations on a single route (no transfers inside). */
 export interface Leg {
@@ -141,6 +141,8 @@ export interface Passenger {
   walkLeft: number;
   /** Transfer penalty minutes still remaining (TRANSFERRING state). */
   transferLeft: number;
+  /** Minutes spent stranded (STRANDED state); abandon at 45. */
+  strandedMin: number;
   transfers: number;
   arriveMin: number | null;
 }
@@ -166,6 +168,16 @@ export interface TripCounters {
   routeVehHr: Record<string, number>;
   deniedBoardings: number;
   totalDelayMin: number;
+  /** Passengers forced to replan by a disruption. */
+  rerouted: number;
+  /** Peak simultaneous stranded passengers. */
+  strandedPeak: number;
+  /** Passenger-minutes spent stranded. */
+  strandedMin: number;
+  /** Waiting minutes accrued while any incident is active. */
+  incidentDelayMin: number;
+  /** Trips abandoned after long stranding. */
+  cancelledTrips: number;
 }
 
 export type CongestionLevel = 'free' | 'light' | 'moderate' | 'heavy' | 'severe';
@@ -180,6 +192,10 @@ export interface RoadEdgeState {
   /** Volume/capacity ratio including background flow. */
   vc: number;
   level: CongestionLevel;
+  /** True while a closure incident covers this edge. */
+  closed: boolean;
+  /** Effective capacity multiplier from incidents (1 = normal). */
+  capMult: number;
 }
 
 export type CarState = 'DRIVING' | 'DONE';
@@ -200,6 +216,8 @@ export interface CarTrip {
   s: number;
   arriveMin: number | null;
   travelMin: number;
+  /** Ticks spent held by a closure with no alternative (abandon at 120). */
+  heldTicks: number;
 }
 
 export interface RoadCounters {
@@ -210,6 +228,8 @@ export interface RoadCounters {
   busDelayMin: number;
   maxVC: number;
   maxVCEdge: string;
+  /** Cars that gave up after long blockage. */
+  abandonedCars: number;
 }
 
 export interface PassengerCounts {
@@ -278,4 +298,110 @@ export interface SimStats {
   opCostPerPax: number;
   avgHeadway: number;
   totalDelayMin: number;
+  rerouted: number;
+  strandedNow: number;
+  strandedPeak: number;
+  cancelledTrips: number;
+  activeIncidents: number;
+}
+
+// ---- Disruptions & resilience (v0.9) ----
+
+export type IncidentKind =
+  | 'station-closure'
+  | 'segment-closure'
+  | 'route-suspension'
+  | 'reduced-service'
+  | 'major-delay'
+  | 'road-closure'
+  | 'road-capacity'
+  | 'bridge-closure';
+
+export type IncidentStatus = 'scheduled' | 'active' | 'recovering' | 'resolved';
+
+export interface ReplacementService {
+  fromStationId: string;
+  toStationId: string;
+  buses: number;
+  headwayMin: number;
+  capacity: number;
+}
+
+/** A disruption: planned or live. Times are simulation minutes. */
+export interface Incident {
+  id: string;
+  kind: IncidentKind;
+  label: string;
+  /** Transit route affected (segment/suspension/reduced-service/delay). */
+  targetRouteId?: string;
+  /** Station affected (station closure; segment endpoint otherwise). */
+  targetStationId?: string;
+  /** Segment closure: ordered station ids from→to along the route. */
+  segFrom?: string;
+  segTo?: string;
+  /** Road edges affected (road/bridge closures, capacity cuts). */
+  edgeIds?: string[];
+  startMin: number;
+  durationMin: number;
+  /** Wind-down after duration ends before full removal. */
+  recoveryMin: number;
+  /** 0..1 severity (drives capacity multiplier + labels). */
+  severity01: number;
+  /** Headway multiplier for reduced-service (e.g. 2 = half frequency). */
+  headwayMult?: number;
+  /** Extra dwell minutes per stop for major-delay. */
+  delayMin?: number;
+  /** Capacity multiplier for road-capacity (e.g. 0.5 = one lane lost). */
+  capacityMult?: number;
+  replacement?: ReplacementService;
+  status: IncidentStatus;
+  /** Ticks since activation (drives recovery + metrics). */
+  activeTicks: number;
+  /** Waiting-passenger baseline sampled at activation (recovery detection). */
+  baselineWaiting: number;
+  recovered90: boolean;
+  /** Temp replacement route id while deployed. */
+  replacementRouteId?: string;
+  /** Counter snapshot at activation (for resolved-incident deltas). */
+  snap?: { rerouted: number; completed: number; totalWaitMin: number; cancelledTrips: number; strandedPeak: number };
+  /** Final outcome, filled on resolve. */
+  result?: {
+    affectedPax: number;
+    rerouted: number;
+    strandedPeak: number;
+    extraWaitMin: number;
+    cancelledTrips: number;
+    completedDelta: number;
+    recoveryTicks: number;
+    stationsClosed: number;
+    routeKmLost: number;
+    roadKmLost: number;
+    transitCapLost: number;
+    roadCapLost: number;
+  };
+}
+
+export interface IncidentEvent {
+  /** Simulation minute. */
+  t: number;
+  text: string;
+  level: 'info' | 'warn' | 'good';
+}
+
+/** Aggregate disruption outcome for one incident (or a whole run). */
+export interface ResilienceMetrics {
+  affectedPax: number;
+  rerouted: number;
+  strandedPeak: number;
+  extraWaitMin: number;
+  cancelledTrips: number;
+  stationsClosed: number;
+  routeKmLost: number;
+  roadKmLost: number;
+  transitCapLost: number;
+  roadCapLost: number;
+  recoveryTicks: number;
+  /** Transparent 0..100 score + parts (a planning-game metric, not science). */
+  score: number;
+  scoreParts: { label: string; penalty: number }[];
 }

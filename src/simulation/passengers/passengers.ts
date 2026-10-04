@@ -27,6 +27,7 @@ import {
 import { cachedRoadPath, driveAccessMin, spawnCarTrip } from '../traffic/cars.ts';
 import { chooseMode, transitEstimate } from '../traffic/modeChoice.ts';
 import type { RoadGraph } from '../traffic/roadGraph.ts';
+import type { PathExclusions } from '../transport/graph.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
 import {
   dwellMin,
@@ -34,9 +35,17 @@ import {
   routeEffectiveHeadway,
 } from '../service/timetable.ts';
 import { tripCancelled, tripDelayMin } from '../service/reliability.ts';
+import {
+  hopAheadBlocked,
+  legBlocked,
+  legBoardableFrom,
+  nearestOpenStationIdx,
+  type DerivedClosures,
+} from '../incidents/incidents.ts';
 
 export interface PassengerWorld {
   timeMinutes: number;
+  tick: number;
   seed: number;
   city: CityData;
   stations: Station[];
@@ -60,6 +69,7 @@ export interface PassengerWorld {
   busRoadMap: Record<string, string[]>;
   service: Record<string, ServicePlan>;
   serviceOffsets: Record<string, number>;
+  closures: DerivedClosures;
 }
 
 /** Bus routes that loop instead of ping-ponging. Exported for fleet math. */
@@ -74,17 +84,78 @@ export function walkMin(ax: number, az: number, bx: number, bz: number): number 
 
 /** Headway a passenger experiences on a route right now. */
 export function effHeadway(w: PassengerWorld, route: TransportRoute): number {
+  if (w.closures.suspendedRoutes.has(route.id)) return Infinity;
   const plan = w.service[route.id];
   if (!plan) return route.headwayMin;
   const cum = w.routeCumDist.get(route.id) ?? [0];
   const total = Math.max(1, cum[cum.length - 1]);
   const slow = route.mode === 'bus' ? (w.busRouteCongestion[route.id] ?? 1) : 1;
-  return routeEffectiveHeadway(plan, total, route.stationIds.length, slow, w.timeMinutes, LOOP_ROUTES.has(route.id));
+  const h = routeEffectiveHeadway(plan, total, route.stationIds.length, slow, w.timeMinutes, LOOP_ROUTES.has(route.id));
+  if (!Number.isFinite(h)) return Infinity;
+  return h * (w.closures.headwayMult.get(route.id) ?? 1);
 }
 
 /** Compress a station-level path into single-route legs. Null when unroutable. */
-export function buildRoutePlan(connections: Connection[], from: string, to: string): Leg[] | null {
-  return planTrip(connections, from, to)?.legs ?? null;
+export function buildRoutePlan(connections: Connection[], from: string, to: string, excl?: PathExclusions): Leg[] | null {
+  return planTrip(connections, from, to, excl)?.legs ?? null;
+}
+
+/** Convert live closures to routing exclusions (empty = normal network). */
+export function exclusionsFrom(closures: DerivedClosures): PathExclusions {
+  return {
+    stations: closures.closedStations,
+    segments: closures.closedHops,
+    routes: closures.suspendedRoutes,
+  };
+}
+
+/**
+ * Replan a disrupted journey from a station toward the original final
+ * destination. Returns true when the passenger can continue by transit
+ * (legs replaced, caller sets WAITING); false when stranded.
+ */
+export function replanFromStation(
+  w: PassengerWorld,
+  p: Passenger,
+  stationId: string,
+  zoneById: Map<string, Zone>,
+): boolean {
+  const destLeg = p.legs[p.legs.length - 1];
+  if (!destLeg) return false;
+  const dest = destLeg.alight;
+  if (stationId === dest) {
+    finishJourney(w, p, zoneById, stationId);
+    return true;
+  }
+  const trip = planTrip(w.connections, stationId, dest, exclusionsFrom(w.closures));
+  if (!trip || trip.legs.length === 0) return false;
+  p.legs = trip.legs;
+  p.legIndex = 0;
+  p.atStation = stationId;
+  p.vehicleId = null;
+  return true;
+}
+
+/** Complete a journey on the spot (already at the destination station). */
+function finishJourney(
+  w: PassengerWorld,
+  p: Passenger,
+  zoneById: Map<string, Zone>,
+  stationId: string,
+): void {
+  const st = w.stations.find((s) => s.id === stationId);
+  const dz = zoneById.get(p.destZone);
+  const egress = st && dz ? walkMin(st.pos.x, st.pos.z, dz.center.x, dz.center.z) : 2;
+  p.state = 'ARRIVED';
+  p.arriveMin = w.timeMinutes;
+  p.travelMin = w.timeMinutes - p.departMin + egress;
+  p.vehicleId = null;
+  p.atStation = null;
+  w.counters.completed++;
+  w.counters.totalTravelMin += p.travelMin;
+  w.counters.totalWaitMin += p.waitMin;
+  w.counters.totalTransfers += p.transfers;
+  if (st) st.alightedDay++;
 }
 
 /** Full transit plan: legs plus estimated ride time (excludes waiting). */
@@ -92,8 +163,9 @@ export function planTrip(
   connections: Connection[],
   from: string,
   to: string,
+  excl?: PathExclusions,
 ): { legs: Leg[]; totalMin: number } | null {
-  const path = findShortestPath(connections, from, to);
+  const path = findShortestPath(connections, from, to, excl);
   if (!path || path.stationIds.length < 2) return null;
   const legs: Leg[] = [];
   let start = 0;
@@ -190,13 +262,46 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         transferLeft: 0,
         transfers: legs.length - 1,
         arriveMin: null,
+        strandedMin: 0,
       });
       w.counters.generated++;
     }
   }
   w.rng = rng;
 
+  // 1b. Disruption validation: passengers whose current leg became unusable
+  // replan from where they stand; otherwise they strand in place. Covers both
+  // WAITING (current leg) and TRANSFERRING (next leg, e.g. suspended since).
+  if (w.closures.active) {
+    for (const p of w.passengers) {
+      if ((p.state === 'WAITING' || p.state === 'TRANSFERRING') && p.atStation) {
+        const leg = p.legs[p.legIndex];
+        const route = leg ? routeById.get(leg.routeId) : undefined;
+        if (legBlocked(leg, route?.stationIds, w.closures)) {
+          if (replanFromStation(w, p, p.atStation, zoneById)) {
+            p.state = 'WAITING';
+            p.transferLeft = 0;
+            w.counters.rerouted++;
+          } else {
+            p.state = 'STRANDED';
+            p.transferLeft = 0;
+            p.strandedMin = 0;
+          }
+        }
+      } else if (p.state === 'STRANDED' && p.atStation) {
+        if ((w.tick + p.id) % 5 === 0) {
+          if (replanFromStation(w, p, p.atStation, zoneById)) {
+            p.state = 'WAITING';
+            p.strandedMin = 0;
+            w.counters.rerouted++;
+          }
+        }
+      }
+    }
+  }
+
   // 2. Walking / transfer timers.
+  const disrupted = w.closures.active;
   for (const p of w.passengers) {
     if (p.state === 'WALKING') {
       p.walkLeft -= dtMin;
@@ -207,11 +312,25 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
     } else if (p.state === 'TRANSFERRING') {
       p.transferLeft -= dtMin;
       p.waitMin += dtMin;
+      if (disrupted) w.counters.incidentDelayMin += dtMin;
       if (p.transferLeft <= 0) {
         p.state = 'WAITING';
       }
     } else if (p.state === 'WAITING') {
       p.waitMin += dtMin;
+      if (disrupted) w.counters.incidentDelayMin += dtMin;
+    } else if (p.state === 'STRANDED') {
+      p.waitMin += dtMin;
+      p.strandedMin += dtMin;
+      if (disrupted) w.counters.incidentDelayMin += dtMin;
+      if (p.strandedMin >= 45) {
+        // Gave up (taxi home off-sim): remove without completing.
+        p.state = 'ARRIVED';
+        p.arriveMin = w.timeMinutes;
+        p.travelMin = w.timeMinutes - p.departMin;
+        p.atStation = null;
+        w.counters.cancelledTrips++;
+      }
     }
   }
 
@@ -232,13 +351,44 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
     const plan = w.service[route.id];
     const cum = w.routeCumDist.get(route.id) ?? [0];
     const total = Math.max(1, cum[cum.length - 1]);
+    // Disruption hold: suspended routes park; vehicles stop before closed hops.
+    const parked = w.closures.suspendedRoutes.has(vv.routeId);
+    const held = parked || hopAheadBlocked(vv.routeId, route.stationIds, cum, vv.s, vv.direction, w.closures);
     // Buses share the road network: congestion slows them (multimodal link).
     const slow = route.mode === 'bus' ? (w.busRouteCongestion[route.id] ?? 1) : 1;
     const speedKph = (plan?.speedKph ?? route.speedKph) / Math.max(1, slow);
     const speedMpm = (speedKph * 1000) / 60;
     // Service supplied accumulates whether moving or dwelling.
     w.counters.routeVehHr[vv.routeId] = (w.counters.routeVehHr[vv.routeId] ?? 0) + dtMin / 60;
-    if (vv.dwellLeft > 0) {
+    if (held) {
+      // Holding for a disruption (no movement, no boarding this tick).
+      vv.dwellLeft = dtMin;
+      vv.load = vv.riders.length;
+      if (vv.riders.length > 0) {
+        // Offload riders who cannot continue: parked (terminated) = all,
+        // held = only those whose remaining leg is blocked. They replan.
+        const idx = nearestOpenStationIdx(cum, vv.s, route.stationIds, w.closures);
+        const sid = idx >= 0 ? route.stationIds[idx] : undefined;
+        if (sid) {
+          const staying: number[] = [];
+          for (const pid of vv.riders) {
+            const p = byId.get(pid);
+            if (!p) continue;
+            const leg = p.legs[p.legIndex];
+            if (parked || legBlocked(leg, route.stationIds, w.closures)) {
+              p.state = 'WAITING';
+              p.atStation = sid;
+              p.vehicleId = null;
+              const st = stationById.get(sid);
+              if (st) st.alightedDay++;
+            } else {
+              staying.push(pid);
+            }
+          }
+          vv.riders = staying;
+        }
+      }
+    } else if (vv.dwellLeft > 0) {
       // Holding at the platform (dwell + delays). No movement this tick.
       vv.dwellLeft -= dtMin;
       vv.load = vv.riders.length;
@@ -277,6 +427,8 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
       if (plan && (boardN > 0 || alightN > 0 || visits.length > 0)) {
         const load01 = vv.riders.length / Math.max(1, vv.capacity);
         vv.dwellLeft = dwellMin(plan, boardN, alightN, load01);
+        // Major-delay incidents add dwell at every served stop.
+        vv.dwellLeft += w.closures.stopDelayMin.get(vv.routeId) ?? 0;
         // Reliability draws happen at terminus turnarounds (deterministic).
         if (visits.includes(0) || visits.includes(lastIdx)) {
           vv.trips++;
@@ -307,11 +459,14 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
     // Transfers complete during vehicle visits may have changed lists; recount.
     let n = 0;
     for (const q of w.passengers) {
-      if ((q.state === 'WAITING' || q.state === 'TRANSFERRING') && q.atStation === st.id) n++;
+      if ((q.state === 'WAITING' || q.state === 'TRANSFERRING' || q.state === 'STRANDED') && q.atStation === st.id) n++;
     }
     st.waiting = n;
     if (n > st.peakWaiting) st.peakWaiting = n;
   }
+  let strandedNow = 0;
+  for (const q of w.passengers) if (q.state === 'STRANDED') strandedNow++;
+  if (strandedNow > w.counters.strandedPeak) w.counters.strandedPeak = strandedNow;
 
   // 5. Sweep arrived passengers (aggregates already recorded).
   if (w.passengers.some((x) => x.state === 'ARRIVED')) {
@@ -404,13 +559,16 @@ function transferServiceWait(
   const nr = routeById.get(nextLeg.routeId);
   const plan = w.service[nextLeg.routeId];
   if (!nr || !plan) return 0;
+  if (w.closures.suspendedRoutes.has(nr.id)) return Infinity;
   const cum = w.routeCumDist.get(nr.id) ?? [0];
   const idx = nr.stationIds.indexOf(stationId);
   if (idx < 0) return 0;
   const total = Math.max(1, cum[cum.length - 1]);
   const slow = nr.mode === 'bus' ? (w.busRouteCongestion[nr.id] ?? 1) : 1;
   const h = routeEffectiveHeadway(plan, total, nr.stationIds.length, slow, w.timeMinutes, LOOP_ROUTES.has(nr.id));
-  const arr = nextArrivalMin(plan, h, w.serviceOffsets[nr.id] ?? 0, cum, idx, w.timeMinutes + TRANSFER_MIN);
+  if (!Number.isFinite(h)) return 0;
+  const mult = w.closures.headwayMult.get(nr.id) ?? 1;
+  const arr = nextArrivalMin(plan, h * mult, w.serviceOffsets[nr.id] ?? 0, cum, idx, w.timeMinutes + TRANSFER_MIN);
   if (!Number.isFinite(arr)) return 0;
   return Math.max(0, arr - (w.timeMinutes + TRANSFER_MIN));
 }
@@ -425,10 +583,15 @@ function boardAt(
   const queue = waitingByStation.get(stationId);
   if (!queue || queue.length === 0) return { boarded: 0, denied: 0 };
   // FIFO: eligible passengers board up to capacity; the rest are denied
-  // this visit and keep waiting for the next service.
+  // this visit and keep waiting for the next service. During disruptions,
+  // passengers only board vehicles that can actually reach their destination.
+  const route = routeById.get(vv.routeId);
+  const idx = route ? route.stationIds.indexOf(stationId) : -1;
+  const loop = LOOP_ROUTES.has(vv.routeId);
   const eligible = queue.filter(
     (p) => p.state === 'WAITING' && p.atStation === stationId &&
-      p.legs[p.legIndex] && p.legs[p.legIndex].board === stationId && p.legs[p.legIndex].routeId === vv.routeId,
+      p.legs[p.legIndex] && p.legs[p.legIndex].board === stationId && p.legs[p.legIndex].routeId === vv.routeId &&
+      (idx < 0 || legBoardableFrom(p.legs[p.legIndex], route?.stationIds ?? [], idx, vv.direction, w.closures, loop)),
   );
   const space = Math.max(0, vv.capacity - vv.riders.length);
   const boarding = eligible.slice(0, space);

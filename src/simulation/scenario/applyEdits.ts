@@ -12,6 +12,7 @@ import { connectionsForRoute, type NetworkData } from '../transport/network.ts';
 import { defaultPlanFor } from '../service/servicePlan.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
 import { COST_RATES, mergeServicePatch, sanitizeServicePatch, type EditOp, type RoadKind } from './scenario.ts';
+import type { IncidentConfig } from '../incidents/incidents.ts';
 
 export interface ModifiedNetwork {
   stations: Station[];
@@ -24,6 +25,44 @@ export interface ModifiedNetwork {
   warnings: string[];
   /** Operating configuration per surviving route (defaults + setService ops). */
   service: Record<string, ServicePlan>;
+  /** Scheduled incidents from scheduleIncident ops (validated). */
+  incidents: IncidentConfig[];
+}
+
+/** Validate an incident config against a network; returns problem strings. */
+export function validateIncidentConfig(
+  inc: IncidentConfig,
+  stationIds: Set<string>,
+  routeIds: Set<string>,
+  edgeIds: Set<string>,
+): string[] {
+  const problems: string[] = [];
+  if (inc.durationMin < 5 || inc.durationMin > 600) problems.push('duration must be 5–600 min');
+  if (inc.startMin < 0 || inc.startMin >= 1440) problems.push('start must be within the day');
+  switch (inc.kind) {
+    case 'station-closure':
+      if (!inc.targetStationId || !stationIds.has(inc.targetStationId)) problems.push('unknown station');
+      break;
+    case 'segment-closure':
+    case 'route-suspension':
+    case 'reduced-service':
+    case 'major-delay':
+      if (!inc.targetRouteId || !routeIds.has(inc.targetRouteId)) problems.push('unknown route');
+      break;
+    case 'road-closure':
+    case 'road-capacity':
+    case 'bridge-closure':
+      if (!inc.edgeIds || inc.edgeIds.length === 0) problems.push('no road edges');
+      else if (inc.edgeIds.some((e) => !edgeIds.has(e))) problems.push('unknown road edge');
+      break;
+  }
+  if (inc.replacement) {
+    if (!stationIds.has(inc.replacement.fromStationId) || !stationIds.has(inc.replacement.toStationId)) {
+      problems.push('replacement endpoints unknown');
+    }
+    if (inc.replacement.buses < 1 || inc.replacement.buses > 12) problems.push('replacement buses must be 1–12');
+  }
+  return problems;
 }
 
 const ROAD_LANES: Record<RoadKind, number> = { local: 2, arterial: 4, highway: 6 };
@@ -268,6 +307,20 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
     service[r.id] = mergeServicePatch(service[r.id], sanitizeServicePatch(op.patch, mode));
   }
 
+  // Scheduled incidents: validated against the final network, never throw.
+  const incidents: IncidentConfig[] = [];
+  const routeIdSet = new Set(routes.map((r) => r.id));
+  const edgeIdSet = new Set(roadEdges.map((e) => e.id));
+  for (const op of ops) {
+    if (op.type !== 'scheduleIncident') continue;
+    const problems = validateIncidentConfig(op.incident, stationIds(), routeIdSet, edgeIdSet);
+    if (problems.length > 0) {
+      warnings.push(`Incident "${op.incident.label}" skipped: ${problems.join('; ')}`);
+      continue;
+    }
+    incidents.push({ ...op.incident });
+  }
+
   return {
     stations,
     routes,
@@ -278,5 +331,6 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
     cost: Math.round(cost),
     warnings,
     service,
+    incidents,
   };
 }

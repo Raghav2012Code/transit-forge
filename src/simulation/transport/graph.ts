@@ -10,10 +10,21 @@ export interface PathResult {
   totalMin: number;
 }
 
+/** Network parts excluded from routing (disruptions). */
+export interface PathExclusions {
+  /** Stations that cannot be entered (the start station is always allowed). */
+  stations?: Set<string>;
+  /** Directed hops `${routeId}|${fromStationId}>${toStationId}`. */
+  segments?: Set<string>;
+  /** Routes that cannot be used. */
+  routes?: Set<string>;
+}
+
 export function findShortestPath(
   connections: Connection[],
   from: string,
   to: string,
+  excl?: PathExclusions,
 ): PathResult | null {
   if (from === to) return { stationIds: [from], routeIds: [], totalMin: 0 };
 
@@ -36,6 +47,9 @@ export function findShortestPath(
   // Simple O(V^2) Dijkstra; graph is tiny (~14 nodes). Replace with heap if scaled.
   const visited = new Set<string>();
   const queue: State[] = [start];
+  const blockedStations = excl?.stations;
+  const blockedSegments = excl?.segments;
+  const blockedRoutes = excl?.routes;
 
   while (queue.length > 0) {
     queue.sort((a, b) => (dist.get(key(a)) ?? Infinity) - (dist.get(key(b)) ?? Infinity));
@@ -63,6 +77,9 @@ export function findShortestPath(
     }
 
     for (const c of adj.get(cur.station) ?? []) {
+      if (c.routeId && blockedRoutes?.has(c.routeId)) continue;
+      if (c.routeId && blockedSegments?.has(`${c.routeId}|${c.from}>${c.to}`)) continue;
+      if (blockedStations?.has(c.to)) continue;
       const penalty =
         cur.routeId !== null && c.routeId !== cur.routeId ? TRANSFER_PENALTY_MIN : 0;
       const next: State = { station: c.to, routeId: c.routeId };

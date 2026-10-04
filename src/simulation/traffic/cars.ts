@@ -13,6 +13,7 @@ import type {
 import { purposeOf } from '../passengers/demand.ts';
 import { bprRatio, congestionLevel } from './bpr.ts';
 import { findRoadPath, nearestRoadNode, edgeName, type RoadGraph } from './roadGraph.ts';
+import type { DerivedClosures } from '../incidents/incidents.ts';
 
 export interface TrafficWorld {
   timeMinutes: number;
@@ -28,19 +29,20 @@ export interface TrafficWorld {
   busRouteCongestion: Record<string, number>;
   routes: TransportRoute[];
   vehicles: VehicleState[];
+  closures: DerivedClosures;
 }
 
 export const ROUTE_CACHE_MIN = 30;
 const MAX_CARS = 6000;
 
 export function emptyRoadCounters(): RoadCounters {
-  return { generated: 0, completed: 0, totalTravelMin: 0, busDelayMin: 0, maxVC: 0, maxVCEdge: '' };
+  return { generated: 0, completed: 0, totalTravelMin: 0, busDelayMin: 0, maxVC: 0, maxVCEdge: '', abandonedCars: 0 };
 }
 
 export function buildEdgeStates(graph: RoadGraph): Record<string, RoadEdgeState> {
   const out: Record<string, RoadEdgeState> = {};
   for (const e of graph.edges) {
-    out[e.id] = { id: e.id, load: 0, currentMin: graph.freeMin.get(e.id) ?? 1, vc: 0, level: 'free' };
+    out[e.id] = { id: e.id, load: 0, currentMin: graph.freeMin.get(e.id) ?? 1, vc: 0, level: 'free', closed: false, capMult: 1 };
   }
   return out;
 }
@@ -107,15 +109,25 @@ export function refreshEdges(w: TrafficWorld): void {
   let maxEdge = '';
   for (const e of w.roadGraph.edges) {
     const st = w.edgeState[e.id];
-    const cap = w.roadGraph.capacityPerHr.get(e.id) ?? 1;
+    const closed = w.closures.closedEdges.has(e.id);
+    const mult = closed ? 0 : (w.closures.edgeCapMult.get(e.id) ?? 1);
+    st.closed = closed;
+    st.capMult = mult;
+    const cap = (w.roadGraph.capacityPerHr.get(e.id) ?? 1) * mult;
     const free = w.roadGraph.freeMin.get(e.id) ?? 1;
-    const storage = Math.max(1, (cap * free) / 60);
-    const vc = baseVC(e.id, w.timeMinutes, w.roadGraph) + st.load / storage;
-    st.vc = vc;
-    st.currentMin = free * bprRatio(vc);
-    st.level = congestionLevel(vc);
-    if (vc > maxVC) {
-      maxVC = vc;
+    if (closed || cap <= 0) {
+      st.vc = 99;
+      st.currentMin = free * 10;
+      st.level = 'severe';
+    } else {
+      const storage = Math.max(1, (cap * free) / 60);
+      const vc = baseVC(e.id, w.timeMinutes, w.roadGraph) + st.load / storage;
+      st.vc = vc;
+      st.currentMin = free * bprRatio(vc);
+      st.level = congestionLevel(vc);
+    }
+    if (st.vc > maxVC && st.vc < 90) {
+      maxVC = st.vc;
       maxEdge = e.id;
     }
   }
@@ -141,9 +153,10 @@ export function cachedRoadPath(
   if (hit && (hit.computedAt < 0 || w.timeMinutes - hit.computedAt < ROUTE_CACHE_MIN)) {
     return hit;
   }
+  const blocked = (id: string) => w.edgeState[id]?.closed === true;
   const cost = congested
-    ? (id: string) => w.edgeState[id]?.currentMin ?? 1
-    : (id: string) => w.roadGraph.freeMin.get(id) ?? 1;
+    ? (id: string) => (blocked(id) ? Infinity : (w.edgeState[id]?.currentMin ?? 1))
+    : (id: string) => (blocked(id) ? Infinity : (w.roadGraph.freeMin.get(id) ?? 1));
   const path = findRoadPath(w.roadGraph, fromNode, toNode, cost);
   if (!path) return null;
   const entry = {
@@ -200,6 +213,7 @@ export function spawnCarTrip(
     s: 0,
     arriveMin: null,
     travelMin: accessDriveMin,
+    heldTicks: 0,
   });
   w.roadCounters.generated++;
   return true;
@@ -209,8 +223,39 @@ export function spawnCarTrip(
 export function advanceTraffic(w: TrafficWorld, dtMin: number): void {
   refreshEdges(w);
   const graph = w.roadGraph;
+  const blockedCost = (id: string) =>
+    w.edgeState[id]?.closed ? Infinity : (w.edgeState[id]?.currentMin ?? 1);
   for (const car of w.cars) {
     if (car.state !== 'DRIVING') continue;
+    // Reroute around closures (deterministic: same network, same result).
+    const curEdge = car.edgeIds[car.edgeIndex];
+    if (curEdge && w.edgeState[curEdge]?.closed) {
+      const fromNode = car.nodes[car.edgeIndex] ?? '';
+      const destNode = car.nodes[car.nodes.length - 1] ?? '';
+      const alt = fromNode && destNode ? findRoadPath(graph, fromNode, destNode, blockedCost) : null;
+      if (alt && alt.edgeIds.length > 0 && !alt.edgeIds.every((e) => w.edgeState[e]?.closed)) {
+        const old = w.edgeState[curEdge];
+        if (old) old.load = Math.max(0, old.load - 1);
+        car.edgeIds = alt.edgeIds;
+        car.nodes = alt.nodes;
+        car.edgeIndex = 0;
+        car.s = 0;
+        car.heldTicks = 0;
+        const first = w.edgeState[car.edgeIds[0]];
+        if (first) first.load++;
+      } else {
+        // Nowhere to go: hold (load stays counted) and retry next tick.
+        car.heldTicks = (car.heldTicks ?? 0) + 1;
+        if (car.heldTicks > 120) {
+          const old = w.edgeState[curEdge];
+          if (old) old.load = Math.max(0, old.load - 1);
+          car.state = 'DONE';
+          car.arriveMin = w.timeMinutes;
+          w.roadCounters.abandonedCars++;
+        }
+        continue;
+      }
+    }
     let remaining = dtMin;
     while (remaining > 0 && car.state === 'DRIVING') {
       const edgeId = car.edgeIds[car.edgeIndex];

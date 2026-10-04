@@ -27,6 +27,16 @@ import { buildRoadGraph, type RoadGraph } from './traffic/roadGraph.ts';
 import { defaultPlanFor, type ServicePlan } from './service/servicePlan.ts';
 import { cycleMin, phaseOffset, resolvedFleet } from './service/timetable.ts';
 import { LOOP_ROUTES } from './passengers/passengers.ts';
+import {
+  closureSignature,
+  deriveClosures,
+  detectThresholdEvents,
+  emptyClosures,
+  updateIncidentLifecycle,
+  type DerivedClosures,
+  type IncidentConfig,
+} from './incidents/incidents.ts';
+import type { Incident, IncidentEvent } from '../types/index.ts';
 
 export interface SimulationState {
   seed: number;
@@ -57,6 +67,18 @@ export interface SimulationState {
   service: Record<string, ServicePlan>;
   /** Deterministic departure phase per route (0 for synced routes). */
   serviceOffsets: Record<string, number>;
+  /** Disruption incidents (live + scheduled + resolved history). */
+  incidents: Incident[];
+  /** Timeline of simulation events (bounded). */
+  events: IncidentEvent[];
+  /** Effective closures derived from active incidents (recomputed per tick). */
+  closures: DerivedClosures;
+  /** Active-incident signature; road cache clears when it changes. */
+  closureSig: string;
+  nextIncidentId: number;
+  emergencyBusesFree: number;
+  /** One-shot threshold flags, cleared when no incident is active. */
+  eventFlags: Record<string, boolean>;
 }
 
 const START_MIN = 7 * 60;
@@ -92,6 +114,11 @@ function emptyCounters(routeIds: string[]): TripCounters {
     routeVehHr,
     deniedBoardings: 0,
     totalDelayMin: 0,
+    rerouted: 0,
+    strandedPeak: 0,
+    strandedMin: 0,
+    incidentDelayMin: 0,
+    cancelledTrips: 0,
   };
 }
 
@@ -145,6 +172,7 @@ export function createSimulationFromParts(
     routeLengths: Map<string, number>;
     routeCumDist: Map<string, number[]>;
     service?: Record<string, ServicePlan>;
+    incidents?: IncidentConfig[];
   },
   serviceOverrides?: Record<string, ServicePlan>,
 ): SimulationState {
@@ -187,21 +215,55 @@ export function createSimulationFromParts(
     busRouteCongestion: {},
     service,
     serviceOffsets,
+    incidents: (net.incidents ?? []).map((cfg, i) => ({
+      ...cfg,
+      id: cfg.id || `inc-sched-${i}`,
+      status: 'scheduled' as const,
+      activeTicks: 0,
+      baselineWaiting: 0,
+      recovered90: false,
+    })),
+    events: [],
+    closures: emptyClosures(),
+    closureSig: '',
+    nextIncidentId: 1,
+    emergencyBusesFree: 12,
+    eventFlags: {},
   };
 }
 
 /** Advance the clock by dtMinutes. Deterministic; no wall-clock or Math.random. */
 export function stepSimulation(state: SimulationState, dtMinutes = 1): SimulationState {
+  // Disruptions first: lifecycle transitions, then effective closures.
+  // A changed incident set invalidates cached road paths immediately.
+  const lifecycleEvents = updateIncidentLifecycle(state, dtMinutes);
+  state.closures = deriveClosures(state.incidents, state.routes);
+  const sig = closureSignature(state.incidents);
+  if (sig !== state.closureSig) {
+    state.closureSig = sig;
+    state.roadCache.clear();
+  }
   // SimulationState structurally satisfies both worlds. Traffic moves first so
   // passenger mode choice reads fresh congestion; passengers then spawn,
   // board, and ride (buses already slowed by road conditions).
   advanceTraffic(state, dtMinutes);
   advancePassengers(state, dtMinutes);
+  const thresholdEvents = detectThresholdEvents(state);
+  pushEvents(state, lifecycleEvents);
+  pushEvents(state, thresholdEvents);
   return {
     ...state,
     tick: state.tick + 1,
     timeMinutes: state.timeMinutes + dtMinutes,
   };
+}
+
+/** Bounded timeline log (deterministic order). */
+function pushEvents(state: SimulationState, events: IncidentEvent[]): void {
+  for (const e of events) {
+    state.events.push(e);
+    while (state.events.length > 200) state.events.shift();
+  }
 }
 
 export function stationLoad01(st: Station): number {

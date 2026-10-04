@@ -11,6 +11,10 @@ function StationDepartures({ sim, stationId }: { sim: SimulationState; stationId
   for (const r of sim.routes) {
     const idx = r.stationIds.indexOf(stationId);
     if (idx < 0) continue;
+    if (sim.closures.suspendedRoutes.has(r.id)) {
+      rows.push({ route: r.name, label: 'suspended', time: '—' });
+      continue;
+    }
     const plan = sim.service[r.id];
     if (!plan) continue;
     const cum = sim.routeCumDist.get(r.id) ?? [0];
@@ -53,6 +57,7 @@ function nextDepartures(sim: SimulationState, routeId: string, count: number): {
   const route = sim.routes.find((r) => r.id === routeId);
   const plan = sim.service[routeId];
   if (!route || !plan || route.stationIds.length < 2) return [];
+  if (sim.closures.suspendedRoutes.has(routeId)) return [{ label: 'suspended', time: '—', from: '' }];
   const cum = sim.routeCumDist.get(routeId) ?? [0];
   const total = Math.max(1, cum[cum.length - 1]);
   const slow = route.mode === 'bus' ? (sim.busRouteCongestion[routeId] ?? 1) : 1;
@@ -99,6 +104,9 @@ export default function Inspector({ selection, sim, onClose }: Props) {
           <button type="button" className="tf-btn small" onClick={onClose}>×</button>
         </div>
         <p className="tf-hint">{interchange ? 'Interchange station' : 'Station'}</p>
+        {sim.closures.closedStations.has(st.id) && (
+          <p className="tf-hint">⚠ Closed by disruption</p>
+        )}
         <dl>
           <div className="tf-stat-row"><dt>Modes</dt><dd>{st.modes.join(', ')}</dd></div>
           <div className="tf-stat-row"><dt>Routes</dt><dd>{routes.map((r) => r.name).join(' · ')}</dd></div>
@@ -139,6 +147,12 @@ export default function Inspector({ selection, sim, onClose }: Props) {
           <button type="button" className="tf-btn small" onClick={onClose}>×</button>
         </div>
         <p className="tf-hint">{r.mode} · {r.stationIds.length} stations</p>
+        {sim.closures.suspendedRoutes.has(r.id) && (
+          <p className="tf-hint">⚠ Suspended by disruption</p>
+        )}
+        {(sim.closures.headwayMult.get(r.id) ?? 1) > 1 && (
+          <p className="tf-hint">⚠ Reduced service ×{sim.closures.headwayMult.get(r.id)}</p>
+        )}
         <dl>
           <div className="tf-stat-row"><dt>Headway</dt><dd>{r.headwayMin} min</dd></div>
           <div className="tf-stat-row"><dt>Speed</dt><dd>{r.speedKph} kph</dd></div>
@@ -210,6 +224,9 @@ export default function Inspector({ selection, sim, onClose }: Props) {
           <button type="button" className="tf-btn small" onClick={onClose}>×</button>
         </div>
         <p className="tf-hint">{st.level} · {edge.lanes} lanes{edge.isBridge ? ' · bridge' : ''}</p>
+        {st.closed && (
+          <p className="tf-hint">⚠ Closed by disruption</p>
+        )}
         <dl>
           <div className="tf-stat-row"><dt>Length</dt><dd>{Math.round(edge.lengthM)} m</dd></div>
           <div className="tf-stat-row"><dt>Capacity</dt><dd>{cap.toLocaleString()}/hr</dd></div>

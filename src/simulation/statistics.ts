@@ -104,6 +104,7 @@ export function computeStats(sim: SimulationState): SimStats {
 function serviceStats(sim: SimulationState): Pick<
   SimStats,
   'deniedBoardings' | 'avgOcc' | 'vehKm' | 'vehHr' | 'opCost' | 'opCostPerPax' | 'avgHeadway' | 'totalDelayMin'
+  | 'rerouted' | 'strandedNow' | 'strandedPeak' | 'cancelledTrips' | 'activeIncidents'
 > {
   const c = sim.counters;
   let occSum = 0;
@@ -135,6 +136,8 @@ function serviceStats(sim: SimulationState): Pick<
     }
   }
   const completed = Math.max(1, c.completed);
+  let strandedNow = 0;
+  for (const p of sim.passengers) if (p.state === 'STRANDED') strandedNow++;
   return {
     deniedBoardings: c.deniedBoardings,
     avgOcc: Math.round(avgOcc * 1000) / 10,
@@ -144,5 +147,10 @@ function serviceStats(sim: SimulationState): Pick<
     opCostPerPax: Math.round((opCost / completed) * 100) / 100,
     avgHeadway: headwayN > 0 ? Math.round((headwaySum / headwayN) * 10) / 10 : 0,
     totalDelayMin: Math.round(c.totalDelayMin),
+    rerouted: c.rerouted,
+    strandedNow,
+    strandedPeak: c.strandedPeak,
+    cancelledTrips: c.cancelledTrips,
+    activeIncidents: sim.incidents.filter((i) => i.status === 'active').length,
   };
 }

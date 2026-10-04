@@ -12,6 +12,9 @@ import { populationImpact, planningScore, type PlanningScore, type PopulationImp
 import { BASE_YEAR, growZones, type GrowthPoint } from '../growth/growth.ts';
 import { buildEdgeStates, buildZoneRoadAccess } from '../traffic/cars.ts';
 import { buildRoadGraph } from '../traffic/roadGraph.ts';
+import { capacityLostFor, resilienceScore, type CapacityLost } from '../analytics/resilience.ts';
+import type { IncidentConfig } from '../incidents/incidents.ts';
+import type { ResilienceMetrics } from '../../types/index.ts';
 
 export const COMPARE_TICKS = 360;
 
@@ -19,6 +22,72 @@ export function runHeadless(seed: number, city: CityData, net: NetworkData, tick
   let sim = createSimulationFromParts(seed, city, net);
   for (let i = 0; i < ticks; i++) sim = stepSimulation(sim, 1);
   return computeStats(sim);
+}
+
+export interface ResilienceSide {
+  stats: SimStats;
+  metrics: ResilienceMetrics;
+  capacity: CapacityLost;
+}
+
+/** Base-vs-scenario under the SAME disruption (deterministic headless runs). */
+export function compareResilience(
+  seed: number,
+  city: CityData,
+  baseNet: NetworkData,
+  modCity: CityData,
+  modNet: NetworkData & { service?: Record<string, ServicePlan> },
+  incident: IncidentConfig,
+  ticks = 240,
+): { base: ResilienceSide; mod: ResilienceSide; rows: CompareRow[] } {
+  const runSide = (
+    c: CityData,
+    net: NetworkData & { service?: Record<string, ServicePlan> },
+  ): ResilienceSide => {
+    let sim = createSimulationFromParts(seed, c, net);
+    sim.incidents.push({
+      ...incident,
+      id: incident.id || 'inc-compare',
+      status: 'scheduled',
+      activeTicks: 0,
+      baselineWaiting: 0,
+      recovered90: false,
+    });
+    for (let i = 0; i < ticks; i++) sim = stepSimulation(sim, 1);
+    const stats = computeStats(sim);
+    const cap = capacityLostFor(incident, sim.routes, sim.routeLengths, sim.roadGraph);
+    const totalRouteKm = sim.routes.reduce((s, r) => s + (sim.routeLengths.get(r.id) ?? 0) / 1000, 0);
+    const totalRoadKm = sim.roadGraph.edges.reduce((s, e) => s + e.lengthM / 1000, 0);
+    const metrics = resilienceScore({
+      extraWaitMin: sim.counters.incidentDelayMin,
+      completedDelta: Math.max(1, sim.counters.completed),
+      strandedPeak: sim.counters.strandedPeak,
+      affectedPax: sim.counters.rerouted + sim.counters.strandedPeak,
+      routeKmLost: cap.routeKmLost,
+      totalRouteKm,
+      roadKmLost: cap.roadKmLost,
+      totalRoadKm,
+      recoveryTicks: sim.incidents.find((x) => x.id === (incident.id || 'inc-compare'))?.result?.recoveryTicks ?? ticks,
+    });
+    metrics.rerouted = sim.counters.rerouted;
+    metrics.cancelledTrips = sim.counters.cancelledTrips;
+    metrics.stationsClosed = cap.stationsClosed;
+    metrics.transitCapLost = cap.transitCapLost;
+    metrics.roadCapLost = cap.roadCapLost;
+    return { stats, metrics, capacity: cap };
+  };
+  const b = runSide(city, baseNet);
+  const m = runSide(modCity, modNet);
+  const rows: CompareRow[] = [
+    numRow('Resilience score', b.metrics.score, m.metrics.score, '', 'up'),
+    numRow('Affected pax', b.metrics.affectedPax, m.metrics.affectedPax, '', 'down', 0),
+    numRow('Stranded peak', b.metrics.strandedPeak, m.metrics.strandedPeak, '', 'down', 0),
+    numRow('Extra wait', b.metrics.extraWaitMin, m.metrics.extraWaitMin, ' min', 'down', 0),
+    numRow('Cancelled trips', b.metrics.cancelledTrips, m.metrics.cancelledTrips, '', 'down', 0),
+    numRow('Transit share', b.stats.transitShare, m.stats.transitShare, '%', 'up'),
+    numRow('Avg wait', b.stats.avgWaitMin, m.stats.avgWaitMin, ' min', 'down'),
+  ];
+  return { base: b, mod: m, rows };
 }
 
 export interface HorizonSide {
