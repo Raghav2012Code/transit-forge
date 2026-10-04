@@ -70,18 +70,47 @@ export default function Inspector({ selection, sim, onClose }: Props) {
   }
 
   const z = sim.city.zones.find((zz) => zz.id === selection.id);
-  if (!z) return null;
-  return (
-    <div className="tf-inspector">
-      <div className="tf-inspector-head">
-        <h3>{z.name}</h3>
-        <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+  if (z) {
+    return (
+      <div className="tf-inspector">
+        <div className="tf-inspector-head">
+          <h3>{z.name}</h3>
+          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+        </div>
+        <p className="tf-hint">{z.kind}</p>
+        <dl>
+          <div className="tf-stat-row"><dt>Population</dt><dd>{z.population.toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Employment</dt><dd>{z.jobs.toLocaleString()}</dd></div>
+        </dl>
       </div>
-      <p className="tf-hint">{z.kind}</p>
-      <dl>
-        <div className="tf-stat-row"><dt>Population</dt><dd>{z.population.toLocaleString()}</dd></div>
-        <div className="tf-stat-row"><dt>Employment</dt><dd>{z.jobs.toLocaleString()}</dd></div>
-      </dl>
-    </div>
-  );
+    );
+  }
+
+  if (selection.kind === 'road') {
+    const edge = sim.city.roadEdges.find((e) => e.id === selection.id);
+    const st = sim.edgeState[selection.id];
+    if (!edge || !st) return null;
+    const free = sim.roadGraph.freeMin.get(edge.id) ?? 0;
+    const cap = sim.roadGraph.capacityPerHr.get(edge.id) ?? 0;
+    return (
+      <div className="tf-inspector">
+        <div className="tf-inspector-head">
+          <h3>{edge.isBridge ? 'Bridge' : edge.isArterial ? 'Arterial' : 'Local'} {edge.a.replace(/^rn-/, '').toUpperCase()}–{edge.b.replace(/^rn-/, '').toUpperCase()}</h3>
+          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+        </div>
+        <p className="tf-hint">{st.level} · {edge.lanes} lanes{edge.isBridge ? ' · bridge' : ''}</p>
+        <dl>
+          <div className="tf-stat-row"><dt>Length</dt><dd>{Math.round(edge.lengthM)} m</dd></div>
+          <div className="tf-stat-row"><dt>Capacity</dt><dd>{cap.toLocaleString()}/hr</dd></div>
+          <div className="tf-stat-row"><dt>Cars on road</dt><dd>{st.load}</dd></div>
+          <div className="tf-stat-row"><dt>V/C ratio</dt><dd>{Math.round(st.vc * 100) / 100}</dd></div>
+          <div className="tf-stat-row"><dt>Free-flow time</dt><dd>{Math.round(free * 100) / 100} min</dd></div>
+          <div className="tf-stat-row"><dt>Current time</dt><dd>{Math.round(st.currentMin * 100) / 100} min</dd></div>
+          <div className="tf-stat-row"><dt>Level</dt><dd>{st.level}</dd></div>
+        </dl>
+      </div>
+    );
+  }
+
+  return null;
 }

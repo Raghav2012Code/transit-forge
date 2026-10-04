@@ -73,11 +73,11 @@ export function generateCity(seed: number): CityData {
   ];
   const edgePairs: [string, string, boolean, boolean][] = [
     ['rn-w1', 'rn-c1', true, false],
-    ['rn-c1', 'rn-e1', true, false],
+    ['rn-c1', 'rn-e1', true, true],
     ['rn-w2', 'rn-c2', true, false],
     ['rn-c2', 'rn-e2', true, true],
     ['rn-w3', 'rn-c3', true, false],
-    ['rn-c3', 'rn-e3', true, false],
+    ['rn-c3', 'rn-e3', true, true],
     ['rn-e2', 'rn-a1', true, false],
     ['rn-w1', 'rn-w2', false, false],
     ['rn-w2', 'rn-w3', false, false],

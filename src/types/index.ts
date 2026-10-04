@@ -137,6 +137,49 @@ export interface TripCounters {
   routeBoardings: Record<string, number>;
 }
 
+export type CongestionLevel = 'free' | 'light' | 'moderate' | 'heavy' | 'severe';
+
+/** Live simulation state of one road edge (static geometry stays in CityData). */
+export interface RoadEdgeState {
+  id: string;
+  /** Simulated cars currently on the segment. */
+  load: number;
+  /** Current travel time in minutes (BPR-adjusted). */
+  currentMin: number;
+  /** Volume/capacity ratio including background flow. */
+  vc: number;
+  level: CongestionLevel;
+}
+
+export type CarState = 'DRIVING' | 'DONE';
+
+export interface CarTrip {
+  id: number;
+  originZone: string;
+  destZone: string;
+  departMin: number;
+  state: CarState;
+  /** Ordered road edge ids from origin access node to destination access node. */
+  edgeIds: string[];
+  /** Ordered node ids aligned with edgeIds (nodes[i] -> nodes[i+1] via edgeIds[i]). */
+  nodes: string[];
+  edgeIndex: number;
+  /** Progress along the current edge in meters. */
+  s: number;
+  arriveMin: number | null;
+  travelMin: number;
+}
+
+export interface RoadCounters {
+  generated: number;
+  completed: number;
+  totalTravelMin: number;
+  /** Cumulative bus vehicle-minutes lost to congestion (for stats/debug). */
+  busDelayMin: number;
+  maxVC: number;
+  maxVCEdge: string;
+}
+
 export interface PassengerCounts {
   waitingTotal: number;
   boardedDay: number;
@@ -185,4 +228,14 @@ export interface SimStats {
   topRoute: string;
   topRouteCount: number;
   maxOccupancy: number;
+  roadTrips: number;
+  roadCompleted: number;
+  activeCars: number;
+  avgRoadMin: number;
+  avgCongestion: number;
+  worstRoad: string;
+  worstVC: number;
+  transitShare: number;
+  carShare: number;
+  avgTransitMin: number;
 }

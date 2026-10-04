@@ -1,9 +1,12 @@
 // Simulation core: pure TS, no React / Three.js. Owns city, network, demand,
 // passengers, vehicles, clock, and counters.
 import type {
+  CarTrip,
   CityData,
   Connection,
   Passenger,
+  RoadCounters,
+  RoadEdgeState,
   Station,
   TransportRoute,
   TripCounters,
@@ -14,6 +17,14 @@ import { buildNetwork } from './transport/network.ts';
 import { mulberry32 } from './city/seededRng.ts';
 import { buildDemandMatrix, type DemandMatrix } from './passengers/demand.ts';
 import { advancePassengers } from './passengers/passengers.ts';
+import {
+  advanceTraffic,
+  buildBusRoadMap,
+  buildEdgeStates,
+  buildZoneRoadAccess,
+  emptyRoadCounters,
+} from './traffic/cars.ts';
+import { buildRoadGraph, type RoadGraph } from './traffic/roadGraph.ts';
 
 export interface SimulationState {
   seed: number;
@@ -31,6 +42,15 @@ export interface SimulationState {
   rng: number;
   nextPassengerId: number;
   counters: TripCounters;
+  roadGraph: RoadGraph;
+  edgeState: Record<string, RoadEdgeState>;
+  cars: CarTrip[];
+  nextCarId: number;
+  roadCounters: RoadCounters;
+  zoneRoadAccess: Record<string, string>;
+  busRoadMap: Record<string, string[]>;
+  roadCache: Map<string, { edgeIds: string[]; nodes: string[]; totalMin: number; computedAt: number }>;
+  busRouteCongestion: Record<string, number>;
 }
 
 const START_MIN = 7 * 60;
@@ -80,6 +100,8 @@ export function createSimulation(seed = 1337): SimulationState {
   const city = generateCity(seed);
   const net = buildNetwork();
   const stations = net.stations.map((s) => ({ ...s }));
+  const roadGraph = buildRoadGraph(city);
+  const stationPos = new Map(stations.map((s) => [s.id, { x: s.pos.x, z: s.pos.z }]));
   return {
     seed,
     tick: 0,
@@ -96,14 +118,24 @@ export function createSimulation(seed = 1337): SimulationState {
     rng: (seed ^ 0x51ab) | 0,
     nextPassengerId: 1,
     counters: emptyCounters(net.routes.map((r) => r.id)),
+    roadGraph,
+    edgeState: buildEdgeStates(roadGraph),
+    cars: [],
+    nextCarId: 1,
+    roadCounters: emptyRoadCounters(),
+    zoneRoadAccess: buildZoneRoadAccess(city),
+    busRoadMap: buildBusRoadMap(net.routes, stationPos, roadGraph, city),
+    roadCache: new Map(),
+    busRouteCongestion: {},
   };
 }
 
 /** Advance the clock by dtMinutes. Deterministic; no wall-clock or Math.random. */
 export function stepSimulation(state: SimulationState, dtMinutes = 1): SimulationState {
-  // SimulationState structurally satisfies PassengerWorld; passengers,
-  // vehicles, stations, and counters mutate in place (high churn), while the
-  // returned shell is new so UI snapshots still trigger renders.
+  // SimulationState structurally satisfies both worlds. Traffic moves first so
+  // passenger mode choice reads fresh congestion; passengers then spawn,
+  // board, and ride (buses already slowed by road conditions).
+  advanceTraffic(state, dtMinutes);
   advancePassengers(state, dtMinutes);
   return {
     ...state,

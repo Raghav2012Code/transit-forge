@@ -23,6 +23,11 @@ export default function DebugPanel({ sim }: { sim: SimulationState }) {
           <div className="tf-stat-row"><dt>completed</dt><dd>{sim.counters.completed}</dd></div>
           <div className="tf-stat-row"><dt>unrouted</dt><dd>{sim.counters.unrouted}</dd></div>
           <div className="tf-stat-row"><dt>skippedCap</dt><dd>{sim.counters.skippedCap}</dd></div>
+          <div className="tf-stat-row"><dt>car trips</dt><dd>{sim.roadCounters.generated}</dd></div>
+          <div className="tf-stat-row"><dt>car done</dt><dd>{sim.roadCounters.completed}</dd></div>
+          <div className="tf-stat-row"><dt>cars active</dt><dd>{sim.cars.length}</dd></div>
+          <div className="tf-stat-row"><dt>maxVC</dt><dd>{Math.round(sim.roadCounters.maxVC * 100) / 100} ({sim.roadCounters.maxVCEdge})</dd></div>
+          <div className="tf-stat-row"><dt>bus delay min</dt><dd>{Math.round(sim.roadCounters.busDelayMin)}</dd></div>
           {sim.routes.map((r) => (
             <div key={r.id} className="tf-stat-row">
               <dt>{r.id}</dt>

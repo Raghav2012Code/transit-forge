@@ -48,6 +48,25 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
           ['Max occupancy', `${stats.maxOccupancy}%`],
         ]}
       />
+      <Section
+        title="Roads"
+        rows={[
+          ['Road trips', stats.roadTrips.toLocaleString()],
+          ['Active cars', stats.activeCars.toLocaleString()],
+          ['Avg road time', `${stats.avgRoadMin} min`],
+          ['Avg congestion', String(stats.avgCongestion)],
+          ['Worst road', `${stats.worstRoad} (${stats.worstVC})`],
+        ]}
+      />
+      <Section
+        title="Multimodal"
+        rows={[
+          ['Transit share', `${stats.transitShare}%`],
+          ['Car share', `${stats.carShare}%`],
+          ['Avg transit time', `${stats.avgTransitMin} min`],
+          ['Avg road time', `${stats.avgRoadMin} min`],
+        ]}
+      />
     </>
   );
 }

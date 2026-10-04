@@ -2,9 +2,11 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { SimulationState } from '../simulation/index.ts';
+import type { CongestionLevel } from '../types/index.ts';
 import { buildCityMeshes } from './city/buildCity.ts';
 import { buildNetworkMeshes } from './transport/buildNetwork.ts';
 import { buildVehicles, updateVehicles } from './vehicles/vehicles.ts';
+import { buildCarRig, updateCarRig } from './traffic/carRig.ts';
 
 export interface Layers {
   metro: boolean;
@@ -15,11 +17,11 @@ export interface Layers {
 }
 
 export interface Selection {
-  kind: 'station' | 'route' | 'zone';
+  kind: 'station' | 'route' | 'zone' | 'road';
   id: string;
 }
 
-export type Overlay = 'normal' | 'flow' | 'load';
+export type Overlay = 'normal' | 'flow' | 'load' | 'congestion';
 
 interface SceneViewProps {
   simRef: React.RefObject<SimulationState>;
@@ -32,6 +34,14 @@ interface SceneViewProps {
 function stationLoad(waiting: number, capacityPerHr: number): number {
   return Math.min(1, waiting / Math.max(1, capacityPerHr * 0.25));
 }
+
+const CONGESTION_COLORS: Record<CongestionLevel, number> = {
+  free: 0x34d399,
+  light: 0xfacc15,
+  moderate: 0xfb923c,
+  heavy: 0xef4444,
+  severe: 0x991b1b,
+};
 
 // Rendering consumes simulation data; it never mutates it or holds sim logic.
 export default function SceneView({ simRef, layers, overlay, selection, onSelect }: SceneViewProps) {
@@ -86,11 +96,16 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     scene.add(net.group);
     const rig = buildVehicles(sim.vehicles, sim.routes, sim.stations);
     scene.add(rig.group);
+    const carRig = buildCarRig(sim.city);
+    city.roads.add(carRig.group);
+    const edgeLen = new Map(sim.city.roadEdges.map((e) => [e.id, e.lengthM]));
     const pickables = [...net.pickables];
     // Zone discs for district picking.
     city.group.children.forEach((c) => {
       if (c.userData?.kind === 'zone') pickables.push(c);
     });
+    // Road segments for inspection.
+    for (const [, mesh] of city.roadMeshById) pickables.push(mesh);
     rigRef.current = {
       stationMeshById: net.stationMeshById,
       pickables,
@@ -143,7 +158,22 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       const cur = simRef.current;
       if (cur) {
         updateVehicles(rig, cur.vehicles);
+        updateCarRig(carRig, cur.cars, edgeLen);
         const ov = overlayRef.current;
+        // Road congestion colors from live volume/capacity (congestion overlay).
+        for (const [id, mesh] of city.roadMeshById) {
+          const mat = mesh.material as THREE.MeshStandardMaterial;
+          if (ov === 'congestion') {
+            const level = cur.edgeState[id]?.level ?? 'free';
+            mat.color.setHex(CONGESTION_COLORS[level]);
+            mat.emissive.setHex(CONGESTION_COLORS[level]);
+            mat.emissiveIntensity = 0.45;
+          } else {
+            mat.color.setHex(mesh.userData.baseColor as number);
+            mat.emissive.setHex(mesh.userData.baseColor as number);
+            mat.emissiveIntensity = 0;
+          }
+        }
         // Route usage from actual boardings (flow overlay input).
         const usage = cur.counters.routeBoardings;
         let maxUse = 1;
@@ -185,6 +215,15 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           if (p) {
             selRing.visible = true;
             selRing.position.set(p.x, 9, p.z);
+          } else selRing.visible = false;
+        } else if (sel && sel.kind === 'road') {
+          const edge = cur.city.roadEdges.find((e) => e.id === sel.id);
+          const nodeById = new Map(cur.city.roadNodes.map((n) => [n.id, n.pos]));
+          const a = edge ? nodeById.get(edge.a) : undefined;
+          const b = edge ? nodeById.get(edge.b) : undefined;
+          if (a && b) {
+            selRing.visible = true;
+            selRing.position.set((a.x + b.x) / 2, 6, (a.z + b.z) / 2);
           } else selRing.visible = false;
         } else selRing.visible = false;
         const L = layersRef.current;

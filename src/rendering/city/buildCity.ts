@@ -15,6 +15,7 @@ export interface CityMeshes {
   group: THREE.Group;
   buildings: THREE.Group;
   roads: THREE.Group;
+  roadMeshById: Map<string, THREE.Mesh>;
 }
 
 /** Static city geometry: terrain, water, river, roads, bridges, buildings. */
@@ -57,6 +58,7 @@ export function buildCityMeshes(city: CityData): CityMeshes {
   // Roads group (toggleable).
   const roads = new THREE.Group();
   roads.name = 'roads';
+  const roadMeshById = new Map<string, THREE.Mesh>();
   const nodeById = new Map(city.roadNodes.map((n) => [n.id, n.pos]));
   const roadMat = new THREE.MeshStandardMaterial({ color: 0x2a3552 });
   const arterialMat = new THREE.MeshStandardMaterial({ color: 0x39496e });
@@ -67,11 +69,13 @@ export function buildCityMeshes(city: CityData): CityMeshes {
     const len = Math.hypot(b.x - a.x, b.z - a.z);
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(len, 0.6, e.isArterial ? 9 : 5),
-      e.isArterial ? arterialMat : roadMat,
+      (e.isArterial ? arterialMat : roadMat).clone(),
     );
     mesh.position.set((a.x + b.x) / 2, 0.4, (a.z + b.z) / 2);
     mesh.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+    mesh.userData = { kind: 'road', id: e.id, baseColor: e.isArterial ? 0x39496e : 0x2a3552 };
     roads.add(mesh);
+    roadMeshById.set(e.id, mesh);
   }
   // Bridges across the river (deck + rails hint).
   const bridgeMat = new THREE.MeshStandardMaterial({ color: 0x8b9cc7 });
@@ -118,5 +122,5 @@ export function buildCityMeshes(city: CityData): CityMeshes {
     group.add(disc);
   }
 
-  return { group, buildings, roads };
+  return { group, buildings, roads, roadMeshById };
 }

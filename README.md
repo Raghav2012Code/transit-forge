@@ -35,13 +35,14 @@ npm run build
 
 ## Status
 
-- v0.3 passenger simulation: deterministic O/D matrix from zone attributes with
-  AM/MID/PM/EVE/NIGHT time profiles, real passenger entities
-  (WALKING→WAITING→ON_VEHICLE→TRANSFERRING→ARRIVED), Dijkstra route choice with
-  transfers, capacity-respecting boarding/alighting at station visits, live
-  station + network statistics, Passenger Flow and Station Load overlays,
-  expanded dashboard, debug panel. 17 tests passing.
-- Next: world-scale pass, congestion/BPR, scenario editing.
+- v0.4 multimodal traffic: real road graph (capacity, free-flow, BPR behind a
+  replaceable interface), deterministic logit mode choice (time, transfers,
+  CBD parking, airport bonus), lightweight car trips on road routes with
+  TTL-cached congested routing, diurnal background + simulated congestion,
+  bus slowdown from mapped road edges, CONGESTION overlay (5 levels),
+  representative car subset rendering, road inspection, Roads + Multimodal
+  dashboard sections, debug panel. 26 tests passing.
+- Next: world-scale pass, scenario editing.
 
 ## Known limitations (v0.4 candidates)
 

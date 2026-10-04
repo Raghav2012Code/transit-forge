@@ -4,6 +4,7 @@ const ITEMS: { key: Overlay; label: string }[] = [
   { key: 'normal', label: 'Normal' },
   { key: 'flow', label: 'Flow' },
   { key: 'load', label: 'Load' },
+  { key: 'congestion', label: 'Congestion' },
 ];
 
 export default function OverlaySwitch({ overlay, onChange }: { overlay: Overlay; onChange: (o: Overlay) => void }) {

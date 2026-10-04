@@ -1,10 +1,13 @@
 // Passenger lifecycle: spawn from O/D demand, walk, wait, board, ride,
 // transfer, arrive. Operates on a structural world so index.ts stays thin.
 import type {
+  CarTrip,
   CityData,
   Connection,
   Leg,
   Passenger,
+  RoadCounters,
+  RoadEdgeState,
   Station,
   TransportRoute,
   TripCounters,
@@ -20,6 +23,9 @@ import {
   rngNext,
   type DemandMatrix,
 } from './demand.ts';
+import { cachedRoadPath, driveAccessMin, spawnCarTrip } from '../traffic/cars.ts';
+import { chooseMode, transitEstimate } from '../traffic/modeChoice.ts';
+import type { RoadGraph } from '../traffic/roadGraph.ts';
 
 export interface PassengerWorld {
   timeMinutes: number;
@@ -34,6 +40,15 @@ export interface PassengerWorld {
   rng: number;
   nextPassengerId: number;
   counters: TripCounters;
+  roadGraph: RoadGraph;
+  edgeState: Record<string, RoadEdgeState>;
+  cars: CarTrip[];
+  nextCarId: number;
+  roadCounters: RoadCounters;
+  zoneRoadAccess: Record<string, string>;
+  roadCache: Map<string, { edgeIds: string[]; nodes: string[]; totalMin: number; computedAt: number }>;
+  busRouteCongestion: Record<string, number>;
+  busRoadMap: Record<string, string[]>;
 }
 
 const LOOP_ROUTES = new Set(['rt-b1']);
@@ -47,6 +62,15 @@ function walkMin(ax: number, az: number, bx: number, bz: number): number {
 
 /** Compress a station-level path into single-route legs. Null when unroutable. */
 export function buildRoutePlan(connections: Connection[], from: string, to: string): Leg[] | null {
+  return planTrip(connections, from, to)?.legs ?? null;
+}
+
+/** Full transit plan: legs plus estimated ride time (excludes waiting). */
+export function planTrip(
+  connections: Connection[],
+  from: string,
+  to: string,
+): { legs: Leg[]; totalMin: number } | null {
   const path = findShortestPath(connections, from, to);
   if (!path || path.stationIds.length < 2) return null;
   const legs: Leg[] = [];
@@ -62,7 +86,7 @@ export function buildRoutePlan(connections: Connection[], from: string, to: stri
     }
   }
   if (legs.some((l) => !l.routeId)) return null;
-  return legs;
+  return { legs, totalMin: path.totalMin };
 }
 
 export function advancePassengers(w: PassengerWorld, dtMin: number): void {
@@ -93,7 +117,28 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         w.counters.skippedCap++;
         break;
       }
-      const legs = buildRoutePlan(w.connections, fromSt, toSt);
+      // Both options use live network state: transit via the station graph,
+      // car via the congested road graph. Either may be unroutable.
+      const trip = planTrip(w.connections, fromSt, toSt);
+      const road = cachedRoadPath(w, w.zoneRoadAccess[pair.from] ?? '', w.zoneRoadAccess[pair.to] ?? '', true);
+      if (!trip && !road) {
+        w.counters.unrouted++;
+        continue;
+      }
+      if (trip && road) {
+        const headways = trip.legs.map((l) => routeById.get(l.routeId)?.headwayMin ?? 10);
+        const drive = driveAccessMin(w.city, oz, dz, w.zoneRoadAccess);
+        const [draw, rng2] = rngNext(rng);
+        rng = rng2;
+        if (chooseMode(draw, transitEstimate(trip.totalMin, headways), trip.legs.length - 1, road.totalMin + drive, dz.kind) === 'car') {
+          if (spawnCarTrip(w, oz, dz, drive)) continue;
+          // Car spawn failed (cap): fall through to transit.
+        }
+      } else if (road) {
+        const drive = driveAccessMin(w.city, oz, dz, w.zoneRoadAccess);
+        if (spawnCarTrip(w, oz, dz, drive)) continue;
+      }
+      const legs = trip?.legs;
       if (!legs) {
         w.counters.unrouted++;
         continue;
@@ -157,7 +202,9 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
     if (!route) continue;
     const cum = w.routeCumDist.get(route.id) ?? [0];
     const total = Math.max(1, cum[cum.length - 1]);
-    const speedMpm = (route.speedKph * 1000) / 60;
+    // Buses share the road network: congestion slows them (multimodal link).
+    const slow = route.mode === 'bus' ? (w.busRouteCongestion[route.id] ?? 1) : 1;
+    const speedMpm = (route.speedKph * 1000) / 60 / Math.max(1, slow);
     const oldP = vv.s;
     const rawP = vv.s + speedMpm * dtMin * vv.direction;
     let p = rawP;

@@ -43,6 +43,21 @@ export function computeStats(sim: SimulationState): SimStats {
     }
   }
 
+  // Roads + multimodal from actual trip state.
+  const rc = sim.roadCounters;
+  const avgRoadMin = rc.completed > 0 ? rc.totalTravelMin / rc.completed : 0;
+  let vcSum = 0;
+  let vcN = 0;
+  for (const id in sim.edgeState) {
+    vcSum += sim.edgeState[id].vc;
+    vcN++;
+  }
+  const allTrips = Math.max(1, c.completed + rc.completed);
+  const worstEdge = sim.roadGraph.edgeById.get(rc.maxVCEdge);
+  const worstName = worstEdge
+    ? `${worstEdge.isBridge ? 'Bridge' : worstEdge.isArterial ? 'Arterial' : 'Local'} ${worstEdge.a.replace(/^rn-/, '').toUpperCase()}–${worstEdge.b.replace(/^rn-/, '').toUpperCase()}`
+    : '—';
+
   return {
     population,
     jobs,
@@ -68,5 +83,15 @@ export function computeStats(sim: SimulationState): SimStats {
     topRoute,
     topRouteCount: Math.round(topRouteCount),
     maxOccupancy: Math.round(c.maxOccupancy01 * 1000) / 10,
+    roadTrips: rc.generated,
+    roadCompleted: rc.completed,
+    activeCars: sim.cars.length,
+    avgRoadMin: Math.round(avgRoadMin * 10) / 10,
+    avgCongestion: vcN > 0 ? Math.round((vcSum / vcN) * 100) / 100 : 0,
+    worstRoad: worstName,
+    worstVC: Math.round(rc.maxVC * 100) / 100,
+    transitShare: Math.round((c.completed / allTrips) * 1000) / 10,
+    carShare: Math.round((rc.completed / allTrips) * 1000) / 10,
+    avgTransitMin: avgTravelMin,
   };
 }
