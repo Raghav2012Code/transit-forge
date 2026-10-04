@@ -3,34 +3,48 @@ import type { Overlay } from '../../rendering/SceneView.tsx';
 export type TravelDest = 'cbd' | 'airport' | 'university' | 'industrial' | 'harbor';
 export type DemandLayer = 'origins' | 'destinations' | 'work' | 'education' | 'transit' | 'car';
 
-const BASE_ITEMS: { key: Overlay; label: string }[] = [
-  { key: 'normal', label: 'Normal' },
-  { key: 'flow', label: 'Flow' },
-  { key: 'load', label: 'Load' },
-  { key: 'congestion', label: 'Congestion' },
-  { key: 'frequency', label: 'Frequency' },
-  { key: 'crowding', label: 'Crowding' },
-  { key: 'status', label: 'Status' },
-];
+interface Item {
+  key: Overlay;
+  label: string;
+}
 
-const ANALYTICS_ITEMS: { key: Overlay; label: string }[] = [
-  { key: 'accessibility', label: 'Access' },
-  { key: 'traveltime', label: 'Travel' },
-  { key: 'coverage', label: 'Cover' },
-  { key: 'bottlenecks', label: 'Limits' },
-  { key: 'critical', label: 'Critical' },
-];
-
-const GROWTH_ITEMS: { key: Overlay; label: string }[] = [
-  { key: 'popdensity', label: 'Pop' },
-  { key: 'jobdensity', label: 'Jobs' },
-  { key: 'development', label: 'Devel' },
-  { key: 'growth', label: 'Growth' },
-  { key: 'demand', label: 'Demand' },
+const GROUPS: { title: string; items: Item[] }[] = [
+  {
+    title: 'Network',
+    items: [
+      { key: 'normal', label: 'Normal' },
+      { key: 'flow', label: 'Flow' },
+      { key: 'load', label: 'Load' },
+      { key: 'frequency', label: 'Freq' },
+      { key: 'crowding', label: 'Crowd' },
+      { key: 'status', label: 'Status' },
+    ],
+  },
+  {
+    title: 'Access analytics',
+    items: [
+      { key: 'accessibility', label: 'Access' },
+      { key: 'traveltime', label: 'Travel' },
+      { key: 'coverage', label: 'Cover' },
+      { key: 'bottlenecks', label: 'Limits' },
+      { key: 'critical', label: 'Critical' },
+    ],
+  },
+  {
+    title: 'City',
+    items: [
+      { key: 'congestion', label: 'Congestion' },
+      { key: 'popdensity', label: 'Pop' },
+      { key: 'jobdensity', label: 'Jobs' },
+      { key: 'development', label: 'Devel' },
+      { key: 'growth', label: 'Growth' },
+      { key: 'demand', label: 'Demand' },
+    ],
+  },
 ];
 
 const DEMAND_LAYERS: { key: DemandLayer; label: string }[] = [
-  { key: 'origins', label: 'Orig' },
+  { key: 'origins', label: 'Origins' },
   { key: 'destinations', label: 'Dest' },
   { key: 'work', label: 'Work' },
   { key: 'education', label: 'Edu' },
@@ -41,8 +55,8 @@ const DEMAND_LAYERS: { key: DemandLayer; label: string }[] = [
 const DESTS: { key: TravelDest; label: string }[] = [
   { key: 'cbd', label: 'CBD' },
   { key: 'airport', label: 'Airport' },
-  { key: 'university', label: 'University' },
-  { key: 'industrial', label: 'Industrial' },
+  { key: 'university', label: 'Univ' },
+  { key: 'industrial', label: 'Industry' },
   { key: 'harbor', label: 'Harbor' },
 ];
 
@@ -57,87 +71,58 @@ interface Props {
   onDemandLayer: (l: DemandLayer) => void;
 }
 
+function Seg<T extends string>({
+  label,
+  items,
+  active,
+  onPick,
+}: {
+  label: string;
+  items: { key: T; label: string }[];
+  active: T;
+  onPick: (k: T) => void;
+}) {
+  return (
+    <div className="tf-overlay-group">
+      <span className="tf-overlay-group-label">{label}</span>
+      <div className="tf-seg wrap" role="radiogroup" aria-label={label}>
+        {items.map((it) => (
+          <button
+            key={it.key}
+            type="button"
+            role="radio"
+            aria-checked={active === it.key}
+            className="tf-seg-item"
+            onClick={() => onPick(it.key)}
+          >
+            {it.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function OverlaySwitch({ overlay, onChange, travelDest, onTravelDest, coverageThreshold, onCoverageThreshold, demandLayer, onDemandLayer }: Props) {
   return (
     <div className="tf-layers">
       <h3>Overlay</h3>
-      <div className="tf-speeds" role="group" aria-label="Visualization overlay">
-        {BASE_ITEMS.map((it) => (
-          <button
-            key={it.key}
-            type="button"
-            className={`tf-btn small${overlay === it.key ? ' active' : ''}`}
-            onClick={() => onChange(it.key)}
-          >
-            {it.label}
-          </button>
-        ))}
-      </div>
-      <div className="tf-speeds" role="group" aria-label="Analytics overlay">
-        {ANALYTICS_ITEMS.map((it) => (
-          <button
-            key={it.key}
-            type="button"
-            className={`tf-btn small${overlay === it.key ? ' active' : ''}`}
-            onClick={() => onChange(it.key)}
-          >
-            {it.label}
-          </button>
-        ))}
-      </div>
+      {GROUPS.map((g) => (
+        <Seg key={g.title} label={g.title} items={g.items} active={overlay} onPick={onChange} />
+      ))}
       {overlay === 'traveltime' && (
-        <div className="tf-speeds" role="group" aria-label="Heatmap destination">
-          {DESTS.map((d) => (
-            <button
-              key={d.key}
-              type="button"
-              className={`tf-btn small${travelDest === d.key ? ' active' : ''}`}
-              onClick={() => onTravelDest(d.key)}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
+        <Seg label="Destination" items={DESTS} active={travelDest} onPick={onTravelDest} />
       )}
-      <div className="tf-speeds" role="group" aria-label="Growth overlay">
-        {GROWTH_ITEMS.map((it) => (
-          <button
-            key={it.key}
-            type="button"
-            className={`tf-btn small${overlay === it.key ? ' active' : ''}`}
-            onClick={() => onChange(it.key)}
-          >
-            {it.label}
-          </button>
-        ))}
-      </div>
       {overlay === 'demand' && (
-        <div className="tf-speeds" role="group" aria-label="Demand layer">
-          {DEMAND_LAYERS.map((d) => (
-            <button
-              key={d.key}
-              type="button"
-              className={`tf-btn small${demandLayer === d.key ? ' active' : ''}`}
-              onClick={() => onDemandLayer(d.key)}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
+        <Seg label="Demand layer" items={DEMAND_LAYERS} active={demandLayer} onPick={onDemandLayer} />
       )}
       {overlay === 'coverage' && (
-        <div className="tf-speeds" role="group" aria-label="Coverage threshold">
-          {[300, 500, 800].map((m) => (
-            <button
-              key={m}
-              type="button"
-              className={`tf-btn small${coverageThreshold === m ? ' active' : ''}`}
-              onClick={() => onCoverageThreshold(m)}
-            >
-              {m}m
-            </button>
-          ))}
-        </div>
+        <Seg
+          label="Walking distance"
+          items={([300, 500, 800].map((m) => ({ key: String(m), label: `${m} m` })) as { key: string; label: string }[])}
+          active={String(coverageThreshold)}
+          onPick={(k) => onCoverageThreshold(Number(k))}
+        />
       )}
     </div>
   );

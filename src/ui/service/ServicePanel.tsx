@@ -6,6 +6,7 @@ import { clampHeadway } from '../../simulation/service/servicePlan.ts';
 import { effectiveHeadway, fleetRequired } from '../../simulation/service/timetable.ts';
 import { routeServiceMath } from '../../simulation/service/routeService.ts';
 import { formatClock } from '../../simulation/index.ts';
+import Dock from '../shell/Dock.tsx';
 
 interface Props {
   sim: SimulationState;
@@ -69,8 +70,7 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
   };
 
   return (
-    <div className="tf-service">
-      <h3>Service Planning</h3>
+    <Dock title="Service planning" meta={`${plan.peakHeadwayMin}m peak`}>
       <label className="tf-namelabel">
         Route
         <select value={route.id} onChange={(e) => onSelectRoute(e.target.value)}>
@@ -143,7 +143,7 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
           min={0} max={30} onChange={(v) => patch({ turnaroundMin: v })} />
       </dl>
       <label className="tf-check">
-        <input type="checkbox" checked={plan.syncEnabled} onChange={(e) => patch({ syncEnabled: e.target.checked })} />
+        <input type="checkbox" checked={plan.syncEnabled} aria-label="Synchronize transfers" onChange={(e) => patch({ syncEnabled: e.target.checked })} />
         Synchronize transfers
       </label>
 
@@ -170,6 +170,6 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
         <div className="tf-stat-row"><dt>Op. cost/day</dt><dd>{Math.round(math.dayCost).toLocaleString()} OCU</dd></div>
         <div className="tf-stat-row"><dt>Cost / pax</dt><dd>{math.costPerPax.toFixed(2)} OCU</dd></div>
       </dl>
-    </div>
+    </Dock>
   );
 }

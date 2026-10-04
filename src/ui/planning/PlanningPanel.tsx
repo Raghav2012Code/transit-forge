@@ -8,6 +8,10 @@ import type { CityProblem } from '../../simulation/planning/problems.ts';
 import { recommendFor, type RecContext } from '../../simulation/planning/recommendations.ts';
 import type { PlanReport } from '../../simulation/planning/report.ts';
 import type { SavedPlan } from '../../simulation/planning/planStore.ts';
+import Dock from '../shell/Dock.tsx';
+import Kpi from '../shell/Kpi.tsx';
+import Meter from '../shell/Meter.tsx';
+import { IconDownload, IconSave, IconTrash } from '../shell/icons.tsx';
 
 export interface SubmittedEvaluation {
   report: PlanReport;
@@ -60,15 +64,6 @@ interface Props {
   onDismissTutorial: () => void;
 }
 
-function Bar({ value }: { value: number }) {
-  const pct = Math.max(0, Math.min(1, value)) * 100;
-  return (
-    <div className="tf-bar-track" aria-hidden="true">
-      <div className="tf-bar-fill" style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
-
 function RowTable({ rows }: { rows: CompareRow[] }) {
   return (
     <table className="tf-compare-table">
@@ -94,6 +89,9 @@ function RowTable({ rows }: { rows: CompareRow[] }) {
   );
 }
 
+const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard', 'expert'];
+const HORIZONS = [0, 1, 5, 10, 20];
+
 export default function PlanningPanel(p: Props) {
   const [problemId, setProblemId] = useState<string | null>(null);
   const [planName, setPlanName] = useState('');
@@ -101,82 +99,116 @@ export default function PlanningPanel(p: Props) {
   const brief = p.briefs.find((b) => b.id === p.briefId) ?? null;
   const resultById = new Map(p.liveResults.map((r) => [r.objectiveId, r]));
   const constraintById = new Map(p.liveConstraints.map((r) => [r.constraintId, r]));
+  const objectivesMet = p.liveResults.filter((r) => r.passed).length;
+  const constraintsOk = p.liveConstraints.filter((r) => r.passed).length;
 
   return (
-    <div className="tf-plan">
-      <h3>Planning</h3>
-
+    <>
       {p.overview && (
-        <div className="tf-overview">
-          <div className="tf-stat-row"><dt>Population</dt><dd>{p.overview.population.toLocaleString()}</dd></div>
-          <div className="tf-stat-row"><dt>Transit/day</dt><dd>{p.overview.transitDay.toLocaleString()} ({p.overview.transitShare.toFixed(0)}%)</dd></div>
-          <div className="tf-stat-row"><dt>Car/day</dt><dd>{p.overview.carDay.toLocaleString()}</dd></div>
-          <div className="tf-stat-row"><dt>Congestion</dt><dd>{p.overview.congestion.toFixed(2)}</dd></div>
-          <div className="tf-stat-row"><dt>Travel</dt><dd>{p.overview.travelMin.toFixed(1)} min</dd></div>
-          <div className="tf-stat-row"><dt>Access / Resilience</dt><dd>{p.overview.access.toFixed(0)} / {p.overview.resilience === null ? '—' : p.overview.resilience.toFixed(0)}</dd></div>
-        </div>
+        <Dock title="Overview">
+          <div className="tf-kpis">
+            <Kpi
+              label="Transit share"
+              value={p.overview.transitShare.toFixed(0)}
+              unit="%"
+              meter={p.overview.transitShare / 100}
+              sub={`${p.overview.transitDay.toLocaleString()} trips/day`}
+            />
+            <Kpi
+              label="Car trips"
+              value={p.overview.carDay.toLocaleString()}
+              sub={`of ${(p.overview.transitDay + p.overview.carDay).toLocaleString()} total`}
+              tone={p.overview.carDay > p.overview.transitDay ? 'warn' : 'good'}
+            />
+            <Kpi
+              label="Congestion"
+              value={p.overview.congestion.toFixed(2)}
+              meter={Math.min(1, p.overview.congestion)}
+              threshold={0.85}
+              tone={p.overview.congestion >= 0.85 ? 'bad' : p.overview.congestion >= 0.7 ? 'warn' : 'good'}
+              sub={`travel ${p.overview.travelMin.toFixed(1)} min`}
+            />
+            <Kpi
+              label="Access"
+              value={p.overview.access.toFixed(0)}
+              meter={p.overview.access / 100}
+              sub={`pop ${p.overview.population.toLocaleString()}`}
+            />
+          </div>
+        </Dock>
       )}
 
-      <h4>City problems</h4>
-      {p.problems.length === 0 && <p className="tf-hint">No significant problems detected. The city is healthy.</p>}
-      <ol className="tf-ranked">
-        {p.problems.slice(0, 6).map((pr) => (
-          <li key={pr.id}>
-            <button type="button" className="tf-link" onClick={() => setProblemId(problemId === pr.id ? null : pr.id)}>
-              {pr.severity >= 70 ? '⚠ ' : ''}{pr.title}
-            </button>
-            {problemId === pr.id && (
-              <div className="tf-drill">
-                {pr.metrics.map(([k, v]) => (
-                  <div className="tf-stat-row" key={k}><dt>{k}</dt><dd>{v}</dd></div>
-                ))}
-                <p className="tf-hint">Likely causes: {pr.causes.join('; ')}</p>
-                {recommendFor(pr, p.recCtx).map((r, i) => (
-                  <div key={i} className="tf-draft">
-                    <strong>{r.intervention}</strong>
-                    <div className="tf-hint">{r.reason}</div>
-                    <div className="tf-hint">{r.metrics}</div>
-                    <div className="tf-hint">Why? {r.why.join(' · ')}</div>
-                  </div>
-                ))}
-                {pr.target && (
-                  <button type="button" className="tf-btn small" onClick={() => p.onLocateProblem(pr)}>
-                    Locate on map
-                  </button>
-                )}
-              </div>
-            )}
-          </li>
-        ))}
-      </ol>
-
-      <h4>Brief</h4>
-      <div className="tf-speeds" role="group" aria-label="Difficulty">
-        {(['easy', 'medium', 'hard', 'expert'] as const).map((d) => (
-          <button key={d} type="button" className={`tf-btn small${p.difficulty === d ? ' active' : ''}`} onClick={() => p.onDifficulty(d)}>
-            {d}
-          </button>
-        ))}
-      </div>
-      <label className="tf-namelabel">
-        Planning scenario
-        <select value={p.briefId ?? ''} onChange={(e) => p.onSelectBrief(e.target.value || null)}>
-          <option value="">— choose a brief —</option>
-          {p.briefs.map((b) => (
-            <option key={b.id} value={b.id}>{b.title}</option>
+      <Dock title="City problems" meta={p.problems.length > 0 ? `${p.problems.length} ranked` : undefined}>
+        {p.problems.length === 0 && <p className="tf-hint">No significant problems detected. The city is healthy.</p>}
+        <ol className="tf-ranked">
+          {p.problems.slice(0, 6).map((pr) => (
+            <li key={pr.id}>
+              <button type="button" className="tf-link" onClick={() => setProblemId(problemId === pr.id ? null : pr.id)}>
+                {pr.severity >= 70 ? '⚠ ' : ''}{pr.title}
+              </button>
+              {problemId === pr.id && (
+                <div className="tf-drill">
+                  <Meter value={pr.severity / 100} tone={pr.severity >= 70 ? 'bad' : pr.severity >= 45 ? 'warn' : 'good'} label={`${pr.title} severity`} />
+                  {pr.metrics.map(([k, v]) => (
+                    <div className="tf-stat-row" key={k}><dt>{k}</dt><dd>{v}</dd></div>
+                  ))}
+                  <p className="tf-hint">Likely causes: {pr.causes.join('; ')}</p>
+                  {recommendFor(pr, p.recCtx).map((r, i) => (
+                    <div key={i} className="tf-draft">
+                      <strong>{r.intervention}</strong>
+                      <div className="tf-hint">{r.reason}</div>
+                      <div className="tf-hint">{r.metrics}</div>
+                      <div className="tf-hint">Why? {r.why.join(' · ')}</div>
+                    </div>
+                  ))}
+                  {pr.target && (
+                    <button type="button" className="tf-btn small" onClick={() => p.onLocateProblem(pr)}>
+                      Locate on map
+                    </button>
+                  )}
+                </div>
+              )}
+            </li>
           ))}
-        </select>
-      </label>
-      {brief && (
-        <div className="tf-draft">
-          {brief.paragraphs.map((para, i) => <p className="tf-hint" key={i}>{para}</p>)}
-          <div className="tf-stat-row"><dt>Horizon</dt><dd>{brief.horizonYears}y</dd></div>
+        </ol>
+      </Dock>
+
+      <Dock title="Brief" meta={p.difficulty}>
+        <div className="tf-seg" role="radiogroup" aria-label="Difficulty">
+          {DIFFICULTIES.map((d) => (
+            <button
+              key={d}
+              type="button"
+              role="radio"
+              aria-checked={p.difficulty === d}
+              className="tf-seg-item"
+              onClick={() => p.onDifficulty(d)}
+            >
+              {d}
+            </button>
+          ))}
         </div>
-      )}
+        <label className="tf-namelabel">
+          Planning scenario
+          <select value={p.briefId ?? ''} onChange={(e) => p.onSelectBrief(e.target.value || null)}>
+            <option value="">— choose a brief —</option>
+            {p.briefs.map((b) => (
+              <option key={b.id} value={b.id}>{b.title}</option>
+            ))}
+          </select>
+        </label>
+        {brief ? (
+          <div className="tf-draft">
+            {brief.paragraphs.map((para, i) => <p className="tf-hint" key={i}>{para}</p>)}
+            <div className="tf-stat-row"><dt>Horizon</dt><dd>{brief.horizonYears}y</dd></div>
+          </div>
+        ) : (
+          <p className="tf-hint">Pick a brief to get objectives and constraints.</p>
+        )}
+      </Dock>
 
       {brief && (
-        <>
-          <h4>Objectives (live)</h4>
+        <Dock title="Objectives" meta={`${objectivesMet}/${p.objectives.length} met`}>
           {p.objectives.map((o) => {
             const r = resultById.get(o.id);
             return (
@@ -185,12 +217,19 @@ export default function PlanningPanel(p: Props) {
                   <dt>{r?.passed ? '✓ ' : ''}{o.title}</dt>
                   <dd>{r && r.value !== null ? `${r.value}${metricUnit(o.metric)}` : '—'}</dd>
                 </div>
-                <Bar value={r?.progress ?? 0} />
+                <Meter
+                  value={r?.progress ?? 0}
+                  tone={r?.passed ? 'good' : (r?.progress ?? 0) > 0.5 ? 'warn' : 'bad'}
+                  label={`${o.title} progress`}
+                />
                 <p className="tf-hint">Target: {o.op} {o.target}{metricUnit(o.metric)} · {Math.round((r?.progress ?? 0) * 100)}%</p>
               </div>
             );
           })}
-          <h4>Constraints (live)</h4>
+          <div className="tf-stat-row">
+            <dt>Constraints</dt>
+            <dd className={constraintsOk === p.constraints.length ? 'tf-good' : 'tf-bad'}>{constraintsOk}/{p.constraints.length}</dd>
+          </div>
           {p.constraints.map((c) => {
             const r = constraintById.get(c.id);
             return (
@@ -200,9 +239,16 @@ export default function PlanningPanel(p: Props) {
               </div>
             );
           })}
-          <div className="tf-speeds" role="group" aria-label="Plan horizon">
-            {[0, 1, 5, 10, 20].map((y) => (
-              <button key={y} type="button" className={`tf-btn small${p.horizonYears === y ? ' active' : ''}`} onClick={() => p.onHorizon(y)}>
+          <div className="tf-seg" role="radiogroup" aria-label="Plan horizon">
+            {HORIZONS.map((y) => (
+              <button
+                key={y}
+                type="button"
+                role="radio"
+                aria-checked={p.horizonYears === y}
+                className="tf-seg-item"
+                onClick={() => p.onHorizon(y)}
+              >
                 {y === 0 ? 'Now' : `${y}y`}
               </button>
             ))}
@@ -216,18 +262,21 @@ export default function PlanningPanel(p: Props) {
                 Reset plan
               </button>
             ) : (
-              <button type="button" className="tf-btn small" onClick={() => { setConfirmReset(false); p.onResetPlan(); }}>
+              <button type="button" className="tf-btn small danger" onClick={() => { setConfirmReset(false); p.onResetPlan(); }}>
                 Confirm reset
               </button>
             )}
           </div>
           {!p.hasOps && <p className="tf-hint">Build or change service first, then submit.</p>}
-        </>
+        </Dock>
       )}
 
       {p.evaluation && (
-        <>
-          <h4>Evaluation: {p.evaluation.report.verdict}</h4>
+        <Dock
+          title={`Evaluation — ${p.evaluation.report.verdict}`}
+          tone={p.evaluation.report.verdict === 'PASSED' ? 'default' : 'alert'}
+          meta={`score ${p.evaluation.score.total}`}
+        >
           <RowTable rows={p.evaluation.rows} />
           {p.evaluation.resilienceRows && (
             <>
@@ -235,7 +284,7 @@ export default function PlanningPanel(p: Props) {
               <RowTable rows={p.evaluation.resilienceRows} />
             </>
           )}
-          <h5>Score: {p.evaluation.score.total}</h5>
+          <h5>Score parts</h5>
           <ul className="tf-score-parts">
             {p.evaluation.score.parts.map((s) => (
               <li key={s.label}>{s.label} {s.value} × {Math.round(s.weight * 100)}%</li>
@@ -248,66 +297,84 @@ export default function PlanningPanel(p: Props) {
             ))}
           </ul>
           <div className="tf-draft-actions">
-            <button type="button" className="tf-btn small" onClick={p.onExportJson}>Export JSON</button>
-            <button type="button" className="tf-btn small" onClick={p.onExportHtml}>Print HTML</button>
+            <button type="button" className="tf-btn small" onClick={p.onExportJson}>
+              <IconDownload /> Export JSON
+            </button>
+            <button type="button" className="tf-btn small" onClick={p.onExportHtml}>
+              <IconDownload /> Print HTML
+            </button>
           </div>
-        </>
+        </Dock>
       )}
 
-      <h4>Saved plans</h4>
-      <div className="tf-draft-actions">
-        <input
-          value={planName}
-          onChange={(e) => setPlanName(e.target.value)}
-          placeholder="Plan name"
-          maxLength={48}
-          aria-label="Plan name"
-        />
-        <button type="button" className="tf-btn small" disabled={!planName.trim()} onClick={() => { p.onSavePlan(planName.trim()); setPlanName(''); }}>
-          Save current
-        </button>
-      </div>
-      {p.plans.length === 0 && <p className="tf-hint">No saved plans yet.</p>}
-      {p.plans.map((plan) => (
-        <div key={plan.id} className="tf-draft">
-          <div className="tf-inspector-head">
-            <strong>{plan.name}</strong>
-            <span className="tf-hint">{plan.attempts.length} attempts</span>
-          </div>
-          <div className="tf-draft-actions">
-            <button type="button" className="tf-btn small" onClick={() => p.onLoadPlan(plan.id)}>Open</button>
-            <button type="button" className="tf-btn small" onClick={() => p.onDeletePlan(plan.id)}>Delete</button>
-          </div>
-          {plan.attempts.length > 0 && (
-            <table className="tf-compare-table">
-              <thead><tr><th>Attempt</th><th>Score</th><th>Result</th></tr></thead>
-              <tbody>
-                {plan.attempts.map((a, i) => (
-                  <tr key={i}>
-                    <td>#{i + 1} · {a.horizonYears === 0 ? 'now' : `${a.horizonYears}y`}</td>
-                    <td>{a.score}</td>
-                    <td className={a.passed ? 'tf-good' : 'tf-bad'}>{a.passed ? 'Passed' : 'Failed'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+      <Dock title="Saved plans" meta={p.plans.length > 0 ? `${p.plans.length}` : undefined} defaultOpen={false}>
+        <div className="tf-draft-actions">
+          <input
+            value={planName}
+            onChange={(e) => setPlanName(e.target.value)}
+            placeholder="Plan name"
+            maxLength={48}
+            aria-label="Plan name"
+          />
+          <button
+            type="button"
+            className="tf-btn small"
+            disabled={!planName.trim()}
+            onClick={() => { p.onSavePlan(planName.trim()); setPlanName(''); }}
+          >
+            <IconSave /> Save
+          </button>
         </div>
-      ))}
+        {p.plans.length === 0 && <p className="tf-hint">No saved plans yet.</p>}
+        {p.plans.map((plan) => (
+          <div key={plan.id} className="tf-draft">
+            <div className="tf-inspector-head">
+              <strong>{plan.name}</strong>
+              <span className="tf-hint">{plan.attempts.length} attempts</span>
+            </div>
+            <div className="tf-draft-actions">
+              <button type="button" className="tf-btn small" onClick={() => p.onLoadPlan(plan.id)}>Open</button>
+              <button type="button" className="tf-btn small danger" onClick={() => p.onDeletePlan(plan.id)}>
+                <IconTrash /> Delete
+              </button>
+            </div>
+            {plan.attempts.length > 0 && (
+              <table className="tf-compare-table">
+                <thead><tr><th>Attempt</th><th>Score</th><th>Result</th></tr></thead>
+                <tbody>
+                  {plan.attempts.map((a, i) => (
+                    <tr key={i}>
+                      <td>#{i + 1} · {a.horizonYears === 0 ? 'now' : `${a.horizonYears}y`}</td>
+                      <td>{a.score}</td>
+                      <td className={a.passed ? 'tf-good' : 'tf-bad'}>{a.passed ? 'Passed' : 'Failed'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ))}
+      </Dock>
 
       {!p.tutorialDismissed && (
-        <>
-          <h4>First run</h4>
+        <Dock title="First run" meta={`${p.tutorialSteps.filter((s) => s.done).length}/${p.tutorialSteps.length}`}>
           <ol className="tf-ranked">
             {p.tutorialSteps.map((s, i) => (
-              <li key={i}>{s.done ? '✓ ' : '· '}{s.label}</li>
+              <li key={i} className={s.done ? 'done' : undefined}>{s.done ? '✓ ' : '· '}{s.label}</li>
             ))}
           </ol>
-          <button type="button" className="tf-btn small" onClick={p.onDismissTutorial}>Dismiss tutorial</button>
-        </>
+          <div className="tf-draft-actions">
+            <button type="button" className="tf-btn small" onClick={p.onDismissTutorial}>Dismiss tutorial</button>
+          </div>
+        </Dock>
       )}
-      <h4>Shortcuts</h4>
-      <p className="tf-hint">Space play/pause · 1/2/3 speed · B build · A analytics · P planning · Esc exit · R reset</p>
-    </div>
+
+      <Dock title="Shortcuts" defaultOpen={false}>
+        <p className="tf-hint">
+          Space play/pause · 1/2/3 speed · B build · D disrupt · A analytics · P plan ·
+          [ panel · Esc simulate · R reset
+        </p>
+      </Dock>
+    </>
   );
 }

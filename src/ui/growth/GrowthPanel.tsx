@@ -1,6 +1,7 @@
 import type { SimStats } from '../../types/index.ts';
 import type { GrowthPoint, PlanAdvice } from '../../simulation/growth/growth.ts';
 import { Bars, Line } from '../analytics/charts.tsx';
+import Dock from '../shell/Dock.tsx';
 
 export interface GrowthSummary {
   pop: number;
@@ -38,8 +39,7 @@ const pct = (r: number) => `${r >= 0 ? '+' : ''}${(r * 100).toFixed(1)}%`;
 
 export default function GrowthPanel({ year, summary, districts, history, onAdvance, advancing, forecast, onForecast, advice }: Props) {
   return (
-    <div className="tf-growth">
-      <h3>City Growth</h3>
+    <Dock title="City growth" meta={`year ${year}`}>
       <div className="tf-stat-row"><dt>Simulation year</dt><dd>{year}</dd></div>
       <div className="tf-stat-row"><dt>Population</dt><dd>{summary.pop.toLocaleString()} ({pct(summary.popRate)})</dd></div>
       <div className="tf-stat-row"><dt>Jobs</dt><dd>{summary.jobs.toLocaleString()} ({pct(summary.jobRate)})</dd></div>
@@ -116,6 +116,6 @@ export default function GrowthPanel({ year, summary, districts, history, onAdvan
           <Line values={history.map((p) => p.avgCongestion * 100)} color="#ef4444" />
         </>
       )}
-    </div>
+    </Dock>
   );
 }

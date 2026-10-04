@@ -77,7 +77,14 @@ export function detectProblems(f: ProblemFacts): CityProblem[] {
     });
   }
 
-  for (const g of f.gaps.slice(0, 2)) {
+  // One entry per district (best-scoring gap wins) so a neighbourhood never
+  // appears twice in the ranked list.
+  const bestByZone = new Map<string, GapCandidate>();
+  for (const g of f.gaps) {
+    const prev = bestByZone.get(g.zoneName);
+    if (!prev || g.score > prev.score) bestByZone.set(g.zoneName, g);
+  }
+  for (const g of [...bestByZone.values()].sort((a, b) => b.score - a.score).slice(0, 2)) {
     out.push({
       id: `gap-${g.x}-${g.z}`,
       kind: 'access',

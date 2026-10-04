@@ -1,8 +1,9 @@
 import type { SimStats } from '../../types/index.ts';
+import Kpi from '../shell/Kpi.tsx';
 
-function Section({ title, rows }: { title: string; rows: [string, string][] }) {
+function Section({ title, rows, tone }: { title: string; rows: [string, string][]; tone?: 'alert' }) {
   return (
-    <div className="tf-stats">
+    <div className="tf-stats" style={tone === 'alert' ? { borderColor: 'var(--bad)' } : undefined}>
       <h3>{title}</h3>
       <dl>
         {rows.map(([k, val]) => (
@@ -17,8 +18,45 @@ function Section({ title, rows }: { title: string; rows: [string, string][] }) {
 }
 
 export default function StatsPanel({ stats }: { stats: SimStats }) {
+  const congTone = stats.avgCongestion >= 0.85 ? 'bad' : stats.avgCongestion >= 0.7 ? 'warn' : 'good';
+  const occTone = stats.maxOccupancy >= 95 ? 'bad' : stats.maxOccupancy >= 85 ? 'warn' : 'good';
   return (
     <>
+      <div className="tf-kpis">
+        <Kpi
+          label="Transit share"
+          value={stats.transitShare.toFixed(0)}
+          unit="%"
+          meter={stats.transitShare / 100}
+          tone={stats.transitShare >= 60 ? 'good' : stats.transitShare >= 45 ? 'plain' : 'warn'}
+          sub={`${stats.carShare}% by car`}
+        />
+        <Kpi
+          label="Avg travel"
+          value={stats.avgTravelMin.toFixed(1)}
+          unit="min"
+          meter={Math.min(1, stats.avgTravelMin / 45)}
+          tone={stats.avgTravelMin > 30 ? 'warn' : 'good'}
+          sub={`${stats.avgTransfers} transfers`}
+        />
+        <Kpi
+          label="Avg wait"
+          value={stats.avgWaitMin.toFixed(1)}
+          unit="min"
+          meter={Math.min(1, stats.avgWaitMin / 12)}
+          tone={stats.avgWaitMin > 8 ? 'warn' : 'good'}
+          sub={`${stats.avgHeadway}m headway`}
+        />
+        <Kpi
+          label="Congestion"
+          value={stats.avgCongestion.toFixed(2)}
+          meter={Math.min(1, stats.avgCongestion)}
+          threshold={0.85}
+          tone={congTone}
+          sub={`worst ${stats.worstVC}`}
+        />
+      </div>
+
       <Section
         title="Network"
         rows={[
@@ -32,11 +70,12 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
       <Section
         title="Passenger experience"
         rows={[
-          ['Avg travel', `${stats.avgTravelMin} min`],
-          ['Avg wait', `${stats.avgWaitMin} min`],
-          ['Avg transfers', String(stats.avgTransfers)],
           ['Waiting now', stats.waitingNow.toLocaleString()],
           ['Onboard now', stats.onboardNow.toLocaleString()],
+          ['Peak occupancy', `${stats.maxOccupancy}%`],
+          ['Avg occupancy', `${stats.avgOcc}%`],
+          ['Denied boardings', stats.deniedBoardings.toLocaleString()],
+          ['Delays accrued', `${stats.totalDelayMin} min`],
         ]}
       />
       <Section
@@ -45,7 +84,6 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
           ['Most used st', `${stats.topStation} (${stats.topStationCount.toLocaleString()})`],
           ['Crowded now', `${stats.crowdedStation} (${stats.crowdedCount.toLocaleString()})`],
           ['Top route', `${stats.topRoute} (${stats.topRouteCount.toLocaleString()})`],
-          ['Max occupancy', `${stats.maxOccupancy}%`],
         ]}
       />
       <Section
@@ -54,17 +92,7 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
           ['Road trips', stats.roadTrips.toLocaleString()],
           ['Active cars', stats.activeCars.toLocaleString()],
           ['Avg road time', `${stats.avgRoadMin} min`],
-          ['Avg congestion', String(stats.avgCongestion)],
           ['Worst road', `${stats.worstRoad} (${stats.worstVC})`],
-        ]}
-      />
-      <Section
-        title="Multimodal"
-        rows={[
-          ['Transit share', `${stats.transitShare}%`],
-          ['Car share', `${stats.carShare}%`],
-          ['Avg transit time', `${stats.avgTransitMin} min`],
-          ['Avg road time', `${stats.avgRoadMin} min`],
         ]}
       />
       <Section
@@ -73,10 +101,6 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
           ['Active vehicles', String(stats.vehicleCount)],
           ['Vehicle-hours', String(stats.vehHr)],
           ['Vehicle-km', String(stats.vehKm)],
-          ['Avg headway', `${stats.avgHeadway} min`],
-          ['Avg occupancy', `${stats.avgOcc}%`],
-          ['Denied boardings', stats.deniedBoardings.toLocaleString()],
-          ['Delays accrued', `${stats.totalDelayMin} min`],
           ['Op. cost', `${stats.opCost.toLocaleString()} OCU`],
           ['Cost / pax', `${stats.opCostPerPax} OCU`],
         ]}
@@ -84,6 +108,7 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
       {(stats.activeIncidents > 0 || stats.rerouted > 0) && (
         <Section
           title="Disruptions"
+          tone="alert"
           rows={[
             ['Active incidents', String(stats.activeIncidents)],
             ['Rerouted', stats.rerouted.toLocaleString()],
@@ -93,6 +118,10 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
           ]}
         />
       )}
+      <div className="tf-hint">
+        Peak occupancy {stats.maxOccupancy >= 95 ? 'is above' : 'is below'} the 95% critical line
+        {occTone === 'good' ? ' — capacity is holding.' : ' — boardings are being turned away.'}
+      </div>
     </>
   );
 }

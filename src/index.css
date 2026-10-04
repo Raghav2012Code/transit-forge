@@ -1,12 +1,114 @@
+/* TransitForge design system — tokens + global primitives.
+   Direction: "coastal control room". Deep ink surfaces, hairline luminous
+   edges, one signal-cyan accent, amber/red for pressure. No glow-for-glow's
+   sake: elevation is expressed by lightness + a 1px inset top highlight. */
+
 :root {
   color-scheme: dark;
-  --bg: #0b1020;
-  --panel: #111834;
-  --text: #dbe4ff;
-  --muted: #8ea0c8;
-  --border: #243152;
-  --accent: #6ea8fe;
-  font-family: Inter, system-ui, sans-serif;
+
+  /* ---- surfaces (elevation by lightness) ---- */
+  --bg-deep: oklch(11% 0.018 258);
+  --bg: oklch(14% 0.02 256);
+  --surface-0: oklch(17.5% 0.021 256);
+  --surface-1: oklch(21% 0.023 256);
+  --surface-2: oklch(25% 0.025 256);
+  --surface-3: oklch(30% 0.027 256);
+  --surface-sunken: oklch(12.5% 0.019 258);
+  --scrim: oklch(8% 0.015 258 / 0.72);
+
+  /* ---- edges ---- */
+  --hairline: oklch(30% 0.028 256);
+  --hairline-soft: oklch(26% 0.024 256);
+  --hairline-strong: oklch(42% 0.032 256);
+  --edge-light: oklch(100% 0 0 / 0.05);
+  --focus-ring: oklch(80% 0.13 205 / 0.65);
+
+  /* ---- type colors ---- */
+  --text: oklch(93% 0.008 250);
+  --text-secondary: oklch(80% 0.018 250);
+  --muted: oklch(67% 0.024 252);
+  --faint: oklch(54% 0.022 252);
+
+  /* ---- accent: signal cyan (used sparingly) ---- */
+  --signal: oklch(80% 0.13 205);
+  --signal-bright: oklch(87% 0.11 200);
+  --signal-deep: oklch(58% 0.12 214);
+  --signal-ink: oklch(15% 0.03 220);
+  --signal-soft: oklch(80% 0.13 205 / 0.14);
+  --signal-line: oklch(80% 0.13 205 / 0.4);
+
+  /* ---- status ---- */
+  --good: oklch(78% 0.16 155);
+  --good-soft: oklch(78% 0.16 155 / 0.14);
+  --warn: oklch(82% 0.15 78);
+  --warn-soft: oklch(82% 0.15 78 / 0.14);
+  --bad: oklch(68% 0.19 22);
+  --bad-soft: oklch(68% 0.19 22 / 0.16);
+  --info: oklch(72% 0.15 230);
+  --info-soft: oklch(72% 0.15 230 / 0.14);
+
+  /* ---- transport modes (match the 3D scene) ---- */
+  --mode-metro: oklch(72% 0.15 230);
+  --mode-rail: oklch(72% 0.16 305);
+  --mode-bus: oklch(83% 0.15 82);
+  --mode-road: oklch(70% 0.02 250);
+  --mode-walk: oklch(78% 0.16 155);
+
+  /* ---- typography ---- */
+  --font-ui: 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --fs-micro: 10px;
+  --fs-caption: 11px;
+  --fs-small: 12px;
+  --fs-body: 13px;
+  --fs-subtitle: 15px;
+  --fs-title: 18px;
+  --fs-metric: 22px;
+  --fs-display: 30px;
+  --lh-tight: 1.2;
+  --lh-body: 1.5;
+  --tracking-label: 0.1em;
+  --tracking-display: -0.015em;
+
+  /* ---- spacing rhythm (4px base; tight inside groups, airy between) ---- */
+  --s-1: 2px;
+  --s-2: 4px;
+  --s-3: 6px;
+  --s-4: 8px;
+  --s-5: 12px;
+  --s-6: 16px;
+  --s-7: 20px;
+  --s-8: 28px;
+
+  /* ---- shape: two radii only ---- */
+  --r-sm: 3px;
+  --r-md: 6px;
+  /* floating layers only */
+  --shadow-float: 0 12px 32px oklch(6% 0.02 258 / 0.55);
+  --shadow-hud: 0 2px 0 oklch(6% 0.02 258 / 0.5);
+
+  /* ---- motion ---- */
+  --d-fast: 90ms;
+  --d-base: 140ms;
+  --d-slow: 220ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.25, 1);
+  --ease-in: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- layout ---- */
+  --hud-h: 56px;
+  --status-h: 30px;
+  --panel-w: 356px;
+  --rail-w: 0px;
+
+  font-family: var(--font-ui);
+  font-synthesis-weight: none;
+}
+
+@media (max-width: 1440px) {
+  :root { --panel-w: 328px; }
+}
+@media (max-width: 1180px) {
+  :root { --panel-w: 296px; --fs-metric: 19px; }
 }
 
 * { box-sizing: border-box; }
@@ -16,4 +118,202 @@ html, body, #root {
   height: 100%;
   background: var(--bg);
   color: var(--text);
+}
+
+body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  font-feature-settings: 'ss01' on, 'cv05' on;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+::selection {
+  background: var(--signal-soft);
+  color: var(--signal-bright);
+}
+
+/* ---- focus: always visible, never removed without replacement ---- */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 1px;
+  border-radius: var(--r-sm);
+}
+
+/* ---- numerals are always tabular and monospaced ---- */
+input, select, button, textarea { font-family: inherit; }
+.tf-mono, .tf-stat-row dd, .tf-compare-table td:not(:first-child),
+.tf-compare-table th:not(:first-child), .tf-kpi-value, .tf-clock strong {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'zero' 1;
+}
+
+/* ---- scrollbars: thin, part of the console ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-3) transparent;
+}
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--surface-2);
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: var(--r-sm);
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--surface-3); background-clip: content-box; }
+
+/* ---- global form primitives ---- */
+.tf-btn,
+button.tf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  height: 28px;
+  padding: 0 10px;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--d-fast) var(--ease), color var(--d-fast) var(--ease),
+    border-color var(--d-fast) var(--ease), transform var(--d-fast) var(--ease);
+}
+.tf-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--hairline-strong);
+  color: var(--text);
+}
+.tf-btn:active:not(:disabled) { transform: translateY(1px); }
+.tf-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.tf-btn.small { height: 24px; padding: 0 8px; font-size: var(--fs-caption); }
+
+.tf-btn.icon {
+  width: 28px;
+  padding: 0;
+}
+.tf-btn.icon.small { width: 24px; }
+
+.tf-btn.primary {
+  color: var(--signal-ink);
+  background: var(--signal);
+  border-color: var(--signal);
+  font-weight: 600;
+}
+.tf-btn.primary:hover:not(:disabled) { background: var(--signal-bright); border-color: var(--signal-bright); }
+
+.tf-btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.tf-btn.ghost:hover:not(:disabled) { background: var(--surface-1); color: var(--text); }
+
+.tf-btn.danger { color: var(--bad); border-color: oklch(68% 0.19 22 / 0.4); }
+.tf-btn.danger:hover:not(:disabled) { background: var(--bad-soft); border-color: var(--bad); }
+
+.tf-btn.active {
+  color: var(--signal-bright);
+  background: var(--signal-soft);
+  border-color: var(--signal-line);
+}
+
+/* inputs + selects */
+input[type='text'], input:not([type]), select, textarea {
+  background: var(--surface-sunken);
+  color: var(--text);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 5px 8px;
+  font-size: var(--fs-small);
+  width: 100%;
+  transition: border-color var(--d-fast) var(--ease), background var(--d-fast) var(--ease);
+}
+select {
+  appearance: none;
+  padding-right: 22px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 8px) 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+input:hover:not(:disabled), select:hover:not(:disabled) { border-color: var(--hairline-strong); }
+input:focus, select:focus { border-color: var(--signal-line); background: var(--surface-1); }
+input:disabled, select:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* range inputs styled as console sliders */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  background: var(--surface-3);
+  border-radius: var(--r-sm);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4.5px;
+  border-radius: 2px;
+  background: var(--signal);
+  border: 1px solid var(--bg-deep);
+}
+input[type='range']::-moz-range-track { height: 3px; background: var(--surface-3); border-radius: var(--r-sm); }
+input[type='range']::-moz-range-thumb {
+  width: 11px; height: 11px; border-radius: 2px;
+  background: var(--signal); border: 1px solid var(--bg-deep);
+}
+
+/* checkboxes as console toggles */
+input[type='checkbox'] {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 2px;
+  background: var(--surface-sunken);
+  cursor: pointer;
+  position: relative;
+  flex: none;
+  transition: background var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease);
+}
+input[type='checkbox']:checked {
+  background: var(--signal);
+  border-color: var(--signal);
+}
+input[type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--signal-ink);
+  clip-path: polygon(19% 46%, 38% 68%, 81% 24%, 88% 33%, 38% 84%, 12% 57%);
+}
+
+/* ---- reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

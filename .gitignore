@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Tool scratch output
+.opencode
+.openchamber
+.playwright-mcp
+*.local.png

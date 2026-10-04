@@ -86,6 +86,11 @@ import GrowthPanel, { type ForecastView } from './ui/growth/GrowthPanel.tsx';
 import type { Zone } from './types/index.ts';
 import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
 import ServicePanel from './ui/service/ServicePanel.tsx';
+import ModeSwitch, { type AppMode as Mode } from './ui/shell/ModeSwitch.tsx';
+import StatusBar from './ui/shell/StatusBar.tsx';
+import Legend from './ui/shell/Legend.tsx';
+import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
+import { IconClose, IconPlan } from './ui/shell/icons.tsx';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
 import { headwayAt } from './simulation/service/servicePlan.ts';
 import { LOOP_ROUTES } from './simulation/passengers/passengers.ts';
@@ -93,8 +98,15 @@ import { LOOP_ROUTES } from './simulation/passengers/passengers.ts';
 const SEED = 1337;
 const TICKS_PER_SEC: Record<Speed, number> = { 1: 2, 5: 8, 20: 24 };
 const ROAD_SNAP_M = 45;
+const TOAST_TTL_MS = 7000;
+const MAX_TOASTS = 4;
 
-type Mode = 'simulate' | 'build' | 'disrupt' | 'plan';
+const MODE_LABEL: Record<Mode, string> = {
+  simulate: 'Simulate',
+  build: 'Build',
+  disrupt: 'Disrupt',
+  plan: 'Plan',
+};
 
 interface PendingDelete {
   kind: 'station' | 'route' | 'road';
@@ -184,6 +196,12 @@ export default function App() {
   const tutorialSeen = useRef<Set<string>>(new Set());
   const evalCache = useRef(new Map<string, PlanEvaluation>());
 
+  // Shell state: event toasts + side-panel visibility.
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const seenEvents = useRef<Set<string>>(new Set());
+  const toastSeq = useRef(1);
+  const [railOpen, setRailOpen] = useState(true);
+
   // Simulation loop: fixed 1-minute steps, decoupled from render rate.
   useEffect(() => {
     let raf = 0;
@@ -250,7 +268,7 @@ export default function App() {
       if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
       if (e.key === ' ') {
         e.preventDefault();
-        if (mode === 'build' || mode === 'disrupt') {
+        if (mode !== 'simulate') {
           enterSimulate();
           setPlaying(true);
         } else setPlaying((p) => !p);
@@ -260,10 +278,18 @@ export default function App() {
       else if (e.key === 'b' || e.key === 'B') {
         if (mode === 'build') enterSimulate();
         else enterBuild();
+      } else if (e.key === 'd' || e.key === 'D') {
+        if (mode === 'disrupt') enterSimulate();
+        else enterDisrupt();
       } else if (e.key === 'a' || e.key === 'A') {
         setOverlay((o) => (o === 'normal' ? 'accessibility' : 'normal'));
       } else if (e.key === 'p' || e.key === 'P') {
-        setMode((m) => (m === 'plan' ? 'simulate' : 'plan'));
+        if (mode === 'plan') enterSimulate();
+        else enterPlan();
+      } else if (e.key === '[') {
+        setRailOpen((r) => !r);
+      } else if (e.key === ']') {
+        if (!railOpen) setRailOpen(true);
       } else if (e.key === 'Escape') {
         enterSimulate();
       } else if (e.key === 'r' || e.key === 'R') {
@@ -273,6 +299,27 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+
+  // New simulation events surface as transient HUD toasts (deduped by key).
+  useEffect(() => {
+    const seen = seenEvents.current;
+    const fresh = snapshot.events.filter((e) => !seen.has(`${e.t}|${e.text}`));
+    if (fresh.length === 0) return;
+    if (seen.size > 400) seen.clear();
+    for (const e of fresh) seen.add(`${e.t}|${e.text}`);
+    const batch = fresh.slice(-2).map((e) => ({
+      id: toastSeq.current++,
+      level: e.level,
+      text: e.text,
+      time: formatClock(e.t),
+    }));
+    setToasts((t) => [...batch, ...t].slice(0, MAX_TOASTS));
+    const ids = batch.map((b) => b.id);
+    const timer = window.setTimeout(() => {
+      setToasts((t) => t.filter((x) => !ids.includes(x.id)));
+    }, TOAST_TTL_MS);
+    return () => window.clearTimeout(timer);
+  }, [snapshot]);
 
   const stats = computeStats(snapshot);
 
@@ -1037,6 +1084,17 @@ export default function App() {
     clearDraft();
   }
 
+  function selectMode(m: Mode) {
+    if (m === mode) return;
+    if (m === 'build') enterBuild();
+    else if (m === 'disrupt') enterDisrupt();
+    else if (m === 'plan') enterPlan();
+    else {
+      enterSimulate();
+      setPlaying(true);
+    }
+  }
+
   function onView(v: 'base' | 'scenario') {
     setViewing(v);
     clearDraft();
@@ -1441,38 +1499,46 @@ export default function App() {
                 : 'Delete: click a route, station, or road. Used infrastructure asks for confirmation.';
 
   return (
-    <div className="tf-root">
+    <div className={`tf-root${railOpen ? '' : ' rail-collapsed'}`}>
       <header className="tf-topbar">
-        <div className="tf-brand">TransitForge</div>
-        <div className="tf-speeds" role="group" aria-label="Editor mode">
-          <button type="button" className={`tf-btn small${mode === 'simulate' ? ' active' : ''}`} onClick={enterSimulate}>
-            Simulate
-          </button>
-          <button type="button" className={`tf-btn small${mode === 'build' ? ' active' : ''}`} onClick={enterBuild}>
-            Build
-          </button>
-          <button type="button" className={`tf-btn small${mode === 'disrupt' ? ' active' : ''}`} onClick={enterDisrupt}>
-            Disrupt
-          </button>
-          <button type="button" className={`tf-btn small${mode === 'plan' ? ' active' : ''}`} onClick={enterPlan}>
-            Plan
+        <div className="tf-brand">
+          <span className="tf-brand-mark" aria-hidden="true">
+            <IconPlan size={17} />
+          </span>
+          <span className="tf-brand-name">
+            <b>TransitForge</b>
+            <span>seed {SEED}</span>
+          </span>
+        </div>
+        <ModeSwitch mode={mode} onChange={selectMode} />
+        <div className="tf-hud-spacer" />
+        <div className="tf-hud-right">
+          <SimControls
+            playing={playing}
+            speed={speed}
+            tick={snapshot.tick}
+            timeMinutes={snapshot.timeMinutes}
+            onToggle={() => {
+              if (mode !== 'simulate') {
+                enterSimulate();
+                setPlaying(true);
+              } else setPlaying((p) => !p);
+            }}
+            onSpeed={(s) => setSpeed(s)}
+            onReset={resetAll}
+            onStep={() => { simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); }}
+          />
+          <button
+            type="button"
+            className="tf-btn icon ghost"
+            onClick={() => setRailOpen((r) => !r)}
+            title={railOpen ? 'Hide side panel' : 'Show side panel'}
+            aria-label={railOpen ? 'Hide side panel' : 'Show side panel'}
+            aria-pressed={railOpen}
+          >
+            {railOpen ? <IconClose /> : <IconPlan />}
           </button>
         </div>
-        <SimControls
-          playing={playing}
-          speed={speed}
-          tick={snapshot.tick}
-          timeMinutes={snapshot.timeMinutes}
-          onToggle={() => {
-            if (mode === 'build' || mode === 'disrupt' || mode === 'plan') {
-              enterSimulate();
-              setPlaying(true);
-            } else setPlaying((p) => !p);
-          }}
-          onSpeed={(s) => setSpeed(s)}
-          onReset={resetAll}
-          onStep={() => { simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); }}
-        />
       </header>
       <main className="tf-main">
         <section className="tf-viewport">
@@ -1492,13 +1558,40 @@ export default function App() {
             draft={draftView}
             analytics={analyticsView}
           />
+          <span className="tf-bracket tl" />
+          <span className="tf-bracket tr" />
+          <span className="tf-bracket bl" />
+          <span className="tf-bracket br" />
+          <div className="tf-hud-tl">
+            <span className={`tf-hud-chip mode-${mode}`}>
+              {MODE_LABEL[mode]} · {viewing === 'base' ? 'Baseline network' : 'Scenario network'}
+            </span>
+            {snapshot.incidents.filter((i) => i.status === 'active').map((i) => (
+              <span className="tf-hud-chip alert" key={i.id}>
+                {i.label} · {Math.max(0, Math.round(i.startMin + i.durationMin - snapshot.timeMinutes))}m left
+              </span>
+            ))}
+            {stats.worstVC >= 0.85 && (
+              <span className="tf-hud-chip alert">Congested: {stats.worstRoad} · V/C {stats.worstVC}</span>
+            )}
+          </div>
+          <Toasts toasts={toasts} />
           <div className="tf-overlay-hint">
             {mode === 'build'
               ? 'build mode · sim paused · edits reset the day'
               : mode === 'disrupt'
                 ? 'disrupt mode · sim paused · click infrastructure to target it'
-                : 'drag orbit · right-drag pan · wheel zoom · click station/route/road/district'}
+                : mode === 'plan'
+                  ? 'plan mode · pick a brief, build, then submit for evaluation'
+                  : 'drag orbit · right-drag pan · wheel zoom · click station/route/road/district'}
           </div>
+          <Legend overlay={overlay} demandLayer={demandLayer} />
+          <StatusBar stats={stats} viewing={viewing} incidents={stats.activeIncidents} opCost={stats.opCost} />
+          {selection && (
+            <div className="tf-inspector-card">
+              <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
+            </div>
+          )}
         </section>
         <aside className="tf-panel">
           {mode === 'simulate' ? (
@@ -1543,7 +1636,6 @@ export default function App() {
                 onForecast={onForecast}
                 advice={advice}
               />
-              <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
               <DebugPanel sim={snapshot} />
             </>
           ) : mode === 'disrupt' ? (
@@ -1569,7 +1661,6 @@ export default function App() {
                 resilienceRunning={resilienceRunning}
                 onCompareResilience={compareResilienceLive}
               />
-              <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
             </>
           ) : mode === 'plan' ? (
             <>
@@ -1604,7 +1695,6 @@ export default function App() {
                 tutorialDismissed={tutorialDismissed}
                 onDismissTutorial={dismissTutorial}
               />
-              <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
             </>
           ) : (
             <>

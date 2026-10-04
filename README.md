@@ -20,6 +20,22 @@ Three separated layers:
 
 Supporting folders: `src/types/`, `src/data/`, `src/workers/`.
 
+Interface: design tokens and primitives live in `src/index.css`, shell and
+component styles in `src/App.css`, and the committed design direction (palette,
+type, motion, slop audit) is recorded in [`DESIGN.md`](DESIGN.md).
+
+## Controls
+
+| Key | Action |
+| --- | --- |
+| `Space` | play / pause (leaves build · disrupt · plan) |
+| `1` `2` `3` | speed 1× / 5× / 20× |
+| `B` `D` `P` | build · disrupt · plan mode |
+| `A` | cycle the analytics overlay |
+| `[` `]` | hide / show the side panel |
+| `Esc` | back to simulate |
+| `R` | reset the simulated day |
+
 ## Run
 
 ```sh
@@ -52,6 +68,14 @@ npm run build
   reports (JSON/text/printable HTML), tutorial checklist, keyboard shortcuts,
   Plan mode, criticality overlay, live objective progress, resilience
   objectives via real disruption sims. 101 tests passing.
+- v1.1 interface overhaul ("control room" design pass, see `DESIGN.md`):
+  OKLCH token system, Space Grotesk + IBM Plex Mono typography, segmented
+  mode/overlay controls, HUD bar with brand lockup and clock, pinned status
+  strip, viewport corner brackets + vignette, HUD chip stack (mode, active
+  incidents, worst congestion), event toasts, overlay legend matching the real
+  scene ramps, floating selection card, collapsible rail docks, KPI tiles with
+  segmented tick meters, `[` panel toggle, `D` disrupt shortcut. 102 tests
+  passing.
 
 ## Known limitations (v0.4 candidates)
 

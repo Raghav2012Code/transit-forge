@@ -7,6 +7,7 @@ import type { IncidentPreset } from '../../simulation/incidents/incidents.ts';
 import { edgeName } from '../../simulation/traffic/roadGraph.ts';
 import type { CompareRow } from '../../simulation/scenario/compare.ts';
 import type { CriticalItem } from '../../simulation/analytics/resilience.ts';
+import Dock from '../shell/Dock.tsx';
 
 const KINDS: { key: IncidentKind; label: string }[] = [
   { key: 'segment-closure', label: 'Close segment' },
@@ -54,8 +55,8 @@ export default function DisruptPanel(p: Props) {
   const activeCount = p.incidents.filter((i) => i.status === 'active').length;
 
   return (
-    <div className="tf-build">
-      <h3>Disruptions{activeCount > 0 ? ` (${activeCount} active)` : ''}</h3>
+    <>
+      <Dock title="New disruption">
       <div className="tf-tool-grid" role="group" aria-label="Incident type">
         {KINDS.map((k) => (
           <button
@@ -186,7 +187,9 @@ export default function DisruptPanel(p: Props) {
         </button>
       </div>
 
-      <h3>Active &amp; scheduled</h3>
+      </Dock>
+
+      <Dock title="Incidents" meta={activeCount > 0 ? `${activeCount} active` : undefined} tone={activeCount > 0 ? 'alert' : 'default'}>
       {p.incidents.length === 0 && <p className="tf-hint">No incidents. The network is nominal.</p>}
       {p.incidents.map((inc) => (
         <div key={inc.id} className="tf-draft">
@@ -209,7 +212,9 @@ export default function DisruptPanel(p: Props) {
         </div>
       ))}
 
-      <h3>Presets</h3>
+      </Dock>
+
+      <Dock title="Presets">
       <div className="tf-draft-actions">
         {p.presets.map((pr) => (
           <button key={pr.key} type="button" className="tf-btn small" onClick={() => p.onPreset(pr.key)} title={pr.hint}>
@@ -218,7 +223,9 @@ export default function DisruptPanel(p: Props) {
         ))}
       </div>
 
-      <h3>Critical links</h3>
+      </Dock>
+
+      <Dock title="Critical links" defaultOpen={false}>
       <button type="button" className="tf-btn small" onClick={p.onAnalyze}>Analyze network resilience</button>
       {p.critical && (
         <ol className="tf-ranked">
@@ -231,7 +238,9 @@ export default function DisruptPanel(p: Props) {
         </ol>
       )}
 
-      <h3>Resilience vs base</h3>
+      </Dock>
+
+      <Dock title="Resilience vs base" defaultOpen={false}>
       <button type="button" className="tf-btn small" disabled={p.resilienceRunning} onClick={p.onCompareResilience}>
         {p.resilienceRunning ? 'Running…' : 'Compare under disruption'}
       </button>
@@ -250,7 +259,9 @@ export default function DisruptPanel(p: Props) {
         </table>
       )}
 
-      <h3>Timeline</h3>
+      </Dock>
+
+      <Dock title="Timeline" defaultOpen={false}>
       {p.sim.events.length === 0 && <p className="tf-hint">No events yet.</p>}
       <ol className="tf-ranked">
         {[...p.sim.events].reverse().slice(0, 30).map((e, i) => (
@@ -259,7 +270,8 @@ export default function DisruptPanel(p: Props) {
           </li>
         ))}
       </ol>
-    </div>
+      </Dock>
+    </>
   );
 }
 

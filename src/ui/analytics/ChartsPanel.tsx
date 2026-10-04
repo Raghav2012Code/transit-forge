@@ -1,6 +1,7 @@
 import type { SeriesPoint } from '../../simulation/analytics/series.ts';
 import { formatClock } from '../../simulation/index.ts';
 import { Bars, Line } from './charts.tsx';
+import Dock from '../shell/Dock.tsx';
 
 interface Props {
   history: SeriesPoint[];
@@ -8,7 +9,13 @@ interface Props {
 }
 
 export default function ChartsPanel({ history, topStations }: Props) {
-  if (history.length < 2) return <p className="tf-hint">Charts appear as the simulation runs.</p>;
+  if (history.length < 2) {
+    return (
+      <Dock title="Charts" meta="warming up">
+        <p className="tf-hint">Charts appear as the simulation runs.</p>
+      </Dock>
+    );
+  }
   const transitRate: number[] = [];
   const carRate: number[] = [];
   const travelWin: number[] = [];
@@ -24,8 +31,7 @@ export default function ChartsPanel({ history, topStations }: Props) {
   const first = history[0];
   const range = `${formatClock(first.t)}–${formatClock(last.t)}`;
   return (
-    <div className="tf-charts">
-      <h3>Charts <span className="tf-hint">{range}</span></h3>
+    <Dock title="Charts" meta={range}>
       <h5>Trips / 5 min · transit</h5>
       <Line values={transitRate} color="#38bdf8" />
       <h5>Trips / 5 min · car</h5>
@@ -42,6 +48,6 @@ export default function ChartsPanel({ history, topStations }: Props) {
       />
       <h5>Top stations (boarded)</h5>
       <Bars color="#c084fc" values={topStations.map((s) => ({ label: s.name, value: s.boarded }))} />
-    </div>
+    </Dock>
   );
 }

@@ -8,6 +8,7 @@ import type { PlanningScore } from '../../simulation/analytics/impact.ts';
 import type { UtilizationRows } from '../../simulation/analytics/utilization.ts';
 import { classifyNetwork } from '../../simulation/service/classify.ts';
 import type { SimulationState } from '../../simulation/index.ts';
+import Dock from '../shell/Dock.tsx';
 
 interface Props {
   access: AccessibilitySet;
@@ -55,8 +56,7 @@ export default function AnalyticsPanel({ access, coverage, score, bottlenecks, g
   const badRoutes = sim.routes.filter((r) => problems.routes[r.id] && problems.routes[r.id] !== 'balanced');
   const badStations = sim.stations.filter((s) => problems.stations[s.id] && problems.stations[s.id] !== 'balanced');
   return (
-    <div className="tf-analytics">
-      <h3>Analytics</h3>
+    <Dock title="Analytics" meta={`score ${score.total}`}>
       <div className="tf-stat-row"><dt>Access score</dt><dd>{access.cityScore}</dd></div>
       <div className="tf-stat-row"><dt>Coverage ({coverage.thresholdM}m)</dt><dd>{coverage.pct}% ({coverage.coveredPop.toLocaleString()})</dd></div>
       <div className="tf-stat-row"><dt>Metro/rail/bus pop</dt><dd>{coverage.metroPop.toLocaleString()}/{coverage.railPop.toLocaleString()}/{coverage.busPop.toLocaleString()}</dd></div>
@@ -161,6 +161,6 @@ export default function AnalyticsPanel({ access, coverage, score, bottlenecks, g
           ))}
         </tbody>
       </table>
-    </div>
+    </Dock>
   );
 }

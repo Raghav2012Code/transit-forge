@@ -203,6 +203,26 @@ describe('problems and recommendations', () => {
     expect(recs2[0].intervention.toLowerCase()).toContain('transit');
   });
 
+  it('lists at most one transit-gap problem per district', () => {
+    const gap = (x: number, score: number) => ({
+      x, z: 0, zoneId: 'z1', zoneName: 'North', score, population: 40000,
+      nearestStationM: 400, nearestRapidM: 900, cbdMin: 20, reasons: ['High population'],
+    });
+    const problems = detectProblems({
+      bottlenecks: { stations: [], routes: [], roads: [] },
+      gaps: [gap(-30, 40), gap(30, 70), gap(60, 55)],
+      zones: [{ id: 'z1', name: 'North', population: 40000, popGrowthRate: 0.01, accessScore: 70 }],
+      routes: [],
+      routeBoardings: {},
+      routePeakOcc: {},
+      criticalRoutes: [],
+      criticalBridges: [],
+    });
+    const gaps = problems.filter((p) => p.kind === 'access');
+    expect(gaps.length).toBe(1);
+    expect(gaps[0].severity).toBe(70);
+  });
+
   it('flags over-service with its metric', () => {
     const low = { ...ctx, routePeakOcc: { 'rt-b9': 0.1 }, routeBoardings: { 'rt-b9': 100 } };
     const problems = detectProblems({
