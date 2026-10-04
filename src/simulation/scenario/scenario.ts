@@ -2,8 +2,66 @@
 // The base is never mutated; applying ops yields the modified network.
 // Undo/redo replays the op log (no state snapshots needed).
 import type { TransportMode } from '../../types/index.ts';
+import type { ServicePlan } from '../service/servicePlan.ts';
+import { clampHeadway } from '../service/servicePlan.ts';
 
 export type RoadKind = 'local' | 'arterial' | 'highway';
+
+/** Partial service update; routeId identifies the route. */
+export interface ServicePatch {
+  peakHeadwayMin?: number;
+  offPeakHeadwayMin?: number;
+  operatingStartMin?: number;
+  operatingEndMin?: number;
+  fleetSize?: number;
+  vehicleCapacity?: number;
+  speedKph?: number;
+  dwellBaseSec?: number;
+  dwellPerBoardSec?: number;
+  dwellPerAlightSec?: number;
+  turnaroundMin?: number;
+  syncEnabled?: boolean;
+  reliability?: {
+    delayProb?: number;
+    meanDelayMin?: number;
+    cancelProb?: number;
+  };
+}
+
+/** Merge a patch over a base plan (reliability merges nested). */
+export function mergeServicePatch(base: ServicePlan, patch: ServicePatch): ServicePlan {
+  const { reliability, ...rest } = patch;
+  return {
+    ...base,
+    ...rest,
+    routeId: base.routeId,
+    reliability: { ...base.reliability, ...(reliability ?? {}) },
+  };
+}
+
+/** Clamp a service patch to sane bounds for the mode. */
+export function sanitizeServicePatch(
+  patch: ServicePatch,
+  mode: 'metro' | 'rail' | 'bus',
+): ServicePatch {
+  const out: ServicePatch = { ...patch };
+  if (out.peakHeadwayMin !== undefined) out.peakHeadwayMin = clampHeadway(mode, out.peakHeadwayMin);
+  if (out.offPeakHeadwayMin !== undefined) out.offPeakHeadwayMin = clampHeadway(mode, out.offPeakHeadwayMin);
+  if (out.fleetSize !== undefined) out.fleetSize = Math.max(0, Math.min(24, Math.floor(out.fleetSize)));
+  if (out.vehicleCapacity !== undefined) out.vehicleCapacity = Math.max(10, Math.min(2000, Math.floor(out.vehicleCapacity)));
+  if (out.speedKph !== undefined) out.speedKph = Math.max(5, Math.min(120, out.speedKph));
+  if (out.turnaroundMin !== undefined) out.turnaroundMin = Math.max(0, Math.min(30, out.turnaroundMin));
+  if (out.operatingStartMin !== undefined) out.operatingStartMin = Math.max(0, Math.min(1439, Math.floor(out.operatingStartMin)));
+  if (out.operatingEndMin !== undefined) out.operatingEndMin = Math.max(0, Math.min(1440, Math.floor(out.operatingEndMin)));
+  if (out.reliability) {
+    const r = { ...out.reliability };
+    if (r.delayProb !== undefined) r.delayProb = Math.max(0, Math.min(1, r.delayProb));
+    if (r.meanDelayMin !== undefined) r.meanDelayMin = Math.max(0, Math.min(30, r.meanDelayMin));
+    if (r.cancelProb !== undefined) r.cancelProb = Math.max(0, Math.min(0.5, r.cancelProb));
+    out.reliability = r;
+  }
+  return out;
+}
 
 export type EditOp =
   | { type: 'addStation'; station: { id: string; name: string; x: number; z: number; capacityPerHr: number } }
@@ -28,7 +86,8 @@ export type EditOp =
       nodes: { id: string; x: number; z: number }[];
       edges: { id: string; a: string; b: string; kind: RoadKind }[];
     }
-  | { type: 'removeRoad'; edgeId: string };
+  | { type: 'removeRoad'; edgeId: string }
+  | { type: 'setService'; routeId: string; patch: ServicePatch };
 
 export interface Scenario {
   version: 1;

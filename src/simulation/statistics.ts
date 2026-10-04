@@ -1,5 +1,8 @@
 import type { SimStats } from '../types/index.ts';
 import type { SimulationState } from './index.ts';
+import { operatingCost } from './service/costs.ts';
+import { routeEffectiveHeadway } from './service/timetable.ts';
+import { LOOP_ROUTES } from './passengers/passengers.ts';
 
 export function computeStats(sim: SimulationState): SimStats {
   const population = sim.city.zones.reduce((s, z) => s + z.population, 0);
@@ -93,5 +96,53 @@ export function computeStats(sim: SimulationState): SimStats {
     transitShare: Math.round((c.completed / allTrips) * 1000) / 10,
     carShare: Math.round((rc.completed / allTrips) * 1000) / 10,
     avgTransitMin: avgTravelMin,
+    ...serviceStats(sim),
+  };
+}
+
+/** Service-level metrics from vehicle telemetry + operating costs. */
+function serviceStats(sim: SimulationState): Pick<
+  SimStats,
+  'deniedBoardings' | 'avgOcc' | 'vehKm' | 'vehHr' | 'opCost' | 'opCostPerPax' | 'avgHeadway' | 'totalDelayMin'
+> {
+  const c = sim.counters;
+  let occSum = 0;
+  for (const vv of sim.vehicles) occSum += vv.load / Math.max(1, vv.capacity);
+  const avgOcc = sim.vehicles.length > 0 ? occSum / sim.vehicles.length : 0;
+  let vehKm = 0;
+  let vehHr = 0;
+  for (const id in c.routeVehKm) vehKm += c.routeVehKm[id];
+  for (const id in c.routeVehHr) vehHr += c.routeVehHr[id];
+
+  let opCost = 0;
+  let headwaySum = 0;
+  let headwayN = 0;
+  for (const r of sim.routes) {
+    const km = c.routeVehKm[r.id] ?? 0;
+    const hr = c.routeVehHr[r.id] ?? 0;
+    const plan = sim.service[r.id];
+    const fleet = plan && plan.fleetSize > 0 ? plan.fleetSize : sim.vehicles.filter((vv) => vv.routeId === r.id).length;
+    opCost += operatingCost(r.mode, hr, km, fleet);
+    if (plan) {
+      const cum = sim.routeCumDist.get(r.id) ?? [0];
+      const total = Math.max(1, cum[cum.length - 1]);
+      const slow = r.mode === 'bus' ? (sim.busRouteCongestion[r.id] ?? 1) : 1;
+      const h = routeEffectiveHeadway(plan, total, r.stationIds.length, slow, sim.timeMinutes, LOOP_ROUTES.has(r.id));
+      if (Number.isFinite(h)) {
+        headwaySum += h;
+        headwayN++;
+      }
+    }
+  }
+  const completed = Math.max(1, c.completed);
+  return {
+    deniedBoardings: c.deniedBoardings,
+    avgOcc: Math.round(avgOcc * 1000) / 10,
+    vehKm: Math.round(vehKm * 10) / 10,
+    vehHr: Math.round(vehHr * 10) / 10,
+    opCost: Math.round(opCost),
+    opCostPerPax: Math.round((opCost / completed) * 100) / 100,
+    avgHeadway: headwayN > 0 ? Math.round((headwaySum / headwayN) * 10) / 10 : 0,
+    totalDelayMin: Math.round(c.totalDelayMin),
   };
 }

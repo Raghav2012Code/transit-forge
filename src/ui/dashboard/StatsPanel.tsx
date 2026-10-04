@@ -67,6 +67,20 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
           ['Avg road time', `${stats.avgRoadMin} min`],
         ]}
       />
+      <Section
+        title="Service"
+        rows={[
+          ['Active vehicles', String(stats.vehicleCount)],
+          ['Vehicle-hours', String(stats.vehHr)],
+          ['Vehicle-km', String(stats.vehKm)],
+          ['Avg headway', `${stats.avgHeadway} min`],
+          ['Avg occupancy', `${stats.avgOcc}%`],
+          ['Denied boardings', stats.deniedBoardings.toLocaleString()],
+          ['Delays accrued', `${stats.totalDelayMin} min`],
+          ['Op. cost', `${stats.opCost.toLocaleString()} OCU`],
+          ['Cost / pax', `${stats.opCostPerPax} OCU`],
+        ]}
+      />
     </>
   );
 }

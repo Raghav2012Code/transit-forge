@@ -14,17 +14,20 @@ import { compareScenarios } from './simulation/scenario/compare.ts';
 import {
   createScenario,
   formatCost,
+  mergeServicePatch,
   nextRouteId,
   nextStationId,
   paletteColor,
   pushOp,
   redoOp,
+  sanitizeServicePatch,
   undoOp,
   validateRoadNode,
   validateStationPlacement,
   type EditOp,
   type RoadKind,
   type Scenario,
+  type ServicePatch,
 } from './simulation/scenario/scenario.ts';
 import { deleteScenario, duplicateScenario, listScenarios, saveScenario } from './simulation/scenario/store.ts';
 import { buildNetwork } from './simulation/transport/network.ts';
@@ -41,6 +44,10 @@ import { buildUtilization } from './simulation/analytics/utilization.ts';
 import BuildPanel, { type BuildTool } from './ui/build/BuildPanel.tsx';
 import ComparePanel, { type CompareResult } from './ui/build/ComparePanel.tsx';
 import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
+import ServicePanel from './ui/service/ServicePanel.tsx';
+import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
+import { headwayAt } from './simulation/service/servicePlan.ts';
+import { LOOP_ROUTES } from './simulation/passengers/passengers.ts';
 
 const SEED = 1337;
 const TICKS_PER_SEC: Record<Speed, number> = { 1: 2, 5: 8, 20: 24 };
@@ -72,6 +79,8 @@ export default function App() {
   const [coverageThreshold, setCoverageThreshold] = useState(500);
   const [history, setHistory] = useState<SeriesPoint[]>([]);
   const lastHistTick = useRef(0);
+  const [serviceRouteId, setServiceRouteId] = useState<string | null>(null);
+  const fleetNonce = useRef(0);
 
   // Scenario + build state. Base city/seed never mutate; ops replay into mod.
   const [mode, setMode] = useState<Mode>('simulate');
@@ -186,6 +195,66 @@ export default function App() {
       bottleneckStations: bottlenecks.stations.slice(0, 5).map((b) => b.id),
     };
   }, [overlay, access, coverage, bottlenecks, travelDest]);
+
+  // ---- live service editing ----
+  // Service edits apply to the running sim immediately (no day reset):
+  // the plan is replaced, offsets recomputed, capacities updated, and the
+  // fleet reconciled by adding/removing empty vehicles. The same change is
+  // logged as a setService op so scenarios, undo, and compare stay exact.
+  function onServicePatch(routeId: string, patch: ServicePatch) {
+    const sim = simRef.current;
+    const route = sim.routes.find((r) => r.id === routeId);
+    const current = sim.service[routeId];
+    if (!route || !current) return;
+    const mode = route.mode === 'metro' || route.mode === 'rail' ? route.mode : 'bus';
+    const next = mergeServicePatch(current, sanitizeServicePatch(patch, mode));
+    sim.service[routeId] = next;
+    sim.serviceOffsets[routeId] = phaseOffset(sim.seed, routeId, next);
+    for (const vv of sim.vehicles) {
+      if (vv.routeId === routeId) vv.capacity = next.vehicleCapacity;
+    }
+    reconcileFleet(sim, routeId);
+    if (viewing === 'base') setViewing('scenario');
+    const r = pushOp(ops, redo, { type: 'setService', routeId, patch: sanitizeServicePatch(patch, mode) });
+    setOps(r.ops);
+    setRedo(r.redo);
+    setCompareResult(null);
+    setSnapshot({ ...sim });
+  }
+
+  function reconcileFleet(sim: SimulationState, routeId: string) {
+    const route = sim.routes.find((r) => r.id === routeId);
+    const plan = sim.service[routeId];
+    if (!route || !plan) return;
+    const cum = sim.routeCumDist.get(routeId) ?? [0];
+    const total = Math.max(1, cum[cum.length - 1]);
+    const cycle = cycleMin(total, plan, route.stationIds.length, LOOP_ROUTES.has(routeId));
+    const h = headwayAt(plan, sim.timeMinutes);
+    const desired = plan.fleetSize > 0 ? plan.fleetSize : Number.isFinite(h) ? fleetRequired(cycle, h) : 0;
+    const existing = sim.vehicles.filter((vv) => vv.routeId === routeId);
+    if (existing.length < desired) {
+      for (let i = existing.length; i < desired; i++) {
+        fleetNonce.current++;
+        sim.vehicles.push({
+          id: `veh-${routeId}-${i}-n${fleetNonce.current}`,
+          routeId,
+          s: 0,
+          direction: 1,
+          load: 0,
+          capacity: plan.vehicleCapacity,
+          riders: [],
+          dwellLeft: 0,
+          trips: 0,
+        });
+      }
+    } else if (existing.length > desired) {
+      const removable = existing
+        .filter((vv) => vv.riders.length === 0)
+        .sort((a, b) => b.id.localeCompare(a.id));
+      const drop = new Set(removable.slice(0, existing.length - desired).map((vv) => vv.id));
+      if (drop.size > 0) sim.vehicles = sim.vehicles.filter((vv) => !drop.has(vv.id));
+    }
+  }
 
   // ---- scenario application ----
   function resetSimTo(city: typeof baseCity, net: typeof baseNet) {
@@ -530,7 +599,10 @@ export default function App() {
             layers={layers}
             overlay={overlay}
             selection={selection}
-            onSelect={mode === 'simulate' ? setSelection : () => {}}
+            onSelect={mode === 'simulate' ? (sel) => {
+              setSelection(sel);
+              if (sel?.kind === 'route') setServiceRouteId(sel.id);
+            } : () => {}}
             networkKey={networkKey}
             ghosts={viewing === 'scenario' ? diff.removedStations : []}
             highlightRoutes={viewing === 'scenario' ? diff.addedRoutes : []}
@@ -557,6 +629,12 @@ export default function App() {
                 onCoverageThreshold={setCoverageThreshold}
               />
               <StatsPanel stats={stats} />
+              <ServicePanel
+                sim={snapshot}
+                selectedRouteId={serviceRouteId}
+                onSelectRoute={setServiceRouteId}
+                onPatch={onServicePatch}
+              />
               <AnalyticsPanel
                 access={access}
                 coverage={coverage}
@@ -564,6 +642,7 @@ export default function App() {
                 bottlenecks={bottlenecks}
                 gaps={gaps}
                 utilization={utilization}
+                sim={snapshot}
                 onSelect={setSelection}
               />
               <ChartsPanel history={history} topStations={topStations} />

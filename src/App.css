@@ -325,6 +325,48 @@
   height: 100%;
 }
 
+.tf-service {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tf-service h3 {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+
+.tf-service h5 {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.tf-service dl {
+  margin: 0;
+}
+
+.tf-stepper {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.tf-service select, .tf-namelabel select {
+  background: #0b1020;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 8px;
+  font-size: 13px;
+  max-width: 100%;
+}
+
 .tf-stats dl, .tf-inspector dl {
   margin: 0;
 }

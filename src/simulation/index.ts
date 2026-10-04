@@ -14,7 +14,6 @@ import type {
 } from '../types/index.ts';
 import { generateCity } from './city/generateCity.ts';
 import { buildNetwork } from './transport/network.ts';
-import { mulberry32 } from './city/seededRng.ts';
 import { buildDemandMatrix, type DemandMatrix } from './passengers/demand.ts';
 import { advancePassengers } from './passengers/passengers.ts';
 import {
@@ -25,6 +24,9 @@ import {
   emptyRoadCounters,
 } from './traffic/cars.ts';
 import { buildRoadGraph, type RoadGraph } from './traffic/roadGraph.ts';
+import { defaultPlanFor, type ServicePlan } from './service/servicePlan.ts';
+import { cycleMin, phaseOffset, resolvedFleet } from './service/timetable.ts';
+import { LOOP_ROUTES } from './passengers/passengers.ts';
 
 export interface SimulationState {
   seed: number;
@@ -51,6 +53,10 @@ export interface SimulationState {
   busRoadMap: Record<string, string[]>;
   roadCache: Map<string, { edgeIds: string[]; nodes: string[]; totalMin: number; computedAt: number }>;
   busRouteCongestion: Record<string, number>;
+  /** Operating configuration per route (infrastructure lives on TransportRoute). */
+  service: Record<string, ServicePlan>;
+  /** Deterministic departure phase per route (0 for synced routes). */
+  serviceOffsets: Record<string, number>;
 }
 
 const START_MIN = 7 * 60;
@@ -60,6 +66,12 @@ function emptyCounters(routeIds: string[]): TripCounters {
   for (const id of routeIds) routeBoardings[id] = 0;
   const routePeakOcc: Record<string, number> = {};
   for (const id of routeIds) routePeakOcc[id] = 0;
+  const routeDenied: Record<string, number> = {};
+  for (const id of routeIds) routeDenied[id] = 0;
+  const routeVehKm: Record<string, number> = {};
+  for (const id of routeIds) routeVehKm[id] = 0;
+  const routeVehHr: Record<string, number> = {};
+  for (const id of routeIds) routeVehHr[id] = 0;
   return {
     generated: 0,
     completed: 0,
@@ -75,25 +87,42 @@ function emptyCounters(routeIds: string[]): TripCounters {
     maxOccupancy01: 0,
     routeBoardings,
     routePeakOcc,
+    routeDenied,
+    routeVehKm,
+    routeVehHr,
+    deniedBoardings: 0,
+    totalDelayMin: 0,
   };
 }
 
-function initVehicles(routes: TransportRoute[], routeLengths: Map<string, number>, seed: number): VehicleState[] {
-  const rand = mulberry32(seed ^ 0x9e37);
+function initVehicles(
+  routes: TransportRoute[],
+  routeLengths: Map<string, number>,
+  service: Record<string, ServicePlan>,
+): VehicleState[] {
   const vehicles: VehicleState[] = [];
+  let total = 0;
   for (const r of routes) {
-    const count = r.mode === 'bus' ? 1 : 2;
+    const plan = service[r.id];
+    if (!plan) continue;
     const length = Math.max(1, routeLengths.get(r.id) ?? 1);
-    for (let i = 0; i < count; i++) {
+    // Fleet sized from the cycle at free speed; congestion degrades the
+    // experienced headway live instead of spawning unlimited vehicles.
+    const cycle = cycleMin(length, plan, r.stationIds.length, LOOP_ROUTES.has(r.id));
+    const fleet = Math.min(12, resolvedFleet(plan, cycle, START_MIN));
+    for (let i = 0; i < fleet && total < 64; i++) {
       vehicles.push({
         id: `veh-${r.id}-${i}`,
         routeId: r.id,
-        s: rand() * length,
-        direction: rand() > 0.5 ? 1 : -1,
+        s: ((i + 0.5) / Math.max(1, fleet)) * length,
+        direction: i % 2 === 0 ? 1 : -1,
         load: 0,
-        capacity: r.vehicleCapacity,
+        capacity: plan.vehicleCapacity,
         riders: [],
+        dwellLeft: 0,
+        trips: 0,
       });
+      total++;
     }
   }
   return vehicles;
@@ -115,11 +144,22 @@ export function createSimulationFromParts(
     connections: Connection[];
     routeLengths: Map<string, number>;
     routeCumDist: Map<string, number[]>;
+    service?: Record<string, ServicePlan>;
   },
+  serviceOverrides?: Record<string, ServicePlan>,
 ): SimulationState {
   const stations = net.stations.map((s) => ({ ...s, routeIds: [...s.routeIds], modes: [...s.modes] }));
   const roadGraph = buildRoadGraph(city);
   const stationPos = new Map(stations.map((s) => [s.id, { x: s.pos.x, z: s.pos.z }]));
+  const service: Record<string, ServicePlan> = {};
+  for (const r of net.routes) {
+    service[r.id] = serviceOverrides?.[r.id] ?? net.service?.[r.id] ?? defaultPlanFor(r);
+  }
+  const serviceOffsets: Record<string, number> = {};
+  for (const r of net.routes) {
+    const plan = service[r.id];
+    if (plan) serviceOffsets[r.id] = phaseOffset(seed, r.id, plan);
+  }
   return {
     seed,
     tick: 0,
@@ -130,7 +170,7 @@ export function createSimulationFromParts(
     connections: net.connections.map((c) => ({ ...c })),
     routeLengths: new Map(net.routeLengths),
     routeCumDist: new Map(net.routeCumDist),
-    vehicles: initVehicles(net.routes, net.routeLengths, seed),
+    vehicles: initVehicles(net.routes, net.routeLengths, service),
     passengers: [],
     demand: buildDemandMatrix(city.zones),
     rng: (seed ^ 0x51ab) | 0,
@@ -145,6 +185,8 @@ export function createSimulationFromParts(
     busRoadMap: buildBusRoadMap(net.routes, stationPos, roadGraph, city),
     roadCache: new Map(),
     busRouteCongestion: {},
+    service,
+    serviceOffsets,
   };
 }
 

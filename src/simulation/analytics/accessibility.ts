@@ -61,11 +61,13 @@ export interface AccessInput {
   stations: Station[];
   connections: Connection[];
   routes: TransportRoute[];
+  /** Experienced headways (e.g. from service plans); defaults to scheduled. */
+  headways?: Record<string, number>;
 }
 
 export function computeAccessibility(input: AccessInput): AccessibilitySet {
   const { zones, stations, connections, routes } = input;
-  const headway = new Map(routes.map((r) => [r.id, r.headwayMin]));
+  const headway = new Map(routes.map((r) => [r.id, input.headways?.[r.id] ?? r.headwayMin]));
   const stationById = new Map(stations.map((s) => [s.id, s]));
   const majorZones = MAJOR_KINDS.map((k) => zones.find((z) => z.kind === k)).filter((z) => z !== undefined);
 

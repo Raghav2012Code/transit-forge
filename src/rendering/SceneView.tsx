@@ -5,7 +5,7 @@ import type { SimulationState } from '../simulation/index.ts';
 import type { CongestionLevel } from '../types/index.ts';
 import { buildCityMeshes } from './city/buildCity.ts';
 import { buildNetworkMeshes } from './transport/buildNetwork.ts';
-import { buildVehicles, updateVehicles } from './vehicles/vehicles.ts';
+import { buildVehicles, syncVehicleMeshes, updateVehicles } from './vehicles/vehicles.ts';
 import { buildCarRig, updateCarRig } from './traffic/carRig.ts';
 
 export interface Layers {
@@ -23,7 +23,8 @@ export interface Selection {
 
 export type Overlay =
   | 'normal' | 'flow' | 'load' | 'congestion'
-  | 'accessibility' | 'traveltime' | 'coverage' | 'bottlenecks';
+  | 'accessibility' | 'traveltime' | 'coverage' | 'bottlenecks'
+  | 'frequency' | 'crowding';
 
 export type AccessGradeKey = 'excellent' | 'good' | 'moderate' | 'poor' | 'very poor';
 
@@ -316,6 +317,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       lastFrame = now;
       const cur = simRef.current;
       if (cur) {
+        syncVehicleMeshes(rig, cur.vehicles, cur.routes);
         updateVehicles(rig, cur.vehicles);
         updateCarRig(carRig, cur.cars, edgeLen);
         rebuildDraft();
@@ -339,6 +341,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         const usage = cur.counters.routeBoardings;
         let maxUse = 1;
         for (const id in usage) maxUse = Math.max(maxUse, usage[id]);
+        // Live occupancy per route for the crowding view.
+        const occSum: Record<string, number> = {};
+        const occN: Record<string, number> = {};
+        for (const vv of cur.vehicles) {
+          occSum[vv.routeId] = (occSum[vv.routeId] ?? 0) + vv.load / Math.max(1, vv.capacity);
+          occN[vv.routeId] = (occN[vv.routeId] ?? 0) + 1;
+        }
         for (const [id, mesh] of net.routeMeshById) {
           const mat = mesh.material as THREE.MeshStandardMaterial;
           const u = Math.min(1, (usage[id] ?? 0) / maxUse);
@@ -353,6 +362,31 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             mat.color.copy(routeBase).lerp(routeHot, u * 0.45);
             mat.emissive.copy(routeBase);
             mat.emissiveIntensity = 0.15 + 2.4 * u;
+          } else if (ov === 'frequency') {
+            // Scheduled peak headway: intense = frequent service.
+            const h = cur.service[id]?.peakHeadwayMin ?? 15;
+            const f = Math.min(1, Math.max(0, 1 - (h - 3) / 27));
+            routeBase.set(mesh.userData.baseColor as string);
+            mat.color.copy(routeBase).lerp(routeHot, f * 0.3);
+            mat.emissive.copy(routeBase);
+            mat.emissiveIntensity = 0.15 + 2.2 * f;
+          } else if (ov === 'crowding') {
+            // Live occupancy: frequent-but-empty looks different from packed.
+            const occ = occN[id] ? occSum[id] / occN[id] : 0;
+            routeBase.set(mesh.userData.baseColor as string);
+            if (occ >= 0.9) {
+              mat.color.setHex(0xef4444);
+              mat.emissive.setHex(0xef4444);
+              mat.emissiveIntensity = 1.4 + 0.8 * Math.sin(elapsed * 5);
+            } else if (occ >= 0.7) {
+              mat.color.copy(routeBase).lerp(routeHot, 0.35);
+              mat.emissive.setHex(0xfb923c);
+              mat.emissiveIntensity = 1.1;
+            } else {
+              mat.color.copy(routeBase);
+              mat.emissive.copy(routeBase);
+              mat.emissiveIntensity = 0.25;
+            }
           } else {
             routeBase.set(mesh.userData.baseColor as string);
             mat.color.copy(routeBase);

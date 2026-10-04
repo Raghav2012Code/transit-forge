@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Selection } from '../../rendering/SceneView.tsx';
 import type { AccessibilitySet } from '../../simulation/analytics/accessibility.ts';
 import type { Bottleneck } from '../../simulation/analytics/bottlenecks.ts';
@@ -6,6 +6,8 @@ import type { CoverageSet } from '../../simulation/analytics/coverage.ts';
 import type { GapCandidate } from '../../simulation/analytics/gaps.ts';
 import type { PlanningScore } from '../../simulation/analytics/impact.ts';
 import type { UtilizationRows } from '../../simulation/analytics/utilization.ts';
+import { classifyNetwork } from '../../simulation/service/classify.ts';
+import type { SimulationState } from '../../simulation/index.ts';
 
 interface Props {
   access: AccessibilitySet;
@@ -14,6 +16,7 @@ interface Props {
   bottlenecks: { stations: Bottleneck[]; routes: Bottleneck[]; roads: Bottleneck[] };
   gaps: GapCandidate[];
   utilization: UtilizationRows;
+  sim: SimulationState;
   onSelect: (sel: Selection) => void;
 }
 
@@ -34,11 +37,23 @@ function BottleneckList({ items, onSelect }: { items: Bottleneck[]; onSelect: (s
   );
 }
 
-export default function AnalyticsPanel({ access, coverage, score, bottlenecks, gaps, utilization, onSelect }: Props) {
+export default function AnalyticsPanel({ access, coverage, score, bottlenecks, gaps, utilization, sim, onSelect }: Props) {
   const [routeSort, setRouteSort] = useState<'boardings' | 'occupancy'>('boardings');
   const routes = [...utilization.routes].sort((a, b) =>
     routeSort === 'boardings' ? b.boardings - a.boardings : b.peakOcc - a.peakOcc,
   );
+  const problems = useMemo(
+    () => classifyNetwork({
+      stations: sim.stations,
+      routes: sim.routes,
+      counters: sim.counters,
+      plans: sim.service,
+      busSlowdown: sim.busRouteCongestion,
+    }),
+    [sim],
+  );
+  const badRoutes = sim.routes.filter((r) => problems.routes[r.id] && problems.routes[r.id] !== 'balanced');
+  const badStations = sim.stations.filter((s) => problems.stations[s.id] && problems.stations[s.id] !== 'balanced');
   return (
     <div className="tf-analytics">
       <h3>Analytics</h3>
@@ -59,6 +74,26 @@ export default function AnalyticsPanel({ access, coverage, score, bottlenecks, g
       <BottleneckList items={bottlenecks.routes.slice(0, 3)} onSelect={onSelect} />
       <h5>Roads</h5>
       <BottleneckList items={bottlenecks.roads.slice(0, 3)} onSelect={onSelect} />
+
+      <h4>Service vs demand</h4>
+      {badRoutes.length === 0 && badStations.length === 0 ? (
+        <p className="tf-hint">All balanced.</p>
+      ) : (
+        <>
+          {badRoutes.map((r) => (
+            <div className="tf-stat-row" key={r.id}>
+              <dt><button type="button" className="tf-link" onClick={() => onSelect({ kind: 'route', id: r.id })}>{r.name}</button></dt>
+              <dd>{problems.routes[r.id]}</dd>
+            </div>
+          ))}
+          {badStations.slice(0, 4).map((s) => (
+            <div className="tf-stat-row" key={s.id}>
+              <dt><button type="button" className="tf-link" onClick={() => onSelect({ kind: 'station', id: s.id })}>{s.name}</button></dt>
+              <dd>{problems.stations[s.id]}</dd>
+            </div>
+          ))}
+        </>
+      )}
 
       <h4>Find transit gaps</h4>
       {gaps.length === 0 ? (

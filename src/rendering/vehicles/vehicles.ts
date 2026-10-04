@@ -49,11 +49,40 @@ export function buildVehicles(
   return { group, meshById, segmentsByRoute };
 }
 
+/** Reconcile meshes with the live vehicle list (fleet changes add/remove). */
+export function syncVehicleMeshes(
+  rig: VehicleRig,
+  vehicles: VehicleState[],
+  routes: TransportRoute[],
+): void {
+  const routeById = new Map(routes.map((r) => [r.id, r]));
+  const live = new Set(vehicles.map((v) => v.id));
+  for (const [id, mesh] of rig.meshById) {
+    if (!live.has(id)) {
+      rig.group.remove(mesh);
+      mesh.geometry.dispose();
+      (mesh.material as THREE.Material).dispose();
+      rig.meshById.delete(id);
+    }
+  }
+  for (const v of vehicles) {
+    if (rig.meshById.has(v.id)) continue;
+    const route = routeById.get(v.routeId);
+    const color = route?.color ?? '#ffffff';
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(v.capacity > 100 ? 7 : 4.5, 2.4, 2.6),
+      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5 }),
+    );
+    mesh.userData = { kind: 'vehicle', id: v.id };
+    rig.group.add(mesh);
+    rig.meshById.set(v.id, mesh);
+  }
+}
+
+/** Position vehicle meshes from sim distance-along-route. Pure data read. */
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
 const tmpT = new THREE.Vector3();
-
-/** Position vehicle meshes from sim distance-along-route. Pure data read. */
 export function updateVehicles(rig: VehicleRig, vehicles: VehicleState[]): void {
   for (const v of vehicles) {
     const mesh = rig.meshById.get(v.id);

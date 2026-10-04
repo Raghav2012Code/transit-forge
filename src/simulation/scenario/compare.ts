@@ -155,9 +155,35 @@ export function compareScenarios(
       pct: null,
       better: modScore.total >= baseScore.total ? 'up' : 'down',
     },
+    {
+      label: 'Operating cost',
+      base: `${base.opCost.toLocaleString()} OCU`,
+      mod: `${mod.opCost.toLocaleString()} OCU`,
+      delta: opDelta(mod.opCost - base.opCost),
+      pct: null,
+      better: null,
+    },
+    {
+      label: 'Denied boardings',
+      base: base.deniedBoardings.toLocaleString(),
+      mod: mod.deniedBoardings.toLocaleString(),
+      delta: deniedDelta(mod.deniedBoardings - base.deniedBoardings),
+      pct: null,
+      better: null,
+    },
   ];
   // Insert analytics rows before the cost row.
   const costRow = rows[rows.length - 1];
   const all = [...rows.slice(0, -1), ...extra, costRow];
   return { base, mod, rows: all, impact, baseScore, modScore, baseAccess, modAccess, baseCoverage, modCoverage };
+}
+
+function opDelta(d: number): string {
+  const sign = d > 0 ? '+' : '';
+  return `${sign}${Math.round(d).toLocaleString()} OCU`;
+}
+
+function deniedDelta(d: number): string {
+  const sign = d > 0 ? '+' : '';
+  return `${sign}${Math.round(d).toLocaleString()}`;
 }

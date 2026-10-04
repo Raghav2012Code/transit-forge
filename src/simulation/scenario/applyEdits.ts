@@ -9,7 +9,9 @@ import type {
   Vec3,
 } from '../../types/index.ts';
 import { connectionsForRoute, type NetworkData } from '../transport/network.ts';
-import { COST_RATES, type EditOp, type RoadKind } from './scenario.ts';
+import { defaultPlanFor } from '../service/servicePlan.ts';
+import type { ServicePlan } from '../service/servicePlan.ts';
+import { COST_RATES, mergeServicePatch, sanitizeServicePatch, type EditOp, type RoadKind } from './scenario.ts';
 
 export interface ModifiedNetwork {
   stations: Station[];
@@ -20,6 +22,8 @@ export interface ModifiedNetwork {
   city: CityData;
   cost: number;
   warnings: string[];
+  /** Operating configuration per surviving route (defaults + setService ops). */
+  service: Record<string, ServicePlan>;
 }
 
 const ROAD_LANES: Record<RoadKind, number> = { local: 2, arterial: 4, highway: 6 };
@@ -157,6 +161,10 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
       case 'removeRoad': {
         break; // handled below with city copies
       }
+      case 'setService': {
+        // Collected after the loop (needs final route list); validated here.
+        break;
+      }
     }
   }
 
@@ -241,6 +249,25 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
     routeCumDist.set(r.id, built.cum);
   }
 
+  // Service overlay: defaults for every surviving route, then setService ops
+  // in order (later ops win). Unknown routes warn instead of throwing.
+  const service: Record<string, ServicePlan> = {};
+  for (const r of routes) service[r.id] = defaultPlanFor(r);
+  for (const op of ops) {
+    if (op.type !== 'setService') continue;
+    const r = routes.find((x) => x.id === op.routeId);
+    if (!r) {
+      warnings.push(`Service edit for unknown route ${op.routeId}, skipped`);
+      continue;
+    }
+    if (r.mode === 'road') {
+      warnings.push(`Service edit for non-transit route ${op.routeId}, skipped`);
+      continue;
+    }
+    const mode = r.mode === 'metro' || r.mode === 'rail' ? r.mode : 'bus';
+    service[r.id] = mergeServicePatch(service[r.id], sanitizeServicePatch(op.patch, mode));
+  }
+
   return {
     stations,
     routes,
@@ -250,5 +277,6 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
     city: { ...city, roadNodes: prunedNodes, roadEdges },
     cost: Math.round(cost),
     warnings,
+    service,
   };
 }

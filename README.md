@@ -35,14 +35,16 @@ npm run build
 
 ## Status
 
-- v0.6 planning analytics: pure analytics layer (accessibility scores/grades
-  from real routing, coverage with configurable threshold, geometric station
-  catchments, ranked bottlenecks, grid transit-gap finder, population impact,
-  explainable planning score, headless time-series), Access/Travel/Coverage/
-  Limits heatmap overlays, analytics panel (bottlenecks, gaps, sortable
-  utilization tables), SVG charts from live history, extended compare
-  (accessibility, coverage, benefited/harmed pop, score). 45 tests passing.
-  Verified: airport express → access 91.1→91.8, 150k improved / 0 worsened.
+- v0.7 service planning: per-route service plans (peak/off-peak headways,
+  operating hours, fleet auto/explicit, capacity, speed, dwell, turnaround,
+  reliability, sync) separate from infrastructure; arithmetic timetables with
+  next-departure waits; fleet sizing from cycle time with graceful degradation;
+  dwell from actual boardings; hash-deterministic delays/cancellations; denied
+  boardings; OCU operating costs; live Service panel with consequence previews;
+  frequency/crowding overlays; timetable inspection; service-vs-demand
+  classification; setService scenario ops with live apply + fleet reconcile;
+  compare extended (operating cost, denied). 59 tests passing. Verified: M1
+  5→3 min cuts wait 3.6%, transit +1.0pp, +884 OCU/day.
 - Next: world-scale pass, advanced economics.
 
 ## Known limitations (v0.4 candidates)

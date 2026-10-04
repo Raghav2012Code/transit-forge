@@ -7,6 +7,8 @@ const BASE_ITEMS: { key: Overlay; label: string }[] = [
   { key: 'flow', label: 'Flow' },
   { key: 'load', label: 'Load' },
   { key: 'congestion', label: 'Congestion' },
+  { key: 'frequency', label: 'Frequency' },
+  { key: 'crowding', label: 'Crowding' },
 ];
 
 const ANALYTICS_ITEMS: { key: Overlay; label: string }[] = [

@@ -88,6 +88,10 @@ export interface VehicleState {
   capacity: number;
   /** Active passenger ids currently onboard. */
   riders: number[];
+  /** Remaining dwell at a station (min). Vehicle holds while > 0. */
+  dwellLeft: number;
+  /** Completed one-way trips (drives deterministic reliability draws). */
+  trips: number;
 }
 
 export type PassengerState = 'WALKING' | 'WAITING' | 'ON_VEHICLE' | 'TRANSFERRING' | 'ARRIVED';
@@ -137,6 +141,11 @@ export interface TripCounters {
   maxOccupancy01: number;
   routeBoardings: Record<string, number>;
   routePeakOcc: Record<string, number>;
+  routeDenied: Record<string, number>;
+  routeVehKm: Record<string, number>;
+  routeVehHr: Record<string, number>;
+  deniedBoardings: number;
+  totalDelayMin: number;
 }
 
 export type CongestionLevel = 'free' | 'light' | 'moderate' | 'heavy' | 'severe';
@@ -240,4 +249,12 @@ export interface SimStats {
   transitShare: number;
   carShare: number;
   avgTransitMin: number;
+  deniedBoardings: number;
+  avgOcc: number;
+  vehKm: number;
+  vehHr: number;
+  opCost: number;
+  opCostPerPax: number;
+  avgHeadway: number;
+  totalDelayMin: number;
 }
