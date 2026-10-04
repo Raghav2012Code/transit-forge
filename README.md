@@ -35,9 +35,18 @@ npm run build
 
 ## Status
 
-- v0.1 scaffold: Vite + React + Three wired, deterministic `createSimulation(seed)`,
-  isolated layers, orbit/pan/zoom viewport.
-- Next: seeded coastal megacity, transport graph, O/D demand, routing, dashboard.
+- v0.2 vertical slice: deterministic seeded coastal city (10 districts, river +
+  3 bridges, arterials, ~1300 instanced buildings), real transport data model
+  (M1/M2 metro, R1 rail, B1/B2/B3 bus, 14 stations, 3 interchanges), Dijkstra
+  graph routing, sim clock (play/pause/1×/5×/20×/reset), 9 live vehicles,
+  orbit/pan/zoom, layer toggles, station/route/district inspector.
+- Next: O/D passenger demand + congestion + overlays + full dashboard.
+
+## Test
+
+```sh
+npm run test   # determinism, graph validity + routing, clock advance
+```
 
 ## Principle
 
