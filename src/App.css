@@ -142,7 +142,7 @@
   cursor: pointer;
 }
 
-.tf-build, .tf-compare, .tf-scenario, .tf-debug {
+.tf-build, .tf-compare, .tf-scenario, .tf-debug, .tf-plan {
   border-top: 1px solid var(--border);
   padding-top: 10px;
   display: flex;
@@ -150,12 +150,30 @@
   gap: 8px;
 }
 
-.tf-build h3, .tf-compare h3, .tf-scenario h3 {
+.tf-build h3, .tf-compare h3, .tf-scenario h3, .tf-plan h3 {
   margin: 0;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--muted);
+}
+
+.tf-plan h4, .tf-plan h5 {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.tf-overview, .tf-objective, .tf-drill {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tf-drill {
+  margin: 4px 0 4px 12px;
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
 }
 
 .tf-tool-grid {

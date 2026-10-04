@@ -45,6 +45,13 @@ npm run build
   event timeline. 87 tests passing. Verified: segment closure → 102 rerouted,
   network-wide road congestion, full recovery with measured deltas.
 - Next: advanced economics.
+- v1.0 planning campaign: objectives + constraints evaluated against live and
+  simulated metrics, 7 procedural briefs with difficulty tiers, ranked city
+  problems with drill-down, rule-based recommendations with Why, intervention
+  summaries, plan save/load/attempts with multi-plan compare, structured
+  reports (JSON/text/printable HTML), tutorial checklist, keyboard shortcuts,
+  Plan mode, criticality overlay, live objective progress, resilience
+  objectives via real disruption sims. 101 tests passing.
 
 ## Known limitations (v0.4 candidates)
 

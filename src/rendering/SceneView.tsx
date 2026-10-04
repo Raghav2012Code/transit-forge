@@ -26,7 +26,7 @@ export type Overlay =
   | 'accessibility' | 'traveltime' | 'coverage' | 'bottlenecks'
   | 'frequency' | 'crowding'
   | 'popdensity' | 'jobdensity' | 'development' | 'growth' | 'demand'
-  | 'status';
+  | 'status' | 'critical';
 
 export type AccessGradeKey = 'excellent' | 'good' | 'moderate' | 'poor' | 'very poor';
 
@@ -50,6 +50,8 @@ export interface AnalyticsView {
   growthMax: number;
   demand: Record<string, number>;
   demandMax: number;
+  /** Structural criticality score per station/route/road id (0-100). */
+  criticalScores: Record<string, number>;
 }
 
 export interface BuildInteractions {
@@ -391,6 +393,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         rebuildDraft();
         const ov = overlayRef.current;
         const highlighted = new Set(highlightRef.current);
+        const av = analyticsRef.current;
         // Road congestion colors from live volume/capacity (congestion overlay).
         for (const [id, mesh] of city.roadMeshById) {
           const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -408,6 +411,18 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             } else if (st && st.capMult < 1) {
               mat.color.setHex(0xfb923c);
               mat.emissive.setHex(0xfb923c);
+              mat.emissiveIntensity = 0.5;
+            } else {
+              mat.color.setHex(mesh.userData.baseColor as number);
+              mat.emissive.setHex(mesh.userData.baseColor as number);
+              mat.emissiveIntensity = 0;
+            }
+          } else if (ov === 'critical' && av) {
+            const score = av.criticalScores[id] ?? 0;
+            if (score > 0) {
+              loadColor.setHex(0x1e3a8a).lerp(hotColor, Math.min(1, score / 100));
+              mat.color.copy(loadColor);
+              mat.emissive.copy(loadColor);
               mat.emissiveIntensity = 0.5;
             } else {
               mat.color.setHex(mesh.userData.baseColor as number);
@@ -488,6 +503,19 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
               mat.emissive.copy(routeBase);
               mat.emissiveIntensity = 0.35;
             }
+          } else if (ov === 'critical' && av) {
+            const score = av.criticalScores[id] ?? 0;
+            if (score > 0) {
+              loadColor.setHex(0x1e3a8a).lerp(hotColor, Math.min(1, score / 100));
+              mat.color.copy(loadColor);
+              mat.emissive.copy(loadColor);
+              mat.emissiveIntensity = 0.6;
+            } else {
+              routeBase.set(mesh.userData.baseColor as string);
+              mat.color.copy(routeBase);
+              mat.emissive.copy(routeBase);
+              mat.emissiveIntensity = 0.1;
+            }
           } else {
             routeBase.set(mesh.userData.baseColor as string);
             mat.color.copy(routeBase);
@@ -496,7 +524,6 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           }
         }
         // Analytics heatmaps on zone discs (values from the analytics layer).
-        const av = analyticsRef.current;
         const heat = ov === 'accessibility' || ov === 'traveltime' || ov === 'coverage' ||
           ov === 'popdensity' || ov === 'jobdensity' || ov === 'development' || ov === 'growth' || ov === 'demand';
         for (const [id, disc] of city.zoneDiscById) {
@@ -566,6 +593,16 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             mat.emissive.setHex(0xef4444);
             mat.emissiveIntensity = 1.2 + 0.6 * Math.sin(elapsed * 5);
             sc = Math.max(sc, 1.3);
+          }
+          if (ov === 'critical' && av) {
+            const score = av.criticalScores[id] ?? 0;
+            if (score > 0) {
+              loadColor.setHex(0x1e3a8a).lerp(hotColor, Math.min(1, score / 100));
+              mat.color.copy(loadColor);
+              mat.emissive.copy(loadColor);
+              mat.emissiveIntensity = 0.3 + Math.min(1, score / 100);
+              sc = Math.max(sc, 1 + Math.min(1, score / 100) * 0.4);
+            }
           }
           mesh.scale.set(sc, 1, sc);
         }

@@ -18,6 +18,7 @@ const ANALYTICS_ITEMS: { key: Overlay; label: string }[] = [
   { key: 'traveltime', label: 'Travel' },
   { key: 'coverage', label: 'Cover' },
   { key: 'bottlenecks', label: 'Limits' },
+  { key: 'critical', label: 'Critical' },
 ];
 
 const GROWTH_ITEMS: { key: Overlay; label: string }[] = [

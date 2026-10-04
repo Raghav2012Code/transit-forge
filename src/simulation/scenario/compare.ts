@@ -19,9 +19,21 @@ import type { ResilienceMetrics } from '../../types/index.ts';
 export const COMPARE_TICKS = 360;
 
 export function runHeadless(seed: number, city: CityData, net: NetworkData, ticks = COMPARE_TICKS): SimStats {
+  return runHeadlessDetailed(seed, city, net, ticks).stats;
+}
+
+/** Headless run that also keeps per-route and per-edge telemetry for objectives. */
+export function runHeadlessDetailed(
+  seed: number,
+  city: CityData,
+  net: NetworkData,
+  ticks = COMPARE_TICKS,
+): { stats: SimStats; routePeakOcc: Record<string, number>; edgeVC: Record<string, number> } {
   let sim = createSimulationFromParts(seed, city, net);
   for (let i = 0; i < ticks; i++) sim = stepSimulation(sim, 1);
-  return computeStats(sim);
+  const edgeVC: Record<string, number> = {};
+  for (const id in sim.edgeState) edgeVC[id] = sim.edgeState[id].vc;
+  return { stats: computeStats(sim), routePeakOcc: { ...sim.counters.routePeakOcc }, edgeVC };
 }
 
 export interface ResilienceSide {
@@ -95,6 +107,8 @@ export interface HorizonSide {
   zones: Zone[];
   history: GrowthPoint[];
   accessScore: number;
+  routePeakOcc: Record<string, number>;
+  edgeVC: Record<string, number>;
 }
 
 export interface HorizonComparison {
@@ -141,7 +155,9 @@ export function compareHorizons(
     for (let i = 0; i < COMPARE_TICKS; i++) sim = stepSimulation(sim, 1);
     const stats = computeStats(sim);
     const access = computeAccessibility({ zones: grown.zones, stations: net.stations, connections: net.connections, routes: net.routes });
-    return { stats, zones: grown.zones, history: grown.history, accessScore: access.cityScore };
+    const edgeVC: Record<string, number> = {};
+    for (const id in sim.edgeState) edgeVC[id] = sim.edgeState[id].vc;
+    return { stats, zones: grown.zones, history: grown.history, accessScore: access.cityScore, routePeakOcc: { ...sim.counters.routePeakOcc }, edgeVC };
   };
   const b = runSide(baseCity, baseNet);
   const m = runSide(modCity, modNet);

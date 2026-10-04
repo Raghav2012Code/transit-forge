@@ -9,14 +9,33 @@ import { findBottlenecks } from './simulation/analytics/bottlenecks.ts';
 import { findTransitGaps } from './simulation/analytics/gaps.ts';
 import { planningScore, populationImpact } from './simulation/analytics/impact.ts';
 import { samplePoint, type SeriesPoint } from './simulation/analytics/series.ts';
-import { applyEdits } from './simulation/scenario/applyEdits.ts';
+import { applyEdits, validateIncidentConfig } from './simulation/scenario/applyEdits.ts';
 import { compareHorizons, compareResilience, compareScenarios } from './simulation/scenario/compare.ts';
+import { evaluatePlan, type PlanEvaluation } from './simulation/scenario/evaluate.ts';
+import {
+  evaluateConstraints,
+  evaluateObjective,
+  readMetric,
+  type MetricsBundle,
+} from './simulation/planning/objectives.ts';
+import { generateBriefs, type Difficulty, type PlanningBrief } from './simulation/planning/briefs.ts';
+import { detectProblems, type CityProblem } from './simulation/planning/problems.ts';
+import type { RecContext } from './simulation/planning/recommendations.ts';
+import { buildReport, reportToHtml, reportToJson, type PlanReport } from './simulation/planning/report.ts';
+import type { PlanningScore } from './simulation/analytics/impact.ts';
+import {
+  deletePlan,
+  listPlans,
+  makePlanId,
+  savePlan,
+  type SavedPlan,
+} from './simulation/planning/planStore.ts';
+import { constraintInputs } from './simulation/scenario/evaluate.ts';
 import {
   deployReplacement,
   incidentPresets,
   type IncidentConfig,
 } from './simulation/incidents/incidents.ts';
-import { validateIncidentConfig } from './simulation/scenario/applyEdits.ts';
 import { criticalityAnalysis, type CriticalItem } from './simulation/analytics/resilience.ts';
 import type { CompareRow } from './simulation/scenario/compare.ts';
 import {
@@ -58,6 +77,7 @@ import Inspector from './ui/inspectors/Inspector.tsx';
 import AnalyticsPanel from './ui/analytics/AnalyticsPanel.tsx';
 import ChartsPanel from './ui/analytics/ChartsPanel.tsx';
 import { buildUtilization } from './simulation/analytics/utilization.ts';
+import PlanningPanel from './ui/planning/PlanningPanel.tsx';
 import BuildPanel, { type BuildTool } from './ui/build/BuildPanel.tsx';
 import ComparePanel, { type CompareResult } from './ui/build/ComparePanel.tsx';
 import DisruptPanel from './ui/disrupt/DisruptPanel.tsx';
@@ -74,7 +94,7 @@ const SEED = 1337;
 const TICKS_PER_SEC: Record<Speed, number> = { 1: 2, 5: 8, 20: 24 };
 const ROAD_SNAP_M = 45;
 
-type Mode = 'simulate' | 'build' | 'disrupt';
+type Mode = 'simulate' | 'build' | 'disrupt' | 'plan';
 
 interface PendingDelete {
   kind: 'station' | 'route' | 'road';
@@ -138,6 +158,31 @@ export default function App() {
   const [compareProgress, setCompareProgress] = useState('');
   const [scenarioMeta, setScenarioMeta] = useState<Scenario>(() => createScenario('East-West Metro', SEED));
   const [saved, setSaved] = useState<Scenario[]>(() => listScenarios());
+  const [critical, setCritical] = useState<CriticalItem[] | null>(null);
+
+  // Planning state.
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
+  const [briefId, setBriefId] = useState<string | null>(null);
+  const [baselineBundle, setBaselineBundle] = useState<MetricsBundle | null>(null);
+  const [planHorizon, setPlanHorizon] = useState(5);
+  const [evaluation, setEvaluation] = useState<{
+    report: PlanReport;
+    rows: CompareRow[];
+    resilienceRows: CompareRow[] | null;
+    score: PlanningScore;
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [plans, setPlans] = useState<SavedPlan[]>(() => listPlans());
+  const [activePlanId, setActivePlanId] = useState<string | null>(null);
+  const [tutorialDismissed, setTutorialDismissed] = useState(() => {
+    try {
+      return localStorage.getItem('transitforge.tutorial.v1') === 'done';
+    } catch {
+      return false;
+    }
+  });
+  const tutorialSeen = useRef<Set<string>>(new Set());
+  const evalCache = useRef(new Map<string, PlanEvaluation>());
 
   // Simulation loop: fixed 1-minute steps, decoupled from render rate.
   useEffect(() => {
@@ -171,6 +216,64 @@ export default function App() {
     return () => cancelAnimationFrame(raf);
   }, [playing, speed]);
 
+  // Tutorial progress follows real user actions (persists via dismissal flag).
+  // Marked inside the memo so progress never flickers backwards.
+  const tutorialSteps = useMemo(() => {
+    const seen = tutorialSeen.current;
+    if (playing) seen.add('play');
+    if (selection) seen.add('select');
+    if (selection?.kind === 'station') seen.add('station');
+    if (overlay === 'crowding') seen.add('crowding');
+    if (overlay === 'accessibility' || overlay === 'traveltime' || overlay === 'coverage') seen.add('analytics');
+    if (mode === 'build') seen.add('build');
+    if (ops.some((o) => o.type === 'setService')) seen.add('service');
+    if (snapshot.tick > 100) seen.add('run');
+    if (compareResult) seen.add('compare');
+    const has = (k: string) => seen.has(k);
+    return [
+      { label: 'Inspect the city (click a district)', done: has('select') },
+      { label: 'Start the simulation (Space)', done: has('play') },
+      { label: 'Select a station', done: has('station') },
+      { label: 'Inspect crowding overlay', done: has('crowding') },
+      { label: 'Open an analytics overlay', done: has('analytics') },
+      { label: 'Enter Build mode (B)', done: has('build') },
+      { label: 'Modify a service frequency', done: has('service') },
+      { label: 'Run the simulation past tick 100', done: has('run') },
+      { label: 'Compare baseline vs scenario', done: has('compare') },
+    ];
+  }, [playing, selection, overlay, mode, ops, snapshot, compareResult]);
+
+  // Keyboard shortcuts (ignored while typing).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return;
+      if (e.key === ' ') {
+        e.preventDefault();
+        if (mode === 'build' || mode === 'disrupt') {
+          enterSimulate();
+          setPlaying(true);
+        } else setPlaying((p) => !p);
+      } else if (e.key === '1') setSpeed(1);
+      else if (e.key === '2') setSpeed(5);
+      else if (e.key === '3') setSpeed(20);
+      else if (e.key === 'b' || e.key === 'B') {
+        if (mode === 'build') enterSimulate();
+        else enterBuild();
+      } else if (e.key === 'a' || e.key === 'A') {
+        setOverlay((o) => (o === 'normal' ? 'accessibility' : 'normal'));
+      } else if (e.key === 'p' || e.key === 'P') {
+        setMode((m) => (m === 'plan' ? 'simulate' : 'plan'));
+      } else if (e.key === 'Escape') {
+        enterSimulate();
+      } else if (e.key === 'r' || e.key === 'R') {
+        resetAll();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   const stats = computeStats(snapshot);
 
   // Analytics layer: pure functions over sim state (structural ones recompute
@@ -200,6 +303,116 @@ export default function App() {
   );
   const score = useMemo(() => planningScore(stats, access, coverage), [stats, access, coverage]);
   const utilization = useMemo(() => buildUtilization(snapshot), [snapshot]);
+  // Planning facts: worst offenders and zone rankings distilled from live state.
+  const briefFacts = useMemo(() => {
+    const worstRouteRow = [...utilization.routes].sort((a, b) => b.peakOcc - a.peakOcc)[0] ?? null;
+    const worstRoadRow = [...utilization.roads].sort((a, b) => b.vc - a.vc)[0] ?? null;
+    const worstBridgeRow = utilization.roads.filter((r) => {
+      const e = snapshot.roadGraph.edgeById.get(r.id);
+      return e?.isBridge === true;
+    }).sort((a, b) => b.vc - a.vc)[0] ?? null;
+    const airport = snapshot.city.zones.find((z) => z.kind === 'airport') ?? null;
+    const central = [...snapshot.stations].sort((a, b) => b.routeIds.length - a.routeIds.length)[0] ?? null;
+    return {
+      transitShare: stats.transitShare,
+      avgCongestion: stats.avgCongestion,
+      avgTravelMin: stats.avgTravelMin,
+      maxOccupancy: stats.maxOccupancy,
+      accessScore: access.cityScore,
+      coveragePct: coverage.pct,
+      opCost: stats.opCost,
+      population: stats.population,
+      worstRoute: worstRouteRow ? { id: worstRouteRow.id, name: worstRouteRow.name, occ: worstRouteRow.peakOcc } : null,
+      worstEdge: worstRoadRow ? { id: worstRoadRow.id, label: worstRoadRow.label, vc: worstRoadRow.vc * 100 } : null,
+      worstBridge: worstBridgeRow ? { id: worstBridgeRow.id, label: worstBridgeRow.label, vc: worstBridgeRow.vc * 100 } : null,
+      lowAccessZones: [...access.zones].sort((a, b) => a.score - b.score).slice(0, 3).map((z) => {
+        const zn = snapshot.city.zones.find((x) => x.id === z.zoneId);
+        return { id: z.zoneId, name: z.zoneName, score: z.score, population: zn?.population ?? 0 };
+      }),
+      growthZones: [...snapshot.city.zones].sort((a, b) => b.popGrowthRate - a.popGrowthRate).slice(0, 3).map((z) => ({
+        id: z.id, name: z.name, popGrowthRate: z.popGrowthRate, population: z.population,
+      })),
+      airportZone: airport ? { id: airport.id, name: airport.name, jobs: airport.jobs } : null,
+      centralStationId: central ? central.id : null,
+      busiestRouteId: worstRouteRow ? worstRouteRow.id : null,
+    };
+  }, [snapshot, stats, access, coverage, utilization]);
+  const briefs = useMemo(() => generateBriefs(briefFacts, difficulty, stats.opCost), [briefFacts, difficulty, stats.opCost]);
+  const activeBrief: PlanningBrief | null = useMemo(
+    () => briefs.find((b) => b.id === briefId) ?? null,
+    [briefs, briefId],
+  );
+  const liveBundle: MetricsBundle = useMemo(() => ({
+    stats,
+    access,
+    coverage,
+    routePeakOcc: snapshot.counters.routePeakOcc,
+    edgeVC: Object.fromEntries(Object.entries(snapshot.edgeState).map(([id, st]) => [id, st.vc])),
+    resilienceScore: null,
+    constructionCost: mod.cost,
+  }), [stats, access, coverage, snapshot, mod]);
+  const liveObjectiveResults = useMemo(
+    () => (activeBrief ? activeBrief.objectives.map((o) => evaluateObjective(o, liveBundle, readMetric(baselineBundle ?? liveBundle, o.metric, o.targetId))) : []),
+    [activeBrief, liveBundle, baselineBundle],
+  );
+  const liveConstraintResults = useMemo(
+    () => (activeBrief ? evaluateConstraints(activeBrief.constraints, constraintInputs(ops, mod, stats.opCost)) : []),
+    [activeBrief, ops, mod, stats],
+  );
+  const problems = useMemo(
+    () => detectProblems({
+      bottlenecks,
+      gaps,
+      zones: snapshot.city.zones.map((z) => ({ id: z.id, name: z.name, population: z.population, popGrowthRate: z.popGrowthRate, accessScore: z.accessScore })),
+      routes: snapshot.routes.map((r) => ({ id: r.id, name: r.name, mode: r.mode })),
+      routeBoardings: snapshot.counters.routeBoardings,
+      routePeakOcc: snapshot.counters.routePeakOcc,
+      criticalRoutes: (critical ?? []).filter((c) => c.kind === 'route').map((c) => ({ id: c.id, label: c.label, score: c.score })),
+      criticalBridges: (critical ?? []).filter((c) => c.kind === 'bridge').map((c) => ({ id: c.id, label: c.label, score: c.score })),
+    }),
+    [bottlenecks, gaps, snapshot, critical],
+  );
+  const recCtx: RecContext = useMemo(() => {
+    const headway: Record<string, number> = {};
+    for (const r of snapshot.routes) {
+      const plan = snapshot.service[r.id];
+      headway[r.id] = plan ? plan.peakHeadwayMin : r.headwayMin;
+    }
+    const zoneAccess: Record<string, number> = {};
+    const zoneGrowth: Record<string, number> = {};
+    for (const z of snapshot.city.zones) {
+      zoneAccess[z.id] = z.accessScore;
+      zoneGrowth[z.id] = z.popGrowthRate;
+    }
+    const edgeVC: Record<string, number> = {};
+    for (const id in snapshot.edgeState) edgeVC[id] = snapshot.edgeState[id].vc;
+    return {
+      routePeakOcc: snapshot.counters.routePeakOcc,
+      routeHeadway: headway,
+      routeBoardings: snapshot.counters.routeBoardings,
+      edgeVC,
+      zoneAccess,
+      zoneGrowth,
+      transitAccessibility: access.cityScore,
+      criticalRoutes: (critical ?? []).filter((c) => c.kind === 'route').map((c) => ({ id: c.id, label: c.label, score: c.score })),
+      criticalBridges: (critical ?? []).filter((c) => c.kind === 'bridge').map((c) => ({ id: c.id, label: c.label, score: c.score })),
+    };
+  }, [snapshot, access, critical]);
+  const overview = useMemo(() => {
+    const totalReal = snapshot.demand.totalDaily * SIM_TRIPS_SCALE;
+    const share = stats.transitShare / 100;
+    return {
+      population: stats.population,
+      jobs: stats.jobs,
+      transitDay: Math.round(totalReal * share),
+      carDay: Math.round(totalReal * (1 - share)),
+      transitShare: stats.transitShare,
+      congestion: stats.avgCongestion,
+      travelMin: stats.avgTravelMin,
+      access: access.cityScore,
+      resilience: null,
+    };
+  }, [snapshot, stats, access]);
   const topStations = useMemo(
     () => [...snapshot.stations].sort((a, b) => b.boardedDay - a.boardedDay).slice(0, 6).map((s) => ({ name: s.name, boarded: Math.round(s.boardedDay) })),
     [snapshot],
@@ -253,7 +466,8 @@ export default function App() {
   const analyticsView: AnalyticsView | null = useMemo(() => {
     const active =
       overlay === 'accessibility' || overlay === 'traveltime' || overlay === 'coverage' || overlay === 'bottlenecks' ||
-      overlay === 'popdensity' || overlay === 'jobdensity' || overlay === 'development' || overlay === 'growth' || overlay === 'demand';
+      overlay === 'popdensity' || overlay === 'jobdensity' || overlay === 'development' || overlay === 'growth' || overlay === 'demand' ||
+      overlay === 'critical';
     if (!active) return null;
     const grades: Record<string, 'excellent' | 'good' | 'moderate' | 'poor' | 'very poor'> = {};
     const travel: Record<string, number | null> = {};
@@ -288,6 +502,20 @@ export default function App() {
       growthMax = Math.max(growthMax, growth[z.id]);
       demandMax = Math.max(demandMax, d);
     }
+    const criticalScores: Record<string, number> = {};
+    if (overlay === 'critical') {
+      for (const c of criticalityAnalysis({
+        zones: snapshot.city.zones,
+        stations: snapshot.stations,
+        connections: snapshot.connections,
+        routes: snapshot.routes,
+        roadGraph: snapshot.roadGraph,
+        zoneRoadAccess: snapshot.zoneRoadAccess,
+        city: snapshot.city,
+      })) criticalScores[c.id] = c.score;
+    } else {
+      for (const c of critical ?? []) criticalScores[c.id] = c.score;
+    }
     return {
       grades,
       travel,
@@ -295,8 +523,9 @@ export default function App() {
       coverage: cov,
       bottleneckStations: bottlenecks.stations.slice(0, 5).map((b) => b.id),
       popD, popMax, jobD, jobMax, dev, growth, growthMax, demand, demandMax,
+      criticalScores,
     };
-  }, [overlay, access, coverage, bottlenecks, travelDest, snapshot, demandLayers, demandLayer]);
+  }, [overlay, access, coverage, bottlenecks, travelDest, snapshot, demandLayers, demandLayer, critical]);
 
   // ---- live service editing ----
   // Service edits apply to the running sim immediately (no day reset):
@@ -361,7 +590,6 @@ export default function App() {
   // ---- disruptions ----
   const [incidentDraft, setIncidentDraft] = useState<IncidentDraft>(EMPTY_DRAFT);
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | null>(null);
-  const [critical, setCritical] = useState<CriticalItem[] | null>(null);
   const [resilienceRows, setResilienceRows] = useState<CompareRow[] | null>(null);
   const [resilienceRunning, setResilienceRunning] = useState(false);
 
@@ -522,6 +750,174 @@ export default function App() {
       while (sim.events.length > 200) sim.events.shift();
     }
     setSnapshot({ ...sim });
+  }
+
+  function enterPlan() {
+    setMode('plan');
+  }
+
+  function resetAll() {
+    setZoneState(null);
+    setYearsApplied(0);
+    setGrowthHistory([]);
+    setForecast(null);
+    if (viewing === 'base') resetSimTo(baseCity, baseNet);
+    else {
+      const fresh = applyEdits(baseCity, baseNet, ops);
+      resetSimTo(fresh.city, fresh);
+    }
+  }
+
+  // ---- plan submit / save / export ----
+  async function onSubmitPlan() {
+    if (!activeBrief || submitting) return;
+    setSubmitting(true);
+    await new Promise((r) => setTimeout(r, 30));
+    const key = JSON.stringify({ ops, brief: activeBrief.id, horizon: planHorizon, incident: activeBrief.incident ?? null, seed: SEED });
+    let ev = evalCache.current.get(key);
+    if (!ev) {
+      ev = evaluatePlan({
+        seed: SEED,
+        baseCity,
+        baseNet,
+        ops,
+        objectives: activeBrief.objectives,
+        constraints: activeBrief.constraints,
+        horizonYears: planHorizon,
+        incident: activeBrief.incident,
+        coverageThreshold,
+        transitShare01: 0.5,
+      });
+      if (evalCache.current.size > 10) evalCache.current.clear();
+      evalCache.current.set(key, ev);
+    }
+    const report = buildReport({
+      title: `Plan — ${activeBrief.title}`,
+      briefTitle: activeBrief.title,
+      briefParagraphs: activeBrief.paragraphs,
+      horizonYears: planHorizon,
+      objectives: activeBrief.objectives,
+      objectiveResults: ev.objectiveResults,
+      constraints: activeBrief.constraints,
+      constraintResults: ev.constraintResults,
+      comparisonRows: ev.rows,
+      resilienceRows: ev.resilienceRows,
+      intervention: ev.intervention,
+      constructionCost: ev.mod.cost,
+      opCost: ev.plan.stats.opCost,
+      score: ev.score,
+    });
+    setEvaluation({ report, rows: ev.rows, resilienceRows: ev.resilienceRows, score: ev.score });
+    if (activePlanId) {
+      const plans = listPlans();
+      const plan = plans.find((x) => x.id === activePlanId);
+      if (plan) {
+        plan.attempts.push({
+          atClock: formatClock(simRef.current.timeMinutes),
+          score: ev.score.total,
+          passed: ev.passed,
+          horizonYears: planHorizon,
+          rows: ev.rows,
+        });
+        savePlan(plan);
+        setPlans(listPlans());
+      }
+    }
+    setSubmitting(false);
+  }
+
+  function onSavePlan(name: string) {
+    const plan: SavedPlan = {
+      id: makePlanId(),
+      name,
+      seed: SEED,
+      briefId,
+      ops: ops.map((o) => ({ ...o })),
+      objectives: activeBrief?.objectives.map((o) => ({ ...o })) ?? [],
+      constraints: activeBrief?.constraints.map((c) => ({ ...c })) ?? [],
+      horizonYears: planHorizon,
+      incident: activeBrief?.incident ? { ...activeBrief.incident } : undefined,
+      createdAt: Date.now(),
+      attempts: [],
+    };
+    savePlan(plan);
+    setPlans(listPlans());
+    setActivePlanId(plan.id);
+  }
+
+  function onLoadPlan(id: string) {
+    const plan = listPlans().find((x) => x.id === id);
+    if (!plan) return;
+    setActivePlanId(id);
+    setBriefId(plan.briefId);
+    setBaselineBundle(null);
+    setPlanHorizon(plan.horizonYears);
+    setEvaluation(null);
+    applyOps(plan.ops.map((o) => ({ ...o })), [], 'scenario');
+    setViewing('scenario');
+  }
+
+  function onDeletePlan(id: string) {
+    deletePlan(id);
+    setPlans(listPlans());
+    if (activePlanId === id) setActivePlanId(null);
+  }
+
+  function onExportJson() {
+    if (!evaluation) return;
+    const blob = new Blob([reportToJson(evaluation.report)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'transitforge-plan-report.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function onExportHtml() {
+    if (!evaluation) return;
+    const html = reportToHtml(evaluation.report);
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    } else {
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'transitforge-plan-report.html';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  function onSelectBrief(id: string | null) {
+    setBriefId(id);
+    setEvaluation(null);
+    if (id === null) {
+      setBaselineBundle(null);
+      return;
+    }
+    // Anchor progress bars to current live metrics.
+    setBaselineBundle({
+      stats,
+      access,
+      coverage,
+      routePeakOcc: snapshot.counters.routePeakOcc,
+      edgeVC: Object.fromEntries(Object.entries(snapshot.edgeState).map(([eid, st]) => [eid, st.vc])),
+      resilienceScore: null,
+      constructionCost: mod.cost,
+    });
+  }
+
+  function onLocateProblem(pr: CityProblem) {
+    if (pr.target) {
+      setSelection({ kind: pr.target.kind, id: pr.target.id });
+      if (pr.kind === 'growth' || pr.kind === 'access') setOverlay('popdensity');
+      if (pr.kind === 'congestion') setOverlay('congestion');
+      if (pr.kind === 'crowding') setOverlay('crowding');
+    }
   }
 
   function boostFrequency(routeId: string) {
@@ -925,6 +1321,18 @@ export default function App() {
   }
 
   // ---- build props for the 3D view ----
+  function onResetPlan() {
+    applyOps([], []);
+  }
+
+  function dismissTutorial() {
+    try {
+      localStorage.setItem('transitforge.tutorial.v1', 'done');
+    } catch {
+      // Ignore storage failures.
+    }
+    setTutorialDismissed(true);
+  }
   const diff = useMemo(() => {
     const baseRouteIds = new Set(baseNet.routes.map((r) => r.id));
     const modRouteIds = new Set(mod.routes.map((r) => r.id));
@@ -1046,6 +1454,9 @@ export default function App() {
           <button type="button" className={`tf-btn small${mode === 'disrupt' ? ' active' : ''}`} onClick={enterDisrupt}>
             Disrupt
           </button>
+          <button type="button" className={`tf-btn small${mode === 'plan' ? ' active' : ''}`} onClick={enterPlan}>
+            Plan
+          </button>
         </div>
         <SimControls
           playing={playing}
@@ -1053,23 +1464,13 @@ export default function App() {
           tick={snapshot.tick}
           timeMinutes={snapshot.timeMinutes}
           onToggle={() => {
-            if (mode === 'build' || mode === 'disrupt') {
+            if (mode === 'build' || mode === 'disrupt' || mode === 'plan') {
               enterSimulate();
               setPlaying(true);
             } else setPlaying((p) => !p);
           }}
           onSpeed={(s) => setSpeed(s)}
-          onReset={() => {
-            setZoneState(null);
-            setYearsApplied(0);
-            setGrowthHistory([]);
-            setForecast(null);
-            if (viewing === 'base') resetSimTo(baseCity, baseNet);
-            else {
-              const fresh = applyEdits(baseCity, baseNet, ops);
-              resetSimTo(fresh.city, fresh);
-            }
-          }}
+          onReset={resetAll}
           onStep={() => { simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); }}
         />
       </header>
@@ -1167,6 +1568,41 @@ export default function App() {
                 resilienceRows={resilienceRows}
                 resilienceRunning={resilienceRunning}
                 onCompareResilience={compareResilienceLive}
+              />
+              <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
+            </>
+          ) : mode === 'plan' ? (
+            <>
+              <PlanningPanel
+                briefs={briefs}
+                briefId={briefId}
+                onSelectBrief={onSelectBrief}
+                difficulty={difficulty}
+                onDifficulty={setDifficulty}
+                objectives={activeBrief?.objectives ?? []}
+                liveResults={liveObjectiveResults}
+                constraints={activeBrief?.constraints ?? []}
+                liveConstraints={liveConstraintResults}
+                horizonYears={planHorizon}
+                onHorizon={setPlanHorizon}
+                onSubmit={onSubmitPlan}
+                submitting={submitting}
+                evaluation={evaluation}
+                overview={overview}
+                problems={problems}
+                onLocateProblem={onLocateProblem}
+                recCtx={recCtx}
+                plans={plans}
+                onSavePlan={onSavePlan}
+                onLoadPlan={onLoadPlan}
+                onDeletePlan={onDeletePlan}
+                onExportJson={onExportJson}
+                onExportHtml={onExportHtml}
+                onResetPlan={onResetPlan}
+                hasOps={ops.length > 0}
+                tutorialSteps={tutorialSteps}
+                tutorialDismissed={tutorialDismissed}
+                onDismissTutorial={dismissTutorial}
               />
               <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
             </>
