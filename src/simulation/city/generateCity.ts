@@ -3,6 +3,7 @@
 // harbor bay south-west, airport far east on flat land.
 import type { CityData, DistrictKind, Vec3, Zone } from '../../types/index.ts';
 import { mulberry32 } from './seededRng.ts';
+import { initGrowthState } from '../growth/landUse.ts';
 
 interface ZoneSpec {
   id: string;
@@ -41,7 +42,18 @@ export function generateCity(seed: number): CityData {
     radius: s.radius,
     population: s.population,
     jobs: s.jobs,
+    students: 0,
+    households: 0,
+    capacityPop: 0,
+    capacityJobs: 0,
+    developed01: 0,
+    attractiveness: 50,
+    accessScore: 50,
+    accessMem: 50,
+    popGrowthRate: 0,
+    jobGrowthRate: 0,
   }));
+  for (const z of zones) initGrowthState(z);
 
   // River polyline (north -> south) at x ~= 120 with gentle meander.
   const river: Vec3[] = [];

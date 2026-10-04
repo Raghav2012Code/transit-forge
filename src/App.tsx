@@ -7,10 +7,19 @@ import { computeAccessibility } from './simulation/analytics/accessibility.ts';
 import { computeCoverage } from './simulation/analytics/coverage.ts';
 import { findBottlenecks } from './simulation/analytics/bottlenecks.ts';
 import { findTransitGaps } from './simulation/analytics/gaps.ts';
-import { planningScore } from './simulation/analytics/impact.ts';
+import { planningScore, populationImpact } from './simulation/analytics/impact.ts';
 import { samplePoint, type SeriesPoint } from './simulation/analytics/series.ts';
 import { applyEdits } from './simulation/scenario/applyEdits.ts';
-import { compareScenarios } from './simulation/scenario/compare.ts';
+import { compareHorizons, compareScenarios } from './simulation/scenario/compare.ts';
+import {
+  BASE_YEAR,
+  forecastGrowth,
+  growZones,
+  planAdvice,
+  SIM_TRIPS_SCALE,
+  computeDemandLayers,
+  type GrowthPoint,
+} from './simulation/growth/growth.ts';
 import {
   createScenario,
   formatCost,
@@ -34,7 +43,7 @@ import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
 import SimControls, { type Speed } from './ui/controls/SimControls.tsx';
 import LayerToggles from './ui/controls/LayerToggles.tsx';
-import OverlaySwitch, { type TravelDest } from './ui/controls/OverlaySwitch.tsx';
+import OverlaySwitch, { type DemandLayer, type TravelDest } from './ui/controls/OverlaySwitch.tsx';
 import StatsPanel from './ui/dashboard/StatsPanel.tsx';
 import DebugPanel from './ui/dashboard/DebugPanel.tsx';
 import Inspector from './ui/inspectors/Inspector.tsx';
@@ -43,6 +52,8 @@ import ChartsPanel from './ui/analytics/ChartsPanel.tsx';
 import { buildUtilization } from './simulation/analytics/utilization.ts';
 import BuildPanel, { type BuildTool } from './ui/build/BuildPanel.tsx';
 import ComparePanel, { type CompareResult } from './ui/build/ComparePanel.tsx';
+import GrowthPanel, { type ForecastView } from './ui/growth/GrowthPanel.tsx';
+import type { Zone } from './types/index.ts';
 import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
 import ServicePanel from './ui/service/ServicePanel.tsx';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
@@ -89,7 +100,16 @@ export default function App() {
   const [redo, setRedo] = useState<EditOp[]>([]);
   const [viewing, setViewing] = useState<'base' | 'scenario'>('scenario');
   const [networkKey, setNetworkKey] = useState(0);
-  const mod = useMemo(() => applyEdits(baseCity, baseNet, ops), [baseCity, baseNet, ops]);
+  // Growth state: grown zones override the seed city (null = pristine).
+  const [zoneState, setZoneState] = useState<Zone[] | null>(null);
+  const [yearsApplied, setYearsApplied] = useState(0);
+  const [growthHistory, setGrowthHistory] = useState<GrowthPoint[]>([]);
+  const [forecast, setForecast] = useState<ForecastView | null>(null);
+  const [growing, setGrowing] = useState(false);
+  const [demandLayer, setDemandLayer] = useState<DemandLayer>('origins');
+  const [compareHorizon, setCompareHorizon] = useState(0);
+  const effBaseCity = useMemo(() => (zoneState ? { ...baseCity, zones: zoneState } : baseCity), [baseCity, zoneState]);
+  const mod = useMemo(() => applyEdits(effBaseCity, baseNet, ops), [effBaseCity, baseNet, ops]);
 
   // Draft state per tool.
   const [draftStations, setDraftStations] = useState<string[]>([]);
@@ -174,8 +194,57 @@ export default function App() {
     () => [...snapshot.stations].sort((a, b) => b.boardedDay - a.boardedDay).slice(0, 6).map((s) => ({ name: s.name, boarded: Math.round(s.boardedDay) })),
     [snapshot],
   );
+  const demandLayers = useMemo(
+    () => computeDemandLayers({
+      zones: snapshot.city.zones,
+      demand: snapshot.demand,
+      connections: snapshot.connections,
+      roadGraph: snapshot.roadGraph,
+      zoneRoadAccess: snapshot.zoneRoadAccess,
+      stations: snapshot.stations,
+      routes: snapshot.routes,
+    }),
+    [snapshot],
+  );
+  const advice = useMemo(
+    () => planAdvice({
+      zones: snapshot.city.zones,
+      stations: snapshot.stations,
+      routes: snapshot.routes,
+      counters: snapshot.counters,
+      edgeState: snapshot.edgeState,
+      roadGraph: snapshot.roadGraph,
+      cityPopGrowth: snapshot.city.zones.reduce((s, z) => s + z.popGrowthRate * z.population, 0) /
+        Math.max(1, snapshot.city.zones.reduce((s, z) => s + z.population, 0)),
+    }),
+    [snapshot],
+  );
+  const growthSummary = useMemo(() => {
+    const zones = snapshot.city.zones;
+    const pop = zones.reduce((s, z) => s + z.population, 0);
+    const jobs = zones.reduce((s, z) => s + z.jobs, 0);
+    const students = zones.reduce((s, z) => s + z.students, 0);
+    const households = zones.reduce((s, z) => s + z.households, 0);
+    const totalReal = snapshot.demand.totalDaily * SIM_TRIPS_SCALE;
+    const share = stats.transitShare / 100;
+    return {
+      pop, jobs, students, households,
+      developed01: pop > 0 ? zones.reduce((s, z) => s + z.developed01 * z.population, 0) / pop : 0,
+      transitDay: Math.round(totalReal * share),
+      carDay: Math.round(totalReal * (1 - share)),
+      popRate: pop > 0 ? zones.reduce((s, z) => s + z.popGrowthRate * z.population, 0) / pop : 0,
+      jobRate: pop > 0 ? zones.reduce((s, z) => s + z.jobGrowthRate * z.population, 0) / pop : 0,
+    };
+  }, [snapshot, stats]);
+  const districtBars = useMemo(
+    () => snapshot.city.zones.map((z) => ({ name: z.name, developed: z.developed01 })),
+    [snapshot],
+  );
   const analyticsView: AnalyticsView | null = useMemo(() => {
-    if (overlay !== 'accessibility' && overlay !== 'traveltime' && overlay !== 'coverage' && overlay !== 'bottlenecks') return null;
+    const active =
+      overlay === 'accessibility' || overlay === 'traveltime' || overlay === 'coverage' || overlay === 'bottlenecks' ||
+      overlay === 'popdensity' || overlay === 'jobdensity' || overlay === 'development' || overlay === 'growth' || overlay === 'demand';
+    if (!active) return null;
     const grades: Record<string, 'excellent' | 'good' | 'moderate' | 'poor' | 'very poor'> = {};
     const travel: Record<string, number | null> = {};
     const cov: Record<string, number> = {};
@@ -187,14 +256,37 @@ export default function App() {
       if (t !== null && t > travelMax) travelMax = t;
     }
     for (const z of coverage.perZone) cov[z.zoneId] = z.pct;
+    const popD: Record<string, number> = {};
+    const jobD: Record<string, number> = {};
+    const dev: Record<string, number> = {};
+    const growth: Record<string, number> = {};
+    const demand: Record<string, number> = {};
+    let popMax = 1;
+    let jobMax = 1;
+    let growthMax = 0.001;
+    let demandMax = 1;
+    for (const z of snapshot.city.zones) {
+      const area = Math.PI * z.radius * z.radius;
+      popD[z.id] = z.population / Math.max(1, area);
+      jobD[z.id] = z.jobs / Math.max(1, area);
+      dev[z.id] = z.developed01;
+      growth[z.id] = Math.max(0, z.popGrowthRate);
+      const d = demandLayers[demandLayer][z.id] ?? 0;
+      demand[z.id] = d;
+      popMax = Math.max(popMax, popD[z.id]);
+      jobMax = Math.max(jobMax, jobD[z.id]);
+      growthMax = Math.max(growthMax, growth[z.id]);
+      demandMax = Math.max(demandMax, d);
+    }
     return {
       grades,
       travel,
       travelMax,
       coverage: cov,
       bottleneckStations: bottlenecks.stations.slice(0, 5).map((b) => b.id),
+      popD, popMax, jobD, jobMax, dev, growth, growthMax, demand, demandMax,
     };
-  }, [overlay, access, coverage, bottlenecks, travelDest]);
+  }, [overlay, access, coverage, bottlenecks, travelDest, snapshot, demandLayers, demandLayer]);
 
   // ---- live service editing ----
   // Service edits apply to the running sim immediately (no day reset):
@@ -271,7 +363,7 @@ export default function App() {
     setCompareResult(null);
     clearDraft();
     if (view === 'scenario') {
-      const applied = applyEdits(baseCity, baseNet, nextOps);
+      const applied = applyEdits(effBaseCity, baseNet, nextOps);
       resetSimTo(applied.city, applied);
       setNetworkKey((k) => k + 1);
     }
@@ -305,7 +397,7 @@ export default function App() {
   function onView(v: 'base' | 'scenario') {
     setViewing(v);
     clearDraft();
-    if (v === 'base') resetSimTo(baseCity, baseNet);
+    if (v === 'base') resetSimTo(effBaseCity, baseNet);
     else resetSimTo(mod.city, mod);
     setNetworkKey((k) => k + 1);
   }
@@ -464,16 +556,119 @@ export default function App() {
     }
   }
 
+  // ---- city growth ----
+  function structuralOf(sim: SimulationState) {
+    return {
+      stations: sim.stations,
+      connections: sim.connections,
+      routes: sim.routes,
+      roadGraph: sim.roadGraph,
+      edgeState: sim.edgeState,
+      zoneRoadAccess: sim.zoneRoadAccess,
+    };
+  }
+
+  async function onAdvanceYears(n: number) {
+    if (growing) return;
+    setGrowing(true);
+    await new Promise((r) => setTimeout(r, 30));
+    const sim = simRef.current;
+    const share = sim.counters.completed + sim.roadCounters.completed > 0
+      ? sim.counters.completed / (sim.counters.completed + sim.roadCounters.completed)
+      : 0.5;
+    const grown = growZones(sim.city.zones, structuralOf(sim), n, BASE_YEAR + yearsApplied, share);
+    const newCity = { ...sim.city, zones: grown.zones };
+    setZoneState(grown.zones);
+    setYearsApplied((y) => y + n);
+    setGrowthHistory((h) => [...h, ...grown.history]);
+    setForecast(null);
+    // Fresh day on the grown city (demand rebuilds from new population).
+    if (viewing === 'base') resetSimTo(newCity, baseNet);
+    else {
+      const applied = applyEdits(newCity, baseNet, ops);
+      resetSimTo(applied.city, applied);
+      setNetworkKey((k) => k + 1);
+    }
+    setGrowing(false);
+  }
+
+  async function onForecast(years: number) {
+    if (growing) return;
+    setGrowing(true);
+    await new Promise((r) => setTimeout(r, 30));
+    const sim = simRef.current;
+    const share = sim.counters.completed + sim.roadCounters.completed > 0
+      ? sim.counters.completed / (sim.counters.completed + sim.roadCounters.completed)
+      : 0.5;
+    const fc = forecastGrowth(SEED, {
+      zones: sim.city.zones,
+      city: sim.city,
+      stations: sim.stations,
+      connections: sim.connections,
+      routes: sim.routes,
+      routeLengths: sim.routeLengths,
+      routeCumDist: sim.routeCumDist,
+      roadGraph: sim.roadGraph,
+      edgeState: sim.edgeState,
+      zoneRoadAccess: sim.zoneRoadAccess,
+      service: sim.service,
+      startYear: BASE_YEAR + yearsApplied,
+      transitShare01: share,
+    }, years);
+    const totalReal = sim.demand.totalDaily * SIM_TRIPS_SCALE;
+    setForecast({
+      years: fc.years,
+      history: fc.history,
+      endStats: fc.endStats,
+      endAccess: fc.endAccess,
+      before: {
+        pop: sim.city.zones.reduce((s, z) => s + z.population, 0),
+        jobs: sim.city.zones.reduce((s, z) => s + z.jobs, 0),
+        transitDay: Math.round(totalReal * share),
+        carDay: Math.round(totalReal * (1 - share)),
+        access: access.cityScore,
+        congest: stats.avgCongestion,
+        crowd: stats.maxOccupancy,
+      },
+    });
+    setGrowing(false);
+  }
+
   // ---- compare ----
-  async function onRunCompare() {
+  async function onRunCompare(horizon: number) {
     if (ops.length === 0 || compareRunning) return;
     setCompareRunning(true);
-    setCompareProgress('base…');
-    await new Promise((r) => setTimeout(r, 30));
-    const cmp = compareScenarios(SEED, baseCity, baseNet, mod.city, mod, mod.cost, coverageThreshold);
-    setCompareProgress('scenario…');
-    await new Promise((r) => setTimeout(r, 30));
-    setCompareResult({ rows: cmp.rows, base: cmp.base, mod: cmp.mod, baseScore: cmp.baseScore, modScore: cmp.modScore, impact: cmp.impact });
+    if (horizon === 0) {
+      setCompareProgress('base…');
+      await new Promise((r) => setTimeout(r, 30));
+      const cmp = compareScenarios(SEED, baseCity, baseNet, mod.city, mod, mod.cost, coverageThreshold);
+      setCompareProgress('scenario…');
+      await new Promise((r) => setTimeout(r, 30));
+      setCompareResult({ rows: cmp.rows, base: cmp.base, mod: cmp.mod, baseScore: cmp.baseScore, modScore: cmp.modScore, impact: cmp.impact, horizonYears: 0 });
+    } else {
+      setCompareProgress(`growing ${horizon}y…`);
+      await new Promise((r) => setTimeout(r, 30));
+      const sim = simRef.current;
+      const share = sim.counters.completed + sim.roadCounters.completed > 0
+        ? sim.counters.completed / (sim.counters.completed + sim.roadCounters.completed)
+        : 0.5;
+      const hz = compareHorizons(SEED, sim.city.zones, baseCity, baseNet, mod.city, mod, mod.cost, horizon, share);
+      setCompareProgress('scoring…');
+      await new Promise((r) => setTimeout(r, 30));
+      const hzBaseAccess = computeAccessibility({ zones: hz.base.zones, stations: baseNet.stations, connections: baseNet.connections, routes: baseNet.routes });
+      const hzModAccess = computeAccessibility({ zones: hz.mod.zones, stations: mod.stations, connections: mod.connections, routes: mod.routes });
+      const hzBaseCov = computeCoverage(hz.base.zones, baseNet.stations, coverageThreshold);
+      const hzModCov = computeCoverage(hz.mod.zones, mod.stations, coverageThreshold);
+      setCompareResult({
+        rows: hz.rows,
+        base: hz.base.stats,
+        mod: hz.mod.stats,
+        baseScore: planningScore(hz.base.stats, hzBaseAccess, hzBaseCov),
+        modScore: planningScore(hz.mod.stats, hzModAccess, hzModCov),
+        impact: populationImpact(hzBaseAccess, hzModAccess, sim.city.zones, hzBaseCov, hzModCov),
+        horizonYears: horizon,
+      });
+    }
     setCompareRunning(false);
     setCompareProgress('');
   }
@@ -586,8 +781,15 @@ export default function App() {
           }}
           onSpeed={(s) => setSpeed(s)}
           onReset={() => {
+            setZoneState(null);
+            setYearsApplied(0);
+            setGrowthHistory([]);
+            setForecast(null);
             if (viewing === 'base') resetSimTo(baseCity, baseNet);
-            else resetSimTo(mod.city, mod);
+            else {
+              const fresh = applyEdits(baseCity, baseNet, ops);
+              resetSimTo(fresh.city, fresh);
+            }
           }}
           onStep={() => { simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); }}
         />
@@ -627,6 +829,8 @@ export default function App() {
                 onTravelDest={setTravelDest}
                 coverageThreshold={coverageThreshold}
                 onCoverageThreshold={setCoverageThreshold}
+                demandLayer={demandLayer}
+                onDemandLayer={setDemandLayer}
               />
               <StatsPanel stats={stats} />
               <ServicePanel
@@ -646,6 +850,17 @@ export default function App() {
                 onSelect={setSelection}
               />
               <ChartsPanel history={history} topStations={topStations} />
+              <GrowthPanel
+                year={BASE_YEAR + yearsApplied}
+                summary={growthSummary}
+                districts={districtBars}
+                history={growthHistory}
+                onAdvance={onAdvanceYears}
+                advancing={growing}
+                forecast={forecast}
+                onForecast={onForecast}
+                advice={advice}
+              />
               <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
               <DebugPanel sim={snapshot} />
             </>
@@ -723,6 +938,8 @@ export default function App() {
                 viewing={viewing}
                 onView={onView}
                 hasEdits={ops.length > 0}
+                horizonYears={compareHorizon}
+                onHorizon={setCompareHorizon}
               />
             </>
           )}

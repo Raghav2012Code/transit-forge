@@ -6,9 +6,11 @@ import type {
   RoadCounters,
   RoadEdgeState,
   TransportRoute,
+  TripPurpose,
   VehicleState,
   Zone,
 } from '../../types/index.ts';
+import { purposeOf } from '../passengers/demand.ts';
 import { bprRatio, congestionLevel } from './bpr.ts';
 import { findRoadPath, nearestRoadNode, edgeName, type RoadGraph } from './roadGraph.ts';
 
@@ -175,6 +177,7 @@ export function spawnCarTrip(
   oZone: Zone,
   dZone: Zone,
   accessDriveMin: number,
+  purpose?: TripPurpose,
 ): boolean {
   const fromNode = w.zoneRoadAccess[oZone.id];
   const toNode = w.zoneRoadAccess[dZone.id];
@@ -188,6 +191,7 @@ export function spawnCarTrip(
     id: w.nextCarId++,
     originZone: oZone.id,
     destZone: dZone.id,
+    purpose: purpose ?? purposeOf(oZone.kind, dZone.kind),
     departMin: w.timeMinutes,
     state: 'DRIVING',
     edgeIds: path.edgeIds,

@@ -35,17 +35,17 @@ npm run build
 
 ## Status
 
-- v0.7 service planning: per-route service plans (peak/off-peak headways,
-  operating hours, fleet auto/explicit, capacity, speed, dwell, turnaround,
-  reliability, sync) separate from infrastructure; arithmetic timetables with
-  next-departure waits; fleet sizing from cycle time with graceful degradation;
-  dwell from actual boardings; hash-deterministic delays/cancellations; denied
-  boardings; OCU operating costs; live Service panel with consequence previews;
-  frequency/crowding overlays; timetable inspection; service-vs-demand
-  classification; setService scenario ops with live apply + fleet reconcile;
-  compare extended (operating cost, denied). 59 tests passing. Verified: M1
-  5→3 min cuts wait 3.6%, transit +1.0pp, +884 OCU/day.
-- Next: world-scale pass, advanced economics.
+- v0.8 city growth: land-use capacity per district, deterministic yearly
+  growth (lagged accessibility memory, city-relative attractiveness, logistic
+  capacity dampening, fixed city budget — no runaway), trip purposes on all
+  trips, demand auto-regenerates from population, separate growth clock
+  (+1/5/10/20y advances), horizon compare (1/5/10/20y base-vs-scenario with
+  population/jobs/ridership/access rows), labeled forecasts, density/
+  development/growth/demand heatmaps, demand purpose layers, district growth
+  inspector, warnings + rule-based recommendations, timeline charts.
+  70 tests passing. Verified: 5y → pop +10.4%, demand +10.4%; airport express
+  5y → access +0.8, transit +2.2pp, crowding +25%.
+- Next: advanced economics.
 
 ## Known limitations (v0.4 candidates)
 

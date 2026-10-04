@@ -1,6 +1,6 @@
 // Origin/destination demand: deterministic daily trip matrix between zones,
 // modulated by time-of-day profiles. Same seed => same matrix.
-import type { Zone } from '../../types/index.ts';
+import type { DistrictKind, TripPurpose, Zone } from '../../types/index.ts';
 
 export type DayPeriod = 'NIGHT' | 'AM' | 'MID' | 'PM' | 'EVE';
 
@@ -97,6 +97,17 @@ export function buildDemandMatrix(zones: Zone[]): DemandMatrix {
     });
   }
   return { pairs, totalDaily };
+}
+
+/** Lightweight trip purpose from O/D district kinds (deterministic). */
+export function purposeOf(fromKind: DistrictKind, toKind: DistrictKind): TripPurpose {
+  if (toKind === 'airport') return 'airport';
+  if (toKind === 'university') return 'education';
+  if (toKind === 'industrial') return fromKind === 'industrial' ? 'work' : 'industrial';
+  if (toKind === 'cbd') return 'work';
+  if (toKind === 'harbor') return 'work';
+  if (fromKind === 'residential' || fromKind === 'suburban') return 'shopping';
+  return 'other';
 }
 
 /** Period modulation factor relative to MID for an O-D pair at time t. */

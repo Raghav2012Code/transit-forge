@@ -1,13 +1,17 @@
 // Headless scenario comparison: run base vs modified networks with the same
 // seed and report metric deltas from real simulation results.
-import type { CityData, SimStats } from '../../types/index.ts';
+import type { CityData, SimStats, Zone } from '../../types/index.ts';
 import type { NetworkData } from '../transport/network.ts';
+import type { ServicePlan } from '../service/servicePlan.ts';
 import { createSimulationFromParts, stepSimulation } from '../index.ts';
 import { computeStats } from '../statistics.ts';
 import { formatCost } from './scenario.ts';
 import { computeAccessibility, type AccessibilitySet } from '../analytics/accessibility.ts';
 import { computeCoverage, type CoverageSet } from '../analytics/coverage.ts';
 import { populationImpact, planningScore, type PlanningScore, type PopulationImpact } from '../analytics/impact.ts';
+import { BASE_YEAR, growZones, type GrowthPoint } from '../growth/growth.ts';
+import { buildEdgeStates, buildZoneRoadAccess } from '../traffic/cars.ts';
+import { buildRoadGraph } from '../traffic/roadGraph.ts';
 
 export const COMPARE_TICKS = 360;
 
@@ -15,6 +19,85 @@ export function runHeadless(seed: number, city: CityData, net: NetworkData, tick
   let sim = createSimulationFromParts(seed, city, net);
   for (let i = 0; i < ticks; i++) sim = stepSimulation(sim, 1);
   return computeStats(sim);
+}
+
+export interface HorizonSide {
+  stats: SimStats;
+  zones: Zone[];
+  history: GrowthPoint[];
+  accessScore: number;
+}
+
+export interface HorizonComparison {
+  base: HorizonSide;
+  mod: HorizonSide;
+  rows: CompareRow[];
+  years: number;
+}
+
+/**
+ * Long-term workflow (§19): grow both sides N years from the same live zones
+ * (structural accessibility drives development; transport is sampled with a
+ * representative 360-tick run at the horizon, not minute-by-minute).
+ */
+export function compareHorizons(
+  seed: number,
+  zones: Zone[],
+  baseCity: CityData,
+  baseNet: NetworkData,
+  modCity: CityData,
+  modNet: NetworkData & { service?: Record<string, ServicePlan> },
+  cost: number,
+  years: number,
+  transitShare01: number,
+): HorizonComparison {
+  const runSide = (city: CityData, net: NetworkData & { service?: Record<string, ServicePlan> }): HorizonSide => {
+    const roadGraph = buildRoadGraph(city);
+    const grown = growZones(
+      zones,
+      {
+        stations: net.stations,
+        connections: net.connections,
+        routes: net.routes,
+        roadGraph,
+        edgeState: buildEdgeStates(roadGraph),
+        zoneRoadAccess: buildZoneRoadAccess(city),
+      },
+      years,
+      BASE_YEAR,
+      transitShare01,
+    );
+    const grownCity: CityData = { ...city, zones: grown.zones };
+    let sim = createSimulationFromParts(seed, grownCity, net);
+    for (let i = 0; i < COMPARE_TICKS; i++) sim = stepSimulation(sim, 1);
+    const stats = computeStats(sim);
+    const access = computeAccessibility({ zones: grown.zones, stations: net.stations, connections: net.connections, routes: net.routes });
+    return { stats, zones: grown.zones, history: grown.history, accessScore: access.cityScore };
+  };
+  const b = runSide(baseCity, baseNet);
+  const m = runSide(modCity, modNet);
+  const sum = (zs: Zone[], f: (z: Zone) => number) => zs.reduce((s, z) => s + f(z), 0);
+  const rows: CompareRow[] = [
+    numRow('Population', sum(b.zones, (z) => z.population), sum(m.zones, (z) => z.population), '', null, 0),
+    numRow('Jobs', sum(b.zones, (z) => z.jobs), sum(m.zones, (z) => z.jobs), '', null, 0),
+    numRow('Transit/day', b.history[b.history.length - 1]?.transitDay ?? 0, m.history[m.history.length - 1]?.transitDay ?? 0, '', 'up', 0),
+    numRow('Car/day', b.history[b.history.length - 1]?.carDay ?? 0, m.history[m.history.length - 1]?.carDay ?? 0, '', 'down', 0),
+    numRow('Avg travel', b.stats.avgTravelMin, m.stats.avgTravelMin, ' min', 'down'),
+    numRow('Congestion', b.stats.avgCongestion, m.stats.avgCongestion, '', 'down', 2),
+    numRow('Crowding', b.stats.maxOccupancy, m.stats.maxOccupancy, '%', 'down'),
+    numRow('Accessibility', b.accessScore, m.accessScore, ' pts', 'up'),
+    numRow('Transit share', b.stats.transitShare, m.stats.transitShare, '%', 'up'),
+    numRow('Op. cost', b.stats.opCost, m.stats.opCost, ' OCU', null, 0),
+    {
+      label: 'Construction cost',
+      base: formatCost(0),
+      mod: formatCost(cost),
+      delta: cost > 0 ? `+${formatCost(cost)}` : '—',
+      pct: null,
+      better: null,
+    },
+  ];
+  return { base: b, mod: m, rows, years };
 }
 
 export interface CompareRow {

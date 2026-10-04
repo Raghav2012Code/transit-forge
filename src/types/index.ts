@@ -26,6 +26,23 @@ export interface Zone {
   radius: number;
   population: number;
   jobs: number;
+  // --- City-growth state (v0.8). Mutated by growth steps, reset with the sim.
+  students: number;
+  households: number;
+  /** Maximum supportable population / jobs (capacity clamp). */
+  capacityPop: number;
+  capacityJobs: number;
+  /** Developed share of capacity, 0..1 (drives diminishing returns). */
+  developed01: number;
+  /** Development attractiveness, 0..100. */
+  attractiveness: number;
+  /** Current accessibility score, 0..100 (from analytics). */
+  accessScore: number;
+  /** Lagged accessibility memory (infrastructure lag). */
+  accessMem: number;
+  /** Last computed yearly growth rates (display). */
+  popGrowthRate: number;
+  jobGrowthRate: number;
 }
 
 export interface RoadNode {
@@ -103,10 +120,13 @@ export interface Leg {
   routeId: string;
 }
 
+export type TripPurpose = 'work' | 'education' | 'shopping' | 'leisure' | 'airport' | 'industrial' | 'other';
+
 export interface Passenger {
   id: number;
   originZone: string;
   destZone: string;
+  purpose: TripPurpose;
   departMin: number;
   state: PassengerState;
   legs: Leg[];
@@ -168,6 +188,7 @@ export interface CarTrip {
   id: number;
   originZone: string;
   destZone: string;
+  purpose: TripPurpose;
   departMin: number;
   state: CarState;
   /** Ordered road edge ids from origin access node to destination access node. */

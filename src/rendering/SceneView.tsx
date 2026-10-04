@@ -24,7 +24,8 @@ export interface Selection {
 export type Overlay =
   | 'normal' | 'flow' | 'load' | 'congestion'
   | 'accessibility' | 'traveltime' | 'coverage' | 'bottlenecks'
-  | 'frequency' | 'crowding';
+  | 'frequency' | 'crowding'
+  | 'popdensity' | 'jobdensity' | 'development' | 'growth' | 'demand';
 
 export type AccessGradeKey = 'excellent' | 'good' | 'moderate' | 'poor' | 'very poor';
 
@@ -38,6 +39,16 @@ export interface AnalyticsView {
   coverage: Record<string, number>;
   /** Station ids to pulse in bottleneck mode. */
   bottleneckStations: string[];
+  /** Growth/density layers (raw per-zone values + maxima). */
+  popD: Record<string, number>;
+  popMax: number;
+  jobD: Record<string, number>;
+  jobMax: number;
+  dev: Record<string, number>;
+  growth: Record<string, number>;
+  growthMax: number;
+  demand: Record<string, number>;
+  demandMax: number;
 }
 
 export interface BuildInteractions {
@@ -396,7 +407,8 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         }
         // Analytics heatmaps on zone discs (values from the analytics layer).
         const av = analyticsRef.current;
-        const heat = ov === 'accessibility' || ov === 'traveltime' || ov === 'coverage';
+        const heat = ov === 'accessibility' || ov === 'traveltime' || ov === 'coverage' ||
+          ov === 'popdensity' || ov === 'jobdensity' || ov === 'development' || ov === 'growth' || ov === 'demand';
         for (const [id, disc] of city.zoneDiscById) {
           const mat = disc.material as THREE.MeshBasicMaterial;
           if (heat && av) {
@@ -411,9 +423,29 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
                 loadColor.setHex(0x34d399).lerp(hotColor, f);
                 mat.color.copy(loadColor);
               }
-            } else {
+            } else if (ov === 'coverage') {
               const f = Math.min(1, Math.max(0, (av.coverage[id] ?? 0) / 100));
               loadColor.setHex(0x1e3a8a).lerp(routeHot, f * 0.85);
+              mat.color.copy(loadColor);
+            } else if (ov === 'popdensity' || ov === 'jobdensity') {
+              const max = ov === 'popdensity' ? av.popMax : av.jobMax;
+              const v = ov === 'popdensity' ? (av.popD[id] ?? 0) : (av.jobD[id] ?? 0);
+              const f = max > 0 ? Math.min(1, v / max) : 0;
+              loadColor.setHex(0x1e3a8a).lerp(routeHot, 0.15 + f * 0.85);
+              mat.color.copy(loadColor);
+            } else if (ov === 'development') {
+              const d = av.dev[id] ?? 0;
+              mat.color.setHex(
+                d >= 0.85 ? 0xef4444 : d >= 0.65 ? 0xfb923c : d >= 0.4 ? 0xfacc15 : d >= 0.15 ? 0x34d399 : 0x475569,
+              );
+            } else if (ov === 'growth') {
+              const f = av.growthMax > 0 ? Math.min(1, Math.max(0, (av.growth[id] ?? 0) / av.growthMax)) : 0;
+              loadColor.setHex(0x14532d).lerp(routeHot, 0.2 + f * 0.8);
+              mat.color.copy(loadColor);
+            } else {
+              // demand
+              const f = av.demandMax > 0 ? Math.min(1, (av.demand[id] ?? 0) / av.demandMax) : 0;
+              loadColor.setHex(0x34d399).lerp(hotColor, f);
               mat.color.copy(loadColor);
             }
           } else {

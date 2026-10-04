@@ -20,6 +20,7 @@ import {
   expectedSpawns,
   periodFactor,
   periodOf,
+  purposeOf,
   rngNext,
   type DemandMatrix,
 } from './demand.ts';
@@ -176,6 +177,7 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         id: w.nextPassengerId++,
         originZone: pair.from,
         destZone: pair.to,
+        purpose: purposeOf(oz.kind, dz.kind),
         departMin: w.timeMinutes,
         state: 'WALKING',
         legs,

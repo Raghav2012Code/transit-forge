@@ -184,6 +184,14 @@ export default function Inspector({ selection, sim, onClose }: Props) {
         <dl>
           <div className="tf-stat-row"><dt>Population</dt><dd>{z.population.toLocaleString()}</dd></div>
           <div className="tf-stat-row"><dt>Employment</dt><dd>{z.jobs.toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Students</dt><dd>{z.students.toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Households</dt><dd>{z.households.toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Development</dt><dd>{Math.round(z.developed01 * 100)}%</dd></div>
+          <div className="tf-stat-row"><dt>Capacity</dt><dd>{z.capacityPop.toLocaleString()} pop / {z.capacityJobs.toLocaleString()} jobs</dd></div>
+          <div className="tf-stat-row"><dt>Accessibility</dt><dd>{z.accessScore.toFixed(0)}/100</dd></div>
+          <div className="tf-stat-row"><dt>Attractiveness</dt><dd>{z.attractiveness.toFixed(0)}/100</dd></div>
+          <div className="tf-stat-row"><dt>Pop. growth</dt><dd>{(z.popGrowthRate * 100).toFixed(1)}%/yr</dd></div>
+          <div className="tf-stat-row"><dt>Job growth</dt><dd>{(z.jobGrowthRate * 100).toFixed(1)}%/yr</dd></div>
         </dl>
       </div>
     );

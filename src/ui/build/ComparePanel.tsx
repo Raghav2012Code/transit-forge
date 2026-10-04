@@ -9,19 +9,22 @@ export interface CompareResult {
   baseScore: PlanningScore;
   modScore: PlanningScore;
   impact: PopulationImpact;
+  horizonYears: number;
 }
 
 interface Props {
   result: CompareResult | null;
   running: boolean;
   progress: string;
-  onRun: () => void;
+  onRun: (horizonYears: number) => void;
   viewing: 'base' | 'scenario';
   onView: (v: 'base' | 'scenario') => void;
   hasEdits: boolean;
+  horizonYears: number;
+  onHorizon: (y: number) => void;
 }
 
-export default function ComparePanel({ result, running, progress, onRun, viewing, onView, hasEdits }: Props) {
+export default function ComparePanel({ result, running, progress, onRun, viewing, onView, hasEdits, horizonYears, onHorizon }: Props) {
   return (
     <div className="tf-compare">
       <h3>Scenario compare</h3>
@@ -41,8 +44,20 @@ export default function ComparePanel({ result, running, progress, onRun, viewing
           Scenario
         </button>
       </div>
-      <button type="button" className="tf-btn small primary" disabled={!hasEdits || running} onClick={onRun}>
-        {running ? `Running… ${progress}` : 'Run comparison'}
+      <div className="tf-speeds" role="group" aria-label="Comparison horizon">
+        {[0, 1, 5, 10, 20].map((y) => (
+          <button
+            key={y}
+            type="button"
+            className={`tf-btn small${horizonYears === y ? ' active' : ''}`}
+            onClick={() => onHorizon(y)}
+          >
+            {y === 0 ? 'Now' : `${y}y`}
+          </button>
+        ))}
+      </div>
+      <button type="button" className="tf-btn small primary" disabled={!hasEdits || running} onClick={() => onRun(horizonYears)}>
+        {running ? `Running… ${progress}` : horizonYears === 0 ? 'Run comparison' : `Run ${horizonYears}y comparison`}
       </button>
       {result && (
         <>
@@ -79,7 +94,7 @@ export default function ComparePanel({ result, running, progress, onRun, viewing
         </>
       )}
       {!result && !running && (
-        <p className="tf-hint">Runs both networks headless (360 ticks, same seed) and diffs real results.</p>
+        <p className="tf-hint">Runs both networks headless (360 ticks, same seed) and diffs real results. Horizons grow both sides first.</p>
       )}
     </div>
   );

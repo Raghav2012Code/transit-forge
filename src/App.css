@@ -250,7 +250,7 @@
   text-align: left;
 }
 
-.tf-analytics, .tf-charts {
+.tf-analytics, .tf-charts, .tf-growth {
   border-top: 1px solid var(--border);
   padding-top: 10px;
   display: flex;
@@ -258,7 +258,7 @@
   gap: 6px;
 }
 
-.tf-analytics h3, .tf-charts h3 {
+.tf-analytics h3, .tf-charts h3, .tf-growth h3 {
   margin: 0;
   font-size: 12px;
   text-transform: uppercase;
@@ -266,7 +266,7 @@
   color: var(--muted);
 }
 
-.tf-analytics h4, .tf-charts h5, .tf-compare h5 {
+.tf-analytics h4, .tf-charts h5, .tf-compare h5, .tf-growth h4, .tf-growth h5 {
   margin: 8px 0 2px;
   font-size: 12px;
   color: var(--text);
