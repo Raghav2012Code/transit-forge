@@ -99,7 +99,22 @@ function initVehicles(routes: TransportRoute[], routeLengths: Map<string, number
 export function createSimulation(seed = 1337): SimulationState {
   const city = generateCity(seed);
   const net = buildNetwork();
-  const stations = net.stations.map((s) => ({ ...s }));
+  return createSimulationFromParts(seed, city, net);
+}
+
+/** Build a simulation from explicit city + network parts (base or scenario-modified). */
+export function createSimulationFromParts(
+  seed: number,
+  city: CityData,
+  net: {
+    stations: Station[];
+    routes: TransportRoute[];
+    connections: Connection[];
+    routeLengths: Map<string, number>;
+    routeCumDist: Map<string, number[]>;
+  },
+): SimulationState {
+  const stations = net.stations.map((s) => ({ ...s, routeIds: [...s.routeIds], modes: [...s.modes] }));
   const roadGraph = buildRoadGraph(city);
   const stationPos = new Map(stations.map((s) => [s.id, { x: s.pos.x, z: s.pos.z }]));
   return {
@@ -108,10 +123,10 @@ export function createSimulation(seed = 1337): SimulationState {
     timeMinutes: START_MIN,
     city,
     stations,
-    routes: net.routes,
-    connections: net.connections,
-    routeLengths: net.routeLengths,
-    routeCumDist: net.routeCumDist,
+    routes: net.routes.map((r) => ({ ...r, stationIds: [...r.stationIds] })),
+    connections: net.connections.map((c) => ({ ...c })),
+    routeLengths: new Map(net.routeLengths),
+    routeCumDist: new Map(net.routeCumDist),
     vehicles: initVehicles(net.routes, net.routeLengths, seed),
     passengers: [],
     demand: buildDemandMatrix(city.zones),

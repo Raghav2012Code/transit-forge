@@ -23,12 +23,41 @@ export interface Selection {
 
 export type Overlay = 'normal' | 'flow' | 'load' | 'congestion';
 
+export interface BuildInteractions {
+  /** Which pickable kinds the active tool accepts; empty = map clicks only. */
+  pickKinds: Selection['kind'][];
+  onPick: (sel: Selection) => void;
+  onMapClick: (x: number, z: number) => void;
+  onHover: (x: number, z: number) => void;
+}
+
+export interface DraftPoint {
+  x: number;
+  z: number;
+}
+
+export interface DraftView {
+  points: DraftPoint[];
+  hover: DraftPoint | null;
+  hoverValid: boolean;
+}
+
 interface SceneViewProps {
   simRef: React.RefObject<SimulationState>;
   layers: Layers;
   overlay: Overlay;
   selection: Selection | null;
   onSelect: (sel: Selection | null) => void;
+  /** Increment to rebuild network/road/vehicle objects after scenario edits. */
+  networkKey: number;
+  /** Positions of deleted stations shown as red ghosts. */
+  ghosts: DraftPoint[];
+  /** New route ids to pulse-highlight in scenario view. */
+  highlightRoutes: string[];
+  /** Active build tool interactions; null in simulate mode. */
+  build: BuildInteractions | null;
+  /** Draft route/road preview; null when no draft. */
+  draft: DraftView | null;
 }
 
 function stationLoad(waiting: number, capacityPerHr: number): number {
@@ -44,21 +73,34 @@ const CONGESTION_COLORS: Record<CongestionLevel, number> = {
 };
 
 // Rendering consumes simulation data; it never mutates it or holds sim logic.
-export default function SceneView({ simRef, layers, overlay, selection, onSelect }: SceneViewProps) {
+export default function SceneView({ simRef, layers, overlay, selection, onSelect, networkKey, ghosts, highlightRoutes, build, draft }: SceneViewProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
   const layersRef = useRef(layers);
-  layersRef.current = layers;
   const overlayRef = useRef(overlay);
-  overlayRef.current = overlay;
+  const buildRef = useRef(build);
+  const draftRef = useRef(draft);
+  const ghostsRef = useRef(ghosts);
+  const highlightRef = useRef(highlightRoutes);
+  // Mirror latest props for the RAF loop and event handlers (committed values
+  // only; the render path itself never touches refs).
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+    layersRef.current = layers;
+    overlayRef.current = overlay;
+    buildRef.current = build;
+    draftRef.current = draft;
+    ghostsRef.current = ghosts;
+    highlightRef.current = highlightRoutes;
+    selectionRef.current = selection;
+  });
   const rigRef = useRef<{
     stationMeshById: Map<string, THREE.Mesh>;
     pickables: THREE.Object3D[];
     groups: { metro: THREE.Group; rail: THREE.Group; bus: THREE.Group; roads: THREE.Group; buildings: THREE.Group };
   } | null>(null);
   const selectionRef = useRef<Selection | null>(selection);
-  selectionRef.current = selection;
+  // (mirrored in the commit effect below alongside the other live refs)
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -114,11 +156,37 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
 
     const ray = new THREE.Raycaster();
     const ptr = new THREE.Vector2();
-    const handleClick = (e: MouseEvent) => {
+    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const groundHit = new THREE.Vector3();
+    const pickAt = (e: MouseEvent) => {
       const rect = renderer.domElement.getBoundingClientRect();
       ptr.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       ptr.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
       ray.setFromCamera(ptr, camera);
+      return rect;
+    };
+    const handleClick = (e: MouseEvent) => {
+      const b = buildRef.current;
+      pickAt(e);
+      if (b) {
+        // Build mode: station/route tools use pickables, map tools use ground.
+        if (b.pickKinds.length > 0) {
+          ray.params.Line = { threshold: 4 };
+          const hits = ray.intersectObjects(pickables, false);
+          for (const h of hits) {
+            const ud = h.object.userData as { kind: Selection['kind']; id: string };
+            if (b.pickKinds.includes(ud.kind)) {
+              b.onPick({ kind: ud.kind, id: ud.id });
+              return;
+            }
+          }
+          return; // clicked nothing valid for this tool
+        }
+        if (ray.ray.intersectPlane(groundPlane, groundHit)) {
+          b.onMapClick(groundHit.x, groundHit.z);
+        }
+        return;
+      }
       ray.params.Line = { threshold: 4 };
       const hits = ray.intersectObjects(pickables, false);
       if (hits.length === 0) {
@@ -128,7 +196,16 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       const ud = hits[0].object.userData as { kind: Selection['kind']; id: string };
       onSelectRef.current({ kind: ud.kind, id: ud.id });
     };
+    const handleHover = (e: MouseEvent) => {
+      const b = buildRef.current;
+      if (!b) return;
+      pickAt(e);
+      if (ray.ray.intersectPlane(groundPlane, groundHit)) {
+        b.onHover(groundHit.x, groundHit.z);
+      }
+    };
     renderer.domElement.addEventListener('click', handleClick);
+    renderer.domElement.addEventListener('mousemove', handleHover);
 
     const onResize = () => {
       const w = mount.clientWidth;
@@ -147,19 +224,75 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     selRing.visible = false;
     scene.add(selRing);
 
+    // Deleted-station ghosts (scenario diff).
+    const ghostGroup = new THREE.Group();
+    ghostGroup.name = 'ghosts';
+    for (const g of ghostsRef.current) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(6, 0.9, 8, 24),
+        new THREE.MeshBasicMaterial({ color: 0xef4444, wireframe: true }),
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(g.x, 6, g.z);
+      ghostGroup.add(ring);
+    }
+    scene.add(ghostGroup);
+
+    // Draft preview: route/road path + hover marker, rebuilt when draft changes.
+    const draftGroup = new THREE.Group();
+    draftGroup.name = 'draft';
+    scene.add(draftGroup);
+    let lastDraftKey = '';
+    const draftMat = new THREE.LineBasicMaterial({ color: 0xfacc15 });
+    const draftDotGeo = new THREE.SphereGeometry(2.2, 12, 12);
+    const draftDotMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+    const hoverDotMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.8 });
+    const rebuildDraft = () => {
+      const d = draftRef.current;
+      const key = d ? JSON.stringify(d) : '';
+      if (key === lastDraftKey) return;
+      lastDraftKey = key;
+      draftGroup.clear();
+      if (!d) return;
+      const y = 9;
+      const pts = d.points.map((p) => new THREE.Vector3(p.x, y, p.z));
+      if (d.hover) pts.push(new THREE.Vector3(d.hover.x, y, d.hover.z));
+      if (pts.length >= 2) {
+        draftGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), draftMat));
+      }
+      for (const p of d.points) {
+        const dot = new THREE.Mesh(draftDotGeo, draftDotMat);
+        dot.position.set(p.x, y, p.z);
+        draftGroup.add(dot);
+      }
+      if (d.hover) {
+        hoverDotMat.color.setHex(d.hoverValid ? 0x4ade80 : 0xef4444);
+        const hov = new THREE.Mesh(draftDotGeo, hoverDotMat);
+        hov.position.set(d.hover.x, y, d.hover.z);
+        draftGroup.add(hov);
+      }
+    };
+
     const loadColor = new THREE.Color();
     const baseColor = new THREE.Color(0xcbd5e1);
     const hotColor = new THREE.Color(0xef4444);
     const routeBase = new THREE.Color();
     const routeHot = new THREE.Color(0xffffff);
     let raf = 0;
+    let elapsed = 0;
+    let lastFrame = performance.now();
     const animate = () => {
       raf = requestAnimationFrame(animate);
+      const now = performance.now();
+      elapsed += Math.min(0.1, (now - lastFrame) / 1000);
+      lastFrame = now;
       const cur = simRef.current;
       if (cur) {
         updateVehicles(rig, cur.vehicles);
         updateCarRig(carRig, cur.cars, edgeLen);
+        rebuildDraft();
         const ov = overlayRef.current;
+        const highlighted = new Set(highlightRef.current);
         // Road congestion colors from live volume/capacity (congestion overlay).
         for (const [id, mesh] of city.roadMeshById) {
           const mat = mesh.material as THREE.MeshStandardMaterial;
@@ -181,7 +314,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         for (const [id, mesh] of net.routeMeshById) {
           const mat = mesh.material as THREE.MeshStandardMaterial;
           const u = Math.min(1, (usage[id] ?? 0) / maxUse);
-          if (ov === 'flow') {
+          if (highlighted.has(id)) {
+            // Scenario additions pulse so differences are obvious.
+            routeBase.set(mesh.userData.baseColor as string);
+            mat.color.copy(routeBase).lerp(routeHot, 0.35 + 0.3 * Math.sin(elapsed * 4));
+            mat.emissive.copy(routeBase);
+            mat.emissiveIntensity = 1.6 + 0.8 * Math.sin(elapsed * 4);
+          } else if (ov === 'flow') {
             routeBase.set(mesh.userData.baseColor as string);
             mat.color.copy(routeBase).lerp(routeHot, u * 0.45);
             mat.emissive.copy(routeBase);
@@ -242,6 +381,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('click', handleClick);
+      renderer.domElement.removeEventListener('mousemove', handleHover);
       controls.dispose();
       scene.traverse((o) => {
         const mesh = o as THREE.Mesh;
@@ -254,9 +394,9 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       mount.removeChild(renderer.domElement);
       rigRef.current = null;
     };
-    // Static geometry builds once per mount; dynamic data flows via simRef.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Full scene rebuild only on discrete scenario applies (networkKey).
+    // Live data flows via simRef, which is stable for the app lifetime.
+  }, [networkKey, simRef]);
 
   return <div ref={mountRef} className="scene-mount" aria-label="TransitForge 3D viewport" />;
 }

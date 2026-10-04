@@ -35,14 +35,14 @@ npm run build
 
 ## Status
 
-- v0.4 multimodal traffic: real road graph (capacity, free-flow, BPR behind a
-  replaceable interface), deterministic logit mode choice (time, transfers,
-  CBD parking, airport bonus), lightweight car trips on road routes with
-  TTL-cached congested routing, diurnal background + simulated congestion,
-  bus slowdown from mapped road edges, CONGESTION overlay (5 levels),
-  representative car subset rendering, road inspection, Roads + Multimodal
-  dashboard sections, debug panel. 26 tests passing.
-- Next: world-scale pass, scenario editing.
+- v0.5 planning sandbox: Simulate/Build modes (build auto-pauses), metro/
+  station/bus/road/extend/delete tools with hover previews + validation,
+  op-log scenarios with undo/redo, fictional-₹ construction costs, headless
+  base-vs-scenario comparison from real runs, base/scenario view toggle with
+  added-route pulse + deleted-station ghosts, localStorage persistence
+  (versioned). 35 tests passing. Verified: a new airport metro moves transit
+  share 48.9% → 50.9% with measured cost.
+- Next: world-scale pass, advanced economics.
 
 ## Known limitations (v0.4 candidates)
 

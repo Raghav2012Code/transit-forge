@@ -120,29 +120,43 @@ export function buildNetwork(): NetworkData {
   const routeLengths = new Map<string, number>();
   const routeCumDist = new Map<string, number[]>();
   for (const r of ROUTE_SPECS) {
-    let length = 0;
-    const cum: number[] = [0];
-    for (let i = 0; i < r.stationIds.length - 1; i++) {
-      const a = pos.get(r.stationIds[i]);
-      const b = pos.get(r.stationIds[i + 1]);
-      if (!a || !b) continue;
-      const d = distM(a, b);
-      length += d;
-      cum.push(length);
-      // Travel time + 0.5 min dwell per hop; capacity from frequency * vehicle size.
-      const timeMin = (d / 1000 / r.speedKph) * 60 + 0.5;
-      const capacityPerHr = Math.round((60 / r.headwayMin) * r.vehicleCapacity);
-      connections.push({ from: r.stationIds[i], to: r.stationIds[i + 1], mode: r.mode, routeId: r.id, distM: d, timeMin, capacityPerHr });
-      connections.push({ from: r.stationIds[i + 1], to: r.stationIds[i], mode: r.mode, routeId: r.id, distM: d, timeMin, capacityPerHr });
-    }
+    const built = connectionsForRoute(
+      { id: r.id, mode: r.mode, stationIds: r.stationIds, speedKph: r.speedKph, headwayMin: r.headwayMin, vehicleCapacity: r.vehicleCapacity },
+      pos,
+    );
+    connections.push(...built.connections);
     // Loop length for bus routes that visually loop (B1); others ping-pong.
-    routeLengths.set(r.id, length);
-    routeCumDist.set(r.id, cum);
+    routeLengths.set(r.id, built.length);
+    routeCumDist.set(r.id, built.cum);
   }
 
   const routes: TransportRoute[] = ROUTE_SPECS.map((r) => ({ ...r }));
 
   return { stations, routes, connections, routeLengths, routeCumDist };
+}
+
+/** Connections + length + cumulative distances for one ordered station list. */
+export function connectionsForRoute(
+  route: { id: string; mode: TransportMode; stationIds: string[]; speedKph: number; headwayMin: number; vehicleCapacity: number },
+  pos: Map<string, Vec3>,
+): { connections: Connection[]; length: number; cum: number[] } {
+  const connections: Connection[] = [];
+  let length = 0;
+  const cum: number[] = [0];
+  for (let i = 0; i < route.stationIds.length - 1; i++) {
+    const a = pos.get(route.stationIds[i]);
+    const b = pos.get(route.stationIds[i + 1]);
+    if (!a || !b) continue;
+    const d = distM(a, b);
+    length += d;
+    cum.push(length);
+    // Travel time + 0.5 min dwell per hop; capacity from frequency * vehicle size.
+    const timeMin = (d / 1000 / route.speedKph) * 60 + 0.5;
+    const capacityPerHr = Math.round((60 / route.headwayMin) * route.vehicleCapacity);
+    connections.push({ from: route.stationIds[i], to: route.stationIds[i + 1], mode: route.mode, routeId: route.id, distM: d, timeMin, capacityPerHr });
+    connections.push({ from: route.stationIds[i + 1], to: route.stationIds[i], mode: route.mode, routeId: route.id, distM: d, timeMin, capacityPerHr });
+  }
+  return { connections, length, cum };
 }
 
 /** Structural validation used by tests and future editors. */
