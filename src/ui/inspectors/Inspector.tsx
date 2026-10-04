@@ -33,8 +33,10 @@ export default function Inspector({ selection, sim, onClose }: Props) {
           <div className="tf-stat-row"><dt>Modes</dt><dd>{st.modes.join(', ')}</dd></div>
           <div className="tf-stat-row"><dt>Routes</dt><dd>{routes.map((r) => r.name).join(' · ')}</dd></div>
           <div className="tf-stat-row"><dt>Capacity</dt><dd>{st.capacityPerHr.toLocaleString()}/hr</dd></div>
-          <div className="tf-stat-row"><dt>Waiting</dt><dd>{Math.round(st.waiting).toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Waiting now</dt><dd>{Math.round(st.waiting).toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Peak waiting</dt><dd>{Math.round(st.peakWaiting).toLocaleString()}</dd></div>
           <div className="tf-stat-row"><dt>Boarded</dt><dd>{Math.round(st.boardedDay).toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Alighted</dt><dd>{Math.round(st.alightedDay).toLocaleString()}</dd></div>
         </dl>
       </div>
     );
@@ -44,6 +46,10 @@ export default function Inspector({ selection, sim, onClose }: Props) {
     const r = sim.routes.find((x) => x.id === selection.id);
     if (!r) return null;
     const vehicles = sim.vehicles.filter((vv) => vv.routeId === r.id);
+    const boardings = sim.counters.routeBoardings[r.id] ?? 0;
+    const onboard = vehicles.reduce((s, vv) => s + vv.riders.length, 0);
+    const cap = vehicles.reduce((s, vv) => s + vv.capacity, 0);
+    const occ = cap > 0 ? Math.round((onboard / cap) * 1000) / 10 : 0;
     return (
       <div className="tf-inspector">
         <div className="tf-inspector-head">
@@ -56,6 +62,8 @@ export default function Inspector({ selection, sim, onClose }: Props) {
           <div className="tf-stat-row"><dt>Speed</dt><dd>{r.speedKph} kph</dd></div>
           <div className="tf-stat-row"><dt>Vehicles</dt><dd>{vehicles.length}</dd></div>
           <div className="tf-stat-row"><dt>Veh. cap</dt><dd>{r.vehicleCapacity}</dd></div>
+          <div className="tf-stat-row"><dt>Boardings</dt><dd>{Math.round(boardings).toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Onboard now</dt><dd>{onboard} / {cap} ({occ}%)</dd></div>
         </dl>
       </div>
     );

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import './App.css';
-import SceneView, { type Layers, type Selection } from './rendering/SceneView.tsx';
+import SceneView, { type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { createSimulation, stepSimulation, type SimulationState } from './simulation/index.ts';
 import { computeStats } from './simulation/statistics.ts';
 import SimControls, { type Speed } from './ui/controls/SimControls.tsx';
 import LayerToggles from './ui/controls/LayerToggles.tsx';
+import OverlaySwitch from './ui/controls/OverlaySwitch.tsx';
 import StatsPanel from './ui/dashboard/StatsPanel.tsx';
+import DebugPanel from './ui/dashboard/DebugPanel.tsx';
 import Inspector from './ui/inspectors/Inspector.tsx';
 
 const SEED = 1337;
@@ -19,6 +21,7 @@ export default function App() {
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState<Speed>(1);
   const [layers, setLayers] = useState<Layers>({ metro: true, rail: true, bus: true, roads: true, buildings: true });
+  const [overlay, setOverlay] = useState<Overlay>('normal');
   const [selection, setSelection] = useState<Selection | null>(null);
 
   // Simulation loop: fixed 1-minute steps, decoupled from render rate.
@@ -66,13 +69,15 @@ export default function App() {
       </header>
       <main className="tf-main">
         <section className="tf-viewport">
-          <SceneView simRef={simRef} layers={layers} selection={selection} onSelect={setSelection} />
+          <SceneView simRef={simRef} layers={layers} overlay={overlay} selection={selection} onSelect={setSelection} />
           <div className="tf-overlay-hint">drag orbit · right-drag pan · wheel zoom · click station/route/district</div>
         </section>
         <aside className="tf-panel">
           <LayerToggles layers={layers} onChange={setLayers} />
+          <OverlaySwitch overlay={overlay} onChange={setOverlay} />
           <StatsPanel stats={stats} />
           <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
+          <DebugPanel sim={snapshot} />
         </aside>
       </main>
     </div>

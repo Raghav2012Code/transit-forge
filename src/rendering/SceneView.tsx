@@ -19,9 +19,12 @@ export interface Selection {
   id: string;
 }
 
+export type Overlay = 'normal' | 'flow' | 'load';
+
 interface SceneViewProps {
   simRef: React.RefObject<SimulationState>;
   layers: Layers;
+  overlay: Overlay;
   selection: Selection | null;
   onSelect: (sel: Selection | null) => void;
 }
@@ -31,12 +34,14 @@ function stationLoad(waiting: number, capacityPerHr: number): number {
 }
 
 // Rendering consumes simulation data; it never mutates it or holds sim logic.
-export default function SceneView({ simRef, layers, selection, onSelect }: SceneViewProps) {
+export default function SceneView({ simRef, layers, overlay, selection, onSelect }: SceneViewProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const layersRef = useRef(layers);
   layersRef.current = layers;
+  const overlayRef = useRef(overlay);
+  overlayRef.current = overlay;
   const rigRef = useRef<{
     stationMeshById: Map<string, THREE.Mesh>;
     pickables: THREE.Object3D[];
@@ -130,12 +135,34 @@ export default function SceneView({ simRef, layers, selection, onSelect }: Scene
     const loadColor = new THREE.Color();
     const baseColor = new THREE.Color(0xcbd5e1);
     const hotColor = new THREE.Color(0xef4444);
+    const routeBase = new THREE.Color();
+    const routeHot = new THREE.Color(0xffffff);
     let raf = 0;
     const animate = () => {
       raf = requestAnimationFrame(animate);
       const cur = simRef.current;
       if (cur) {
         updateVehicles(rig, cur.vehicles);
+        const ov = overlayRef.current;
+        // Route usage from actual boardings (flow overlay input).
+        const usage = cur.counters.routeBoardings;
+        let maxUse = 1;
+        for (const id in usage) maxUse = Math.max(maxUse, usage[id]);
+        for (const [id, mesh] of net.routeMeshById) {
+          const mat = mesh.material as THREE.MeshStandardMaterial;
+          const u = Math.min(1, (usage[id] ?? 0) / maxUse);
+          if (ov === 'flow') {
+            routeBase.set(mesh.userData.baseColor as string);
+            mat.color.copy(routeBase).lerp(routeHot, u * 0.45);
+            mat.emissive.copy(routeBase);
+            mat.emissiveIntensity = 0.15 + 2.4 * u;
+          } else {
+            routeBase.set(mesh.userData.baseColor as string);
+            mat.color.copy(routeBase);
+            mat.emissive.copy(routeBase);
+            mat.emissiveIntensity = ov === 'load' ? 0.12 : 0.35;
+          }
+        }
         // Station load tint (data-driven, no sim logic here).
         const byId = new Map(cur.stations.map((s) => [s.id, s]));
         for (const [id, mesh] of net.stationMeshById) {
@@ -143,8 +170,12 @@ export default function SceneView({ simRef, layers, selection, onSelect }: Scene
           if (!st) continue;
           const load = stationLoad(st.waiting, st.capacityPerHr);
           const mat = mesh.material as THREE.MeshStandardMaterial;
-          loadColor.copy(baseColor).lerp(hotColor, load);
+          const boosted = ov === 'load' ? Math.pow(load, 0.6) : load;
+          loadColor.copy(baseColor).lerp(hotColor, boosted);
           mat.color.copy(loadColor);
+          mat.emissiveIntensity = ov === 'load' ? 0.3 + 1.8 * load : 0.4;
+          const sc = ov === 'load' ? 1 + load * 0.6 : 1;
+          mesh.scale.set(sc, 1, sc);
         }
         const sel = selectionRef.current;
         if (sel && (sel.kind === 'station' || sel.kind === 'zone')) {

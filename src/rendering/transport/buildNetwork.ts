@@ -13,6 +13,7 @@ export interface NetworkMeshes {
   byMode: Record<TransportMode, THREE.Group>;
   pickables: THREE.Object3D[];
   stationMeshById: Map<string, THREE.Mesh>;
+  routeMeshById: Map<string, THREE.Mesh>;
 }
 
 function routePoints(route: TransportRoute, byId: Map<string, Station>): THREE.Vector3[] {
@@ -37,6 +38,7 @@ export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]
   byMode.bus.name = 'bus';
   const pickables: THREE.Object3D[] = [];
   const byId = new Map(stations.map((s) => [s.id, s]));
+  const routeMeshById = new Map<string, THREE.Mesh>();
 
   for (const route of routes) {
     const pts = routePoints(route, byId);
@@ -49,8 +51,10 @@ export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]
       new THREE.MeshStandardMaterial({ color: route.color, emissive: route.color, emissiveIntensity: 0.35 }),
     );
     mesh.userData = { kind: 'route', id: route.id };
+    mesh.userData.baseColor = route.color;
     byMode[route.mode].add(mesh);
     pickables.push(mesh);
+    routeMeshById.set(route.id, mesh);
   }
 
   const stationGeo = new THREE.CylinderGeometry(3.2, 3.2, 3, 12);
@@ -79,5 +83,5 @@ export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]
   }
 
   group.add(byMode.metro, byMode.rail, byMode.bus);
-  return { group, byMode, pickables, stationMeshById };
+  return { group, byMode, pickables, stationMeshById, routeMeshById };
 }

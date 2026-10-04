@@ -1,15 +1,19 @@
-// Simulation core: pure TS, no React / Three.js. Owns city, network, vehicles,
-// clock, and lightweight passenger counts (full OD demand arrives next milestone).
+// Simulation core: pure TS, no React / Three.js. Owns city, network, demand,
+// passengers, vehicles, clock, and counters.
 import type {
   CityData,
   Connection,
+  Passenger,
   Station,
   TransportRoute,
+  TripCounters,
   VehicleState,
 } from '../types/index.ts';
 import { generateCity } from './city/generateCity.ts';
 import { buildNetwork } from './transport/network.ts';
 import { mulberry32 } from './city/seededRng.ts';
+import { buildDemandMatrix, type DemandMatrix } from './passengers/demand.ts';
+import { advancePassengers } from './passengers/passengers.ts';
 
 export interface SimulationState {
   seed: number;
@@ -20,11 +24,36 @@ export interface SimulationState {
   routes: TransportRoute[];
   connections: Connection[];
   routeLengths: Map<string, number>;
+  routeCumDist: Map<string, number[]>;
   vehicles: VehicleState[];
+  passengers: Passenger[];
+  demand: DemandMatrix;
+  rng: number;
+  nextPassengerId: number;
+  counters: TripCounters;
 }
 
 const START_MIN = 7 * 60;
-const LOOP_ROUTES = new Set(['rt-b1']);
+
+function emptyCounters(routeIds: string[]): TripCounters {
+  const routeBoardings: Record<string, number> = {};
+  for (const id of routeIds) routeBoardings[id] = 0;
+  return {
+    generated: 0,
+    completed: 0,
+    unrouted: 0,
+    skippedCap: 0,
+    totalTravelMin: 0,
+    totalWaitMin: 0,
+    totalTransfers: 0,
+    boardingsTotal: 0,
+    metroBoardings: 0,
+    railBoardings: 0,
+    busBoardings: 0,
+    maxOccupancy01: 0,
+    routeBoardings,
+  };
+}
 
 function initVehicles(routes: TransportRoute[], routeLengths: Map<string, number>, seed: number): VehicleState[] {
   const rand = mulberry32(seed ^ 0x9e37);
@@ -40,6 +69,7 @@ function initVehicles(routes: TransportRoute[], routeLengths: Map<string, number
         direction: rand() > 0.5 ? 1 : -1,
         load: 0,
         capacity: r.vehicleCapacity,
+        riders: [],
       });
     }
   }
@@ -59,77 +89,27 @@ export function createSimulation(seed = 1337): SimulationState {
     routes: net.routes,
     connections: net.connections,
     routeLengths: net.routeLengths,
+    routeCumDist: net.routeCumDist,
     vehicles: initVehicles(net.routes, net.routeLengths, seed),
+    passengers: [],
+    demand: buildDemandMatrix(city.zones),
+    rng: (seed ^ 0x51ab) | 0,
+    nextPassengerId: 1,
+    counters: emptyCounters(net.routes.map((r) => r.id)),
   };
 }
 
 /** Advance the clock by dtMinutes. Deterministic; no wall-clock or Math.random. */
 export function stepSimulation(state: SimulationState, dtMinutes = 1): SimulationState {
-  const stations = state.stations.map((s) => ({ ...s }));
-  const byId = new Map(stations.map((s) => [s.id, s]));
-  const routeById = new Map(state.routes.map((r) => [r.id, r]));
-
-  // Background demand trickle: peak around 8:30, scaled per station capacity.
-  const t = state.timeMinutes;
-  const peak = Math.exp(-Math.pow(t - 510, 2) / (2 * 75 * 75));
-  const demandRate = 0.6 + peak * 2.2; // pax per min per 1000 capacity
-  for (const st of stations) {
-    const arrivals = (st.capacityPerHr / 1000) * demandRate * dtMinutes * 0.12;
-    st.waiting += arrivals;
-  }
-
-  const vehicles = state.vehicles.map((vv) => {
-    const route = routeById.get(vv.routeId);
-    if (!route) return { ...vv };
-    const length = Math.max(1, state.routeLengths.get(route.id) ?? 1);
-    const speedMpm = (route.speedKph * 1000) / 60;
-    let s = vv.s + speedMpm * dtMinutes * vv.direction;
-    let direction = vv.direction;
-    if (LOOP_ROUTES.has(route.id)) {
-      s = ((s % length) + length) % length;
-    } else {
-      if (s >= length) { s = length - (s - length); direction = -1; }
-      if (s <= 0) { s = -s; direction = 1; }
-    }
-    // Boarding: each vehicle picks up a share of waiting at its nearest station.
-    const nearest = nearestStationOnRoute(stations, route, s, length);
-    let load = vv.load;
-    if (nearest) {
-      const st = byId.get(nearest);
-      if (st) {
-        const space = Math.max(0, vv.capacity - load);
-        const take = Math.min(space, st.waiting * 0.25, 60 * dtMinutes);
-        st.waiting -= take;
-        st.boardedDay += take;
-        load += take * 0.5; // rest alight downstream; keeps loads lively but bounded
-        load = Math.min(vv.capacity, load);
-        if (vv.direction !== direction) load *= 0.4; // terminus alighting
-      }
-    }
-    return { ...vv, s, direction, load: Math.round(load) };
-  });
-
+  // SimulationState structurally satisfies PassengerWorld; passengers,
+  // vehicles, stations, and counters mutate in place (high churn), while the
+  // returned shell is new so UI snapshots still trigger renders.
+  advancePassengers(state, dtMinutes);
   return {
     ...state,
     tick: state.tick + 1,
     timeMinutes: state.timeMinutes + dtMinutes,
-    stations,
-    vehicles,
   };
-}
-
-function nearestStationOnRoute(
-  stations: Station[],
-  route: TransportRoute,
-  s: number,
-  totalLength: number,
-): string | null {
-  if (route.stationIds.length === 0 || totalLength <= 0) return null;
-  // Approximate: stations evenly spaced along route length.
-  const n = route.stationIds.length;
-  const idx = Math.max(0, Math.min(n - 1, Math.round((s / totalLength) * (n - 1))));
-  const stationId = route.stationIds[idx];
-  return stations.some((st) => st.id === stationId) ? stationId : null;
 }
 
 export function stationLoad01(st: Station): number {

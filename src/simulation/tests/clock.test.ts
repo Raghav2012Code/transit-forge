@@ -17,8 +17,8 @@ describe('simulation clock', () => {
     const sim = createSimulation(1337);
     const before = sim.vehicles.map((v) => v.s);
     let cur = sim;
-    for (let i = 0; i < 10; i++) cur = stepSimulation(cur, 1);
-    expect(cur.tick).toBe(10);
+    for (let i = 0; i < 30; i++) cur = stepSimulation(cur, 1);
+    expect(cur.tick).toBe(30);
     const moved = cur.vehicles.some((v, i) => v.s !== before[i]);
     expect(moved).toBe(true);
     const boarded = cur.stations.reduce((s, st) => s + st.boardedDay, 0);

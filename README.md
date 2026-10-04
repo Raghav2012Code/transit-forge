@@ -35,12 +35,21 @@ npm run build
 
 ## Status
 
-- v0.2 vertical slice: deterministic seeded coastal city (10 districts, river +
-  3 bridges, arterials, ~1300 instanced buildings), real transport data model
-  (M1/M2 metro, R1 rail, B1/B2/B3 bus, 14 stations, 3 interchanges), Dijkstra
-  graph routing, sim clock (play/pause/1×/5×/20×/reset), 9 live vehicles,
-  orbit/pan/zoom, layer toggles, station/route/district inspector.
-- Next: O/D passenger demand + congestion + overlays + full dashboard.
+- v0.3 passenger simulation: deterministic O/D matrix from zone attributes with
+  AM/MID/PM/EVE/NIGHT time profiles, real passenger entities
+  (WALKING→WAITING→ON_VEHICLE→TRANSFERRING→ARRIVED), Dijkstra route choice with
+  transfers, capacity-respecting boarding/alighting at station visits, live
+  station + network statistics, Passenger Flow and Station Load overlays,
+  expanded dashboard, debug panel. 17 tests passing.
+- Next: world-scale pass, congestion/BPR, scenario editing.
+
+## Known limitations (v0.4 candidates)
+
+- World geography is compact (~1.2 km across), so absolute travel times read
+  low (a few minutes cross-city). A world-scale pass (×5–6 coordinates with
+  matched camera/fog/building density) should precede any fare/economics work.
+- Buses run ping-pong/loop approximations; no dwell timetables or headway
+  control yet. No congestion/BPR, no scenario editing.
 
 ## Test
 

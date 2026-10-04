@@ -85,6 +85,8 @@ export interface NetworkData {
   routes: TransportRoute[];
   connections: Connection[];
   routeLengths: Map<string, number>;
+  /** Cumulative station distances (meters) per route, aligned with stationIds. */
+  routeCumDist: Map<string, number[]>;
 }
 
 export function buildNetwork(): NetworkData {
@@ -110,18 +112,23 @@ export function buildNetwork(): NetworkData {
     capacityPerHr: s.capacityPerHr,
     waiting: 0,
     boardedDay: 0,
+    alightedDay: 0,
+    peakWaiting: 0,
   }));
 
   const connections: Connection[] = [];
   const routeLengths = new Map<string, number>();
+  const routeCumDist = new Map<string, number[]>();
   for (const r of ROUTE_SPECS) {
     let length = 0;
+    const cum: number[] = [0];
     for (let i = 0; i < r.stationIds.length - 1; i++) {
       const a = pos.get(r.stationIds[i]);
       const b = pos.get(r.stationIds[i + 1]);
       if (!a || !b) continue;
       const d = distM(a, b);
       length += d;
+      cum.push(length);
       // Travel time + 0.5 min dwell per hop; capacity from frequency * vehicle size.
       const timeMin = (d / 1000 / r.speedKph) * 60 + 0.5;
       const capacityPerHr = Math.round((60 / r.headwayMin) * r.vehicleCapacity);
@@ -130,11 +137,12 @@ export function buildNetwork(): NetworkData {
     }
     // Loop length for bus routes that visually loop (B1); others ping-pong.
     routeLengths.set(r.id, length);
+    routeCumDist.set(r.id, cum);
   }
 
   const routes: TransportRoute[] = ROUTE_SPECS.map((r) => ({ ...r }));
 
-  return { stations, routes, connections, routeLengths };
+  return { stations, routes, connections, routeLengths, routeCumDist };
 }
 
 /** Structural validation used by tests and future editors. */
