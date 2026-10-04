@@ -1,0 +1,82 @@
+.tf-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.tf-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(17, 24, 52, 0.9);
+}
+
+.tf-brand {
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+
+.tf-meta {
+  display: flex;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tf-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.tf-actions button {
+  background: #1a2547;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.tf-main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  min-height: 0;
+  flex: 1;
+}
+
+.tf-viewport {
+  min-height: 0;
+  position: relative;
+}
+
+.scene-mount {
+  position: absolute;
+  inset: 0;
+}
+
+.scene-mount canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tf-panel {
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  padding: 16px;
+  font-size: 14px;
+}
+
+.tf-panel code {
+  background: rgba(110, 168, 254, 0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.tf-hint {
+  color: var(--muted);
+}
