@@ -114,6 +114,7 @@ export function buildNetwork(): NetworkData {
     boardedDay: 0,
     alightedDay: 0,
     peakWaiting: 0,
+    transfersDay: 0,
   }));
 
   const connections: Connection[] = [];

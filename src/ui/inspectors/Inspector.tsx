@@ -1,5 +1,6 @@
 import type { Selection } from '../../rendering/SceneView.tsx';
 import type { SimulationState } from '../../simulation/index.ts';
+import { stationCatchment } from '../../simulation/analytics/catchment.ts';
 
 interface Props {
   selection: Selection | null;
@@ -22,6 +23,7 @@ export default function Inspector({ selection, sim, onClose }: Props) {
     if (!st) return null;
     const routes = sim.routes.filter((r) => st.routeIds.includes(r.id));
     const interchange = st.routeIds.length > 1;
+    const catchment = stationCatchment(st, sim.city.zones, 800);
     return (
       <div className="tf-inspector">
         <div className="tf-inspector-head">
@@ -37,6 +39,13 @@ export default function Inspector({ selection, sim, onClose }: Props) {
           <div className="tf-stat-row"><dt>Peak waiting</dt><dd>{Math.round(st.peakWaiting).toLocaleString()}</dd></div>
           <div className="tf-stat-row"><dt>Boarded</dt><dd>{Math.round(st.boardedDay).toLocaleString()}</dd></div>
           <div className="tf-stat-row"><dt>Alighted</dt><dd>{Math.round(st.alightedDay).toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Transfers</dt><dd>{Math.round(st.transfersDay).toLocaleString()}</dd></div>
+        </dl>
+        <p className="tf-hint">Catchment (800m)</p>
+        <dl>
+          <div className="tf-stat-row"><dt>Population</dt><dd>{catchment.population.toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Employment</dt><dd>{catchment.jobs.toLocaleString()}</dd></div>
+          <div className="tf-stat-row"><dt>Utilization</dt><dd>{Math.round(catchment.utilization01 * 100)}%</dd></div>
         </dl>
       </div>
     );

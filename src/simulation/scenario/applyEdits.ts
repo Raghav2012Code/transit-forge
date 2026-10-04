@@ -27,7 +27,7 @@ const ROAD_LANES: Record<RoadKind, number> = { local: 2, arterial: 4, highway: 6
 function blankStation(id: string, name: string, x: number, z: number, capacityPerHr: number): Station {
   return {
     id, name, pos: { x, y: 0, z }, modes: [], routeIds: [],
-    capacityPerHr, waiting: 0, boardedDay: 0, alightedDay: 0, peakWaiting: 0,
+    capacityPerHr, waiting: 0, boardedDay: 0, alightedDay: 0, peakWaiting: 0, transfersDay: 0,
   };
 }
 

@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
-import SceneView, { type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
+import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
 import { createSimulation, createSimulationFromParts, stepSimulation, type SimulationState } from './simulation/index.ts';
+import { computeAccessibility } from './simulation/analytics/accessibility.ts';
+import { computeCoverage } from './simulation/analytics/coverage.ts';
+import { findBottlenecks } from './simulation/analytics/bottlenecks.ts';
+import { findTransitGaps } from './simulation/analytics/gaps.ts';
+import { planningScore } from './simulation/analytics/impact.ts';
+import { samplePoint, type SeriesPoint } from './simulation/analytics/series.ts';
 import { applyEdits } from './simulation/scenario/applyEdits.ts';
-import { buildCompareRows, runHeadless } from './simulation/scenario/compare.ts';
+import { compareScenarios } from './simulation/scenario/compare.ts';
 import {
   createScenario,
   formatCost,
@@ -25,10 +31,13 @@ import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
 import SimControls, { type Speed } from './ui/controls/SimControls.tsx';
 import LayerToggles from './ui/controls/LayerToggles.tsx';
-import OverlaySwitch from './ui/controls/OverlaySwitch.tsx';
+import OverlaySwitch, { type TravelDest } from './ui/controls/OverlaySwitch.tsx';
 import StatsPanel from './ui/dashboard/StatsPanel.tsx';
 import DebugPanel from './ui/dashboard/DebugPanel.tsx';
 import Inspector from './ui/inspectors/Inspector.tsx';
+import AnalyticsPanel from './ui/analytics/AnalyticsPanel.tsx';
+import ChartsPanel from './ui/analytics/ChartsPanel.tsx';
+import { buildUtilization } from './simulation/analytics/utilization.ts';
 import BuildPanel, { type BuildTool } from './ui/build/BuildPanel.tsx';
 import ComparePanel, { type CompareResult } from './ui/build/ComparePanel.tsx';
 import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
@@ -59,6 +68,10 @@ export default function App() {
   const [layers, setLayers] = useState<Layers>({ metro: true, rail: true, bus: true, roads: true, buildings: true });
   const [overlay, setOverlay] = useState<Overlay>('normal');
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [travelDest, setTravelDest] = useState<TravelDest>('cbd');
+  const [coverageThreshold, setCoverageThreshold] = useState(500);
+  const [history, setHistory] = useState<SeriesPoint[]>([]);
+  const lastHistTick = useRef(0);
 
   // Scenario + build state. Base city/seed never mutate; ops replay into mod.
   const [mode, setMode] = useState<Mode>('simulate');
@@ -105,7 +118,13 @@ export default function App() {
         for (let i = 0; i < n; i++) simRef.current = stepSimulation(simRef.current, 1);
         if (n > 0 && now - lastUi > 500) {
           lastUi = now;
-          setSnapshot(simRef.current);
+          const sim = simRef.current;
+          setSnapshot(sim);
+          if (sim.tick - lastHistTick.current >= 5) {
+            lastHistTick.current = sim.tick;
+            const point = samplePoint(sim);
+            setHistory((h) => (h.length >= 288 ? [...h.slice(-287), point] : [...h, point]));
+          }
         }
       }
     };
@@ -115,11 +134,66 @@ export default function App() {
 
   const stats = computeStats(snapshot);
 
+  // Analytics layer: pure functions over sim state (structural ones recompute
+  // with the network; live ones refresh with each snapshot).
+  const access = useMemo(
+    () => computeAccessibility({ zones: snapshot.city.zones, stations: snapshot.stations, connections: snapshot.connections, routes: snapshot.routes }),
+    [snapshot],
+  );
+  const coverage = useMemo(
+    () => computeCoverage(snapshot.city.zones, snapshot.stations, coverageThreshold),
+    [snapshot, coverageThreshold],
+  );
+  const bottlenecks = useMemo(
+    () => findBottlenecks({
+      stations: snapshot.stations,
+      routes: snapshot.routes,
+      counters: snapshot.counters,
+      edgeState: snapshot.edgeState,
+      roadGraph: snapshot.roadGraph,
+      busRouteCongestion: snapshot.busRouteCongestion,
+    }),
+    [snapshot],
+  );
+  const gaps = useMemo(
+    () => findTransitGaps({ zones: snapshot.city.zones, stations: snapshot.stations, connections: snapshot.connections, routes: snapshot.routes }),
+    [snapshot],
+  );
+  const score = useMemo(() => planningScore(stats, access, coverage), [stats, access, coverage]);
+  const utilization = useMemo(() => buildUtilization(snapshot), [snapshot]);
+  const topStations = useMemo(
+    () => [...snapshot.stations].sort((a, b) => b.boardedDay - a.boardedDay).slice(0, 6).map((s) => ({ name: s.name, boarded: Math.round(s.boardedDay) })),
+    [snapshot],
+  );
+  const analyticsView: AnalyticsView | null = useMemo(() => {
+    if (overlay !== 'accessibility' && overlay !== 'traveltime' && overlay !== 'coverage' && overlay !== 'bottlenecks') return null;
+    const grades: Record<string, 'excellent' | 'good' | 'moderate' | 'poor' | 'very poor'> = {};
+    const travel: Record<string, number | null> = {};
+    const cov: Record<string, number> = {};
+    let travelMax = 1;
+    for (const z of access.zones) {
+      grades[z.zoneId] = z.grade;
+      const t = travelDest === 'cbd' ? z.toCBD : travelDest === 'airport' ? z.toAirport : travelDest === 'university' ? z.toUniv : travelDest === 'industrial' ? z.toIndustrial : z.toHarbor;
+      travel[z.zoneId] = t;
+      if (t !== null && t > travelMax) travelMax = t;
+    }
+    for (const z of coverage.perZone) cov[z.zoneId] = z.pct;
+    return {
+      grades,
+      travel,
+      travelMax,
+      coverage: cov,
+      bottleneckStations: bottlenecks.stations.slice(0, 5).map((b) => b.id),
+    };
+  }, [overlay, access, coverage, bottlenecks, travelDest]);
+
   // ---- scenario application ----
   function resetSimTo(city: typeof baseCity, net: typeof baseNet) {
     simRef.current = createSimulationFromParts(SEED, city, net);
     setSnapshot(simRef.current);
     setSelection(null);
+    setHistory([]);
+    lastHistTick.current = 0;
   }
 
   function applyOps(nextOps: EditOp[], nextRedo: EditOp[], view: 'base' | 'scenario' = viewing) {
@@ -327,11 +401,10 @@ export default function App() {
     setCompareRunning(true);
     setCompareProgress('base…');
     await new Promise((r) => setTimeout(r, 30));
-    const base = runHeadless(SEED, baseCity, baseNet);
+    const cmp = compareScenarios(SEED, baseCity, baseNet, mod.city, mod, mod.cost, coverageThreshold);
     setCompareProgress('scenario…');
     await new Promise((r) => setTimeout(r, 30));
-    const scenarioStats = runHeadless(SEED, mod.city, mod);
-    setCompareResult({ rows: buildCompareRows(base, scenarioStats, 0, mod.cost), base, mod: scenarioStats });
+    setCompareResult({ rows: cmp.rows, base: cmp.base, mod: cmp.mod, baseScore: cmp.baseScore, modScore: cmp.modScore, impact: cmp.impact });
     setCompareRunning(false);
     setCompareProgress('');
   }
@@ -463,6 +536,7 @@ export default function App() {
             highlightRoutes={viewing === 'scenario' ? diff.addedRoutes : []}
             build={buildIx}
             draft={draftView}
+            analytics={analyticsView}
           />
           <div className="tf-overlay-hint">
             {mode === 'build'
@@ -474,8 +548,25 @@ export default function App() {
           {mode === 'simulate' ? (
             <>
               <LayerToggles layers={layers} onChange={setLayers} />
-              <OverlaySwitch overlay={overlay} onChange={setOverlay} />
+              <OverlaySwitch
+                overlay={overlay}
+                onChange={setOverlay}
+                travelDest={travelDest}
+                onTravelDest={setTravelDest}
+                coverageThreshold={coverageThreshold}
+                onCoverageThreshold={setCoverageThreshold}
+              />
               <StatsPanel stats={stats} />
+              <AnalyticsPanel
+                access={access}
+                coverage={coverage}
+                score={score}
+                bottlenecks={bottlenecks}
+                gaps={gaps}
+                utilization={utilization}
+                onSelect={setSelection}
+              />
+              <ChartsPanel history={history} topStations={topStations} />
               <Inspector selection={selection} sim={snapshot} onClose={() => setSelection(null)} />
               <DebugPanel sim={snapshot} />
             </>

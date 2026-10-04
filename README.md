@@ -35,13 +35,14 @@ npm run build
 
 ## Status
 
-- v0.5 planning sandbox: Simulate/Build modes (build auto-pauses), metro/
-  station/bus/road/extend/delete tools with hover previews + validation,
-  op-log scenarios with undo/redo, fictional-₹ construction costs, headless
-  base-vs-scenario comparison from real runs, base/scenario view toggle with
-  added-route pulse + deleted-station ghosts, localStorage persistence
-  (versioned). 35 tests passing. Verified: a new airport metro moves transit
-  share 48.9% → 50.9% with measured cost.
+- v0.6 planning analytics: pure analytics layer (accessibility scores/grades
+  from real routing, coverage with configurable threshold, geometric station
+  catchments, ranked bottlenecks, grid transit-gap finder, population impact,
+  explainable planning score, headless time-series), Access/Travel/Coverage/
+  Limits heatmap overlays, analytics panel (bottlenecks, gaps, sortable
+  utilization tables), SVG charts from live history, extended compare
+  (accessibility, coverage, benefited/harmed pop, score). 45 tests passing.
+  Verified: airport express → access 91.1→91.8, 150k improved / 0 worsened.
 - Next: world-scale pass, advanced economics.
 
 ## Known limitations (v0.4 candidates)

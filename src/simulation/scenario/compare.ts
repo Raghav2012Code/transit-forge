@@ -5,6 +5,9 @@ import type { NetworkData } from '../transport/network.ts';
 import { createSimulationFromParts, stepSimulation } from '../index.ts';
 import { computeStats } from '../statistics.ts';
 import { formatCost } from './scenario.ts';
+import { computeAccessibility, type AccessibilitySet } from '../analytics/accessibility.ts';
+import { computeCoverage, type CoverageSet } from '../analytics/coverage.ts';
+import { populationImpact, planningScore, type PlanningScore, type PopulationImpact } from '../analytics/impact.ts';
 
 export const COMPARE_TICKS = 360;
 
@@ -72,4 +75,89 @@ export function buildCompareRows(base: SimStats, mod: SimStats, costBase: number
       better: null,
     },
   ];
+}
+
+export interface ScenarioComparison {
+  base: SimStats;
+  mod: SimStats;
+  rows: CompareRow[];
+  impact: PopulationImpact;
+  baseScore: PlanningScore;
+  modScore: PlanningScore;
+  baseAccess: AccessibilitySet;
+  modAccess: AccessibilitySet;
+  baseCoverage: CoverageSet;
+  modCoverage: CoverageSet;
+}
+
+/** Full base-vs-scenario workup: headless runs plus structural analytics. */
+export function compareScenarios(
+  seed: number,
+  baseCity: CityData,
+  baseNet: NetworkData,
+  modCity: CityData,
+  modNet: NetworkData,
+  cost: number,
+  thresholdM = 500,
+  ticks = COMPARE_TICKS,
+): ScenarioComparison {
+  const base = runHeadless(seed, baseCity, baseNet, ticks);
+  const mod = runHeadless(seed, modCity, modNet, ticks);
+  const baseAccess = computeAccessibility({ zones: baseCity.zones, stations: baseNet.stations, connections: baseNet.connections, routes: baseNet.routes });
+  const modAccess = computeAccessibility({ zones: modCity.zones, stations: modNet.stations, connections: modNet.connections, routes: modNet.routes });
+  const baseCoverage = computeCoverage(baseCity.zones, baseNet.stations, thresholdM);
+  const modCoverage = computeCoverage(modCity.zones, modNet.stations, thresholdM);
+  const impact = populationImpact(baseAccess, modAccess, baseCity.zones, baseCoverage, modCoverage);
+  const baseScore = planningScore(base, baseAccess, baseCoverage);
+  const modScore = planningScore(mod, modAccess, modCoverage);
+
+  const rows = buildCompareRows(base, mod, 0, cost);
+  const accessDelta = modAccess.cityScore - baseAccess.cityScore;
+  const covDelta = modCoverage.pct - baseCoverage.pct;
+  const extra: CompareRow[] = [
+    {
+      label: 'Accessibility',
+      base: String(baseAccess.cityScore),
+      mod: String(modAccess.cityScore),
+      delta: `${accessDelta >= 0 ? '+' : ''}${Math.round(accessDelta * 10) / 10} pts`,
+      pct: null,
+      better: accessDelta >= 0 ? 'up' : 'down',
+    },
+    {
+      label: 'Coverage',
+      base: `${baseCoverage.pct}%`,
+      mod: `${modCoverage.pct}%`,
+      delta: `${covDelta >= 0 ? '+' : ''}${Math.round(covDelta * 10) / 10}pp`,
+      pct: null,
+      better: covDelta >= 0 ? 'up' : 'down',
+    },
+    {
+      label: 'Pop. improved',
+      base: '—',
+      mod: impact.improvedPop.toLocaleString(),
+      delta: `${impact.improvedPop.toLocaleString()} gained`,
+      pct: null,
+      better: null,
+    },
+    {
+      label: 'Pop. worsened',
+      base: '—',
+      mod: impact.worsenedPop.toLocaleString(),
+      delta: impact.worsenedPop > 0 ? `${impact.worsenedPop.toLocaleString()} lost` : 'none',
+      pct: null,
+      better: null,
+    },
+    {
+      label: 'Planning score',
+      base: String(baseScore.total),
+      mod: String(modScore.total),
+      delta: `${modScore.total >= baseScore.total ? '+' : ''}${Math.round((modScore.total - baseScore.total) * 10) / 10}`,
+      pct: null,
+      better: modScore.total >= baseScore.total ? 'up' : 'down',
+    },
+  ];
+  // Insert analytics rows before the cost row.
+  const costRow = rows[rows.length - 1];
+  const all = [...rows.slice(0, -1), ...extra, costRow];
+  return { base, mod, rows: all, impact, baseScore, modScore, baseAccess, modAccess, baseCoverage, modCoverage };
 }

@@ -250,6 +250,81 @@
   text-align: left;
 }
 
+.tf-analytics, .tf-charts {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tf-analytics h3, .tf-charts h3 {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+
+.tf-analytics h4, .tf-charts h5, .tf-compare h5 {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.tf-analytics h5 {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.tf-ranked {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.tf-score-parts {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tf-chart {
+  background: rgba(11, 16, 32, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.tf-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tf-bar-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 52px;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.tf-bar-track {
+  height: 10px;
+  background: rgba(36, 49, 82, 0.7);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.tf-bar-fill {
+  height: 100%;
+}
+
 .tf-stats dl, .tf-inspector dl {
   margin: 0;
 }

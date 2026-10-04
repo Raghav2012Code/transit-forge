@@ -58,6 +58,8 @@ const START_MIN = 7 * 60;
 function emptyCounters(routeIds: string[]): TripCounters {
   const routeBoardings: Record<string, number> = {};
   for (const id of routeIds) routeBoardings[id] = 0;
+  const routePeakOcc: Record<string, number> = {};
+  for (const id of routeIds) routePeakOcc[id] = 0;
   return {
     generated: 0,
     completed: 0,
@@ -72,6 +74,7 @@ function emptyCounters(routeIds: string[]): TripCounters {
     busBoardings: 0,
     maxOccupancy01: 0,
     routeBoardings,
+    routePeakOcc,
   };
 }
 

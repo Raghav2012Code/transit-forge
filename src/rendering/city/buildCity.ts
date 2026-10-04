@@ -16,6 +16,7 @@ export interface CityMeshes {
   buildings: THREE.Group;
   roads: THREE.Group;
   roadMeshById: Map<string, THREE.Mesh>;
+  zoneDiscById: Map<string, THREE.Mesh>;
 }
 
 /** Static city geometry: terrain, water, river, roads, bridges, buildings. */
@@ -111,6 +112,7 @@ export function buildCityMeshes(city: CityData): CityMeshes {
   group.add(buildings);
 
   // Zone discs (subtle, used for district picking + readability).
+  const zoneDiscById = new Map<string, THREE.Mesh>();
   for (const z of city.zones) {
     const disc = new THREE.Mesh(
       new THREE.CircleGeometry(z.radius, 40),
@@ -120,7 +122,8 @@ export function buildCityMeshes(city: CityData): CityMeshes {
     disc.position.set(z.center.x, 0.15, z.center.z);
     disc.userData = { kind: 'zone', id: z.id };
     group.add(disc);
+    zoneDiscById.set(z.id, disc);
   }
 
-  return { group, buildings, roads, roadMeshById };
+  return { group, buildings, roads, roadMeshById, zoneDiscById };
 }

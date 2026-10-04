@@ -54,6 +54,7 @@ export interface Station {
   boardedDay: number;
   alightedDay: number;
   peakWaiting: number;
+  transfersDay: number;
 }
 
 export interface TransportRoute {
@@ -135,6 +136,7 @@ export interface TripCounters {
   busBoardings: number;
   maxOccupancy01: number;
   routeBoardings: Record<string, number>;
+  routePeakOcc: Record<string, number>;
 }
 
 export type CongestionLevel = 'free' | 'light' | 'moderate' | 'heavy' | 'severe';

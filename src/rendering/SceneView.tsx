@@ -21,7 +21,23 @@ export interface Selection {
   id: string;
 }
 
-export type Overlay = 'normal' | 'flow' | 'load' | 'congestion';
+export type Overlay =
+  | 'normal' | 'flow' | 'load' | 'congestion'
+  | 'accessibility' | 'traveltime' | 'coverage' | 'bottlenecks';
+
+export type AccessGradeKey = 'excellent' | 'good' | 'moderate' | 'poor' | 'very poor';
+
+/** Analytics values for heatmap overlays (computed by the sim analytics layer). */
+export interface AnalyticsView {
+  grades: Record<string, AccessGradeKey>;
+  /** Travel minutes per zone to the selected destination (null = unreachable). */
+  travel: Record<string, number | null>;
+  travelMax: number;
+  /** Covered population share per zone (0-100). */
+  coverage: Record<string, number>;
+  /** Station ids to pulse in bottleneck mode. */
+  bottleneckStations: string[];
+}
 
 export interface BuildInteractions {
   /** Which pickable kinds the active tool accepts; empty = map clicks only. */
@@ -58,6 +74,8 @@ interface SceneViewProps {
   build: BuildInteractions | null;
   /** Draft route/road preview; null when no draft. */
   draft: DraftView | null;
+  /** Analytics heatmap values; null when no analytics overlay active. */
+  analytics: AnalyticsView | null;
 }
 
 function stationLoad(waiting: number, capacityPerHr: number): number {
@@ -72,8 +90,16 @@ const CONGESTION_COLORS: Record<CongestionLevel, number> = {
   severe: 0x991b1b,
 };
 
+const GRADE_COLORS: Record<AccessGradeKey, number> = {
+  excellent: 0x34d399,
+  good: 0xa3e635,
+  moderate: 0xfacc15,
+  poor: 0xfb923c,
+  'very poor': 0xef4444,
+};
+
 // Rendering consumes simulation data; it never mutates it or holds sim logic.
-export default function SceneView({ simRef, layers, overlay, selection, onSelect, networkKey, ghosts, highlightRoutes, build, draft }: SceneViewProps) {
+export default function SceneView({ simRef, layers, overlay, selection, onSelect, networkKey, ghosts, highlightRoutes, build, draft, analytics }: SceneViewProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const onSelectRef = useRef(onSelect);
   const layersRef = useRef(layers);
@@ -82,6 +108,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
   const draftRef = useRef(draft);
   const ghostsRef = useRef(ghosts);
   const highlightRef = useRef(highlightRoutes);
+  const analyticsRef = useRef(analytics);
   // Mirror latest props for the RAF loop and event handlers (committed values
   // only; the render path itself never touches refs).
   useEffect(() => {
@@ -93,6 +120,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     ghostsRef.current = ghosts;
     highlightRef.current = highlightRoutes;
     selectionRef.current = selection;
+    analyticsRef.current = analytics;
   });
   const rigRef = useRef<{
     stationMeshById: Map<string, THREE.Mesh>;
@@ -332,7 +360,35 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             mat.emissiveIntensity = ov === 'load' ? 0.12 : 0.35;
           }
         }
-        // Station load tint (data-driven, no sim logic here).
+        // Analytics heatmaps on zone discs (values from the analytics layer).
+        const av = analyticsRef.current;
+        const heat = ov === 'accessibility' || ov === 'traveltime' || ov === 'coverage';
+        for (const [id, disc] of city.zoneDiscById) {
+          const mat = disc.material as THREE.MeshBasicMaterial;
+          if (heat && av) {
+            mat.opacity = 0.42;
+            if (ov === 'accessibility') {
+              mat.color.setHex(GRADE_COLORS[av.grades[id] ?? 'poor']);
+            } else if (ov === 'traveltime') {
+              const t = av.travel[id];
+              if (t === null || t === undefined) mat.color.setHex(0x475569);
+              else {
+                const f = Math.min(1, t / Math.max(1, av.travelMax));
+                loadColor.setHex(0x34d399).lerp(hotColor, f);
+                mat.color.copy(loadColor);
+              }
+            } else {
+              const f = Math.min(1, Math.max(0, (av.coverage[id] ?? 0) / 100));
+              loadColor.setHex(0x1e3a8a).lerp(routeHot, f * 0.85);
+              mat.color.copy(loadColor);
+            }
+          } else {
+            mat.opacity = 0.05;
+            mat.color.setHex(0x6ea8fe);
+          }
+        }
+        // Bottleneck pulse on flagged stations.
+        const bottleneckSet = ov === 'bottlenecks' && av ? new Set(av.bottleneckStations) : null;
         const byId = new Map(cur.stations.map((s) => [s.id, s]));
         for (const [id, mesh] of net.stationMeshById) {
           const st = byId.get(id);
@@ -343,7 +399,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           loadColor.copy(baseColor).lerp(hotColor, boosted);
           mat.color.copy(loadColor);
           mat.emissiveIntensity = ov === 'load' ? 0.3 + 1.8 * load : 0.4;
-          const sc = ov === 'load' ? 1 + load * 0.6 : 1;
+          let sc = ov === 'load' ? 1 + load * 0.6 : 1;
+          if (bottleneckSet?.has(id)) {
+            mat.emissive.setHex(0xef4444);
+            mat.emissiveIntensity = 1.2 + 0.8 * Math.sin(elapsed * 5);
+            sc = Math.max(sc, 1.35);
+          }
           mesh.scale.set(sc, 1, sc);
         }
         const sel = selectionRef.current;

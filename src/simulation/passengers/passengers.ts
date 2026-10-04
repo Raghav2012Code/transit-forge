@@ -56,7 +56,7 @@ const MAX_ACTIVE = 12000;
 const WALK_KPH = 5;
 const TRANSFER_MIN = 2;
 
-function walkMin(ax: number, az: number, bx: number, bz: number): number {
+export function walkMin(ax: number, az: number, bx: number, bz: number): number {
   return (Math.hypot(ax - bx, az - bz) / 1000 / WALK_KPH) * 60;
 }
 
@@ -235,6 +235,8 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
     vv.load = vv.riders.length;
     const occ = vv.load / Math.max(1, vv.capacity);
     if (occ > w.counters.maxOccupancy01) w.counters.maxOccupancy01 = occ;
+    const peak = w.counters.routePeakOcc;
+    if (occ > (peak[vv.routeId] ?? 0)) peak[vv.routeId] = occ;
   }
 
   // 4. Station live counters from actual passenger states.
@@ -317,6 +319,7 @@ function alightAt(
       p.transferLeft = TRANSFER_MIN;
       p.atStation = stationId;
       p.vehicleId = null;
+      if (st) st.transfersDay++;
     }
   }
   vv.riders = staying;
