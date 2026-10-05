@@ -12,6 +12,7 @@ import SceneView, {
 } from '../../rendering/SceneView.tsx';
 import type { CameraCmd } from '../../rendering/map/camera.ts';
 import type { CameraInfo } from '../../rendering/SceneView.tsx';
+import type { Theme } from '../../rendering/palette.ts';
 import type { MapMarker } from '../../rendering/map/markers.ts';
 import type { SimulationState } from '../../simulation/index.ts';
 
@@ -23,6 +24,7 @@ export interface SplitViewProps {
   selection: Selection | null;
   onSelect: (sel: Selection | null) => void;
   networkKey: number;
+  theme: Theme;
   build: BuildInteractions | null;
   analytics: AnalyticsView | null;
   draft: DraftView | null;
@@ -59,6 +61,7 @@ export default function CompareSplit(p: SplitViewProps) {
           selection={p.selection}
           onSelect={p.onSelect}
           networkKey={p.networkKey}
+          theme={p.theme}
           ghosts={[]}
           highlightRoutes={[]}
           build={null}
@@ -86,6 +89,7 @@ export default function CompareSplit(p: SplitViewProps) {
           selection={p.selection}
           onSelect={p.onSelect}
           networkKey={p.networkKey}
+          theme={p.theme}
           ghosts={[]}
           highlightRoutes={[]}
           build={p.build}

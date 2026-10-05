@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { CarTrip, CityData } from '../../types/index.ts';
-import { MARK } from '../palette.ts';
+import type { ScenePalette } from '../palette.ts';
 
 /** Representative subset of cars as one InstancedMesh (never one object per car). */
 export const MAX_VISIBLE_CARS = 60;
@@ -11,7 +11,8 @@ export interface CarRig {
   nodePos: Map<string, { x: number; z: number }>;
 }
 
-export function buildCarRig(city: CityData): CarRig {
+export function buildCarRig(city: CityData, palette: ScenePalette): CarRig {
+  const MARK = palette.mark;
   const group = new THREE.Group();
   group.name = 'cars';
   const geo = new THREE.BoxGeometry(4, 1.6, 2);

@@ -1225,7 +1225,7 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: oklch(20% 0.01 250 / 0.3);
+  background: var(--scrim);
   backdrop-filter: blur(2px);
 }
 .tf-palette-scrim {
@@ -1299,7 +1299,7 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   color: var(--on-ink);
 }
 .tf-palette-item.cursor .tf-hint,
-.tf-palette-item.cursor kbd { color: oklch(78% 0.006 250); }
+.tf-palette-item.cursor kbd { color: color-mix(in oklch, var(--on-ink) 72%, var(--ink-strong)); }
 .tf-palette-empty {
   padding: var(--s-5) var(--s-6);
   color: var(--ink-faint);

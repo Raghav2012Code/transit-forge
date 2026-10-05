@@ -97,6 +97,7 @@ const SHORTCUTS: [string[], string][] = [
   [['P'], 'Plan mode'],
   [['A'], 'Accessibility overlay on or off'],
   [['I'], 'Quick inspect'],
+  [['T'], 'Switch between light and dark'],
   [['/'], 'Search the map'],
   [['F'], 'Focus the selection'],
   [['0'], 'Reset the view'],

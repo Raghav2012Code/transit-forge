@@ -4,7 +4,21 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#edeff2" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#edeff2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#16191d" media="(prefers-color-scheme: dark)" />
+    <script>
+      // Set the theme before first paint so a dark visitor never sees a white flash.
+      (function () {
+        var theme = null;
+        try { theme = localStorage.getItem('transitforge.theme'); } catch (e) {}
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+      })();
+    </script>
     <meta
       name="description"
       content="TransitForge — build, simulate and stress-test a fictional coastal transit network."

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Station, TransportMode, TransportRoute } from '../../types/index.ts';
-import { STATION } from '../palette.ts';
+import type { ScenePalette } from '../palette.ts';
 
 export const MODE_Y: Record<TransportMode, number> = {
   metro: 7,
@@ -25,7 +25,8 @@ function routePoints(route: TransportRoute, byId: Map<string, Station>): THREE.V
     .map((s) => new THREE.Vector3(s.pos.x, y, s.pos.z));
 }
 
-export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]): NetworkMeshes {
+export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[], palette: ScenePalette): NetworkMeshes {
+  const STATION = palette.station;
   const group = new THREE.Group();
   group.name = 'network';
   const byMode: Record<TransportMode, THREE.Group> = {

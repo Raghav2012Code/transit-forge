@@ -105,7 +105,9 @@ import CompareSplit from './ui/map/CompareSplit.tsx';
 import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './rendering/SceneView.tsx';
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
 import RailTabs, { type RailTab } from './ui/shell/RailTabs.tsx';
-import { IconInspect, IconMeasure, IconPanel, IconPlan, IconSearch } from './ui/shell/icons.tsx';
+import { IconInspect, IconMeasure, IconMoon, IconPanel, IconPlan, IconSearch, IconSun } from './ui/shell/icons.tsx';
+import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme.ts';
+import type { Theme } from './rendering/palette.ts';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
 import { headwayAt } from './simulation/service/servicePlan.ts';
 import { LOOP_ROUTES } from './simulation/passengers/passengers.ts';
@@ -232,6 +234,27 @@ export default function App() {
   const toastSeq = useRef(1);
   const toastTimers = useRef<Set<number>>(new Set());
   const [railOpen, setRailOpen] = useState(true);
+  // Theme: an explicit choice is remembered; until one is made, follow the system.
+  const [theme, setTheme] = useState<Theme>(() => savedTheme() ?? systemTheme());
+  const themePinned = useRef(savedTheme() !== null);
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const onChange = () => {
+      if (!themePinned.current) setTheme(mq.matches ? 'dark' : 'light');
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  function toggleTheme() {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark';
+    themePinned.current = true;
+    saveTheme(next);
+    setTheme(next);
+  }
   const [railTab, setRailTab] = useState<SimTab>('map');
   const railRef = useRef<HTMLElement>(null);
 
@@ -328,7 +351,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA');
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
       const mod = e.ctrlKey || e.metaKey;
       if (mod && (e.key === 'z' || e.key === 'Z')) {
         if (typing) return;
@@ -386,6 +409,8 @@ export default function App() {
           setMeasureHover(null);
         } else if (inspectMode) setInspectMode(false);
         else enterSimulate();
+      } else if ((e.key === 't' || e.key === 'T') && !mod && !e.altKey) {
+        toggleTheme();
       } else if (e.key === 'r' || e.key === 'R') {
         resetAll();
       }
@@ -2117,6 +2142,15 @@ export default function App() {
             </button>
             <button
               type="button"
+              className="tf-btn icon ghost"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light theme (T)' : 'Switch to dark theme (T)'}
+              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            >
+              {theme === 'dark' ? <IconSun /> : <IconMoon />}
+            </button>
+            <button
+              type="button"
               className={`tf-btn icon ghost${railOpen ? ' active' : ''}`}
               onClick={() => setRailOpen((r) => !r)}
               title={railOpen ? 'Hide side panel ([)' : 'Show side panel (])'}
@@ -2143,6 +2177,7 @@ export default function App() {
                 announceSelection(sel);
               }}
               networkKey={networkKey}
+              theme={theme}
               build={inspectMode ? null : buildIx}
               analytics={analyticsView}
               draft={draftView}
@@ -2168,6 +2203,7 @@ export default function App() {
               announceSelection(sel);
             }}
             networkKey={networkKey}
+            theme={theme}
             ghosts={viewing === 'scenario' ? diff.removedStations : []}
             highlightRoutes={viewing === 'scenario' ? diff.addedRoutes : []}
             build={inspectMode ? null : buildIx}

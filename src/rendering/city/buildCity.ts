@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { CityData } from '../../types/index.ts';
-import { DISTRICT_COLORS, MARK, SCENE } from '../palette.ts';
+import type { ScenePalette } from '../palette.ts';
 
 
 export interface CityMeshes {
@@ -12,7 +12,8 @@ export interface CityMeshes {
 }
 
 /** Static city geometry: terrain, water, river, roads, bridges, buildings. */
-export function buildCityMeshes(city: CityData): CityMeshes {
+export function buildCityMeshes(city: CityData, palette: ScenePalette): CityMeshes {
+  const { scene: SCENE, district: DISTRICT_COLORS, mark: MARK } = palette;
   const group = new THREE.Group();
   group.name = 'city';
 

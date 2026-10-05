@@ -10,7 +10,7 @@ import { buildCarRig, updateCarRig } from './traffic/carRig.ts';
 import type { CameraCmd } from './map/camera.ts';
 import { resolveClick, type CycleCandidate, type CycleState } from './map/selectionCycle.ts';
 import type { MapMarker } from './map/markers.ts';
-import { MARK, RAMP, SCENE, STATION } from './palette.ts';
+import { getPalette, type Theme } from './palette.ts';
 
 export interface Layers {
   metro: boolean;
@@ -121,6 +121,8 @@ interface SceneViewProps {
   onSelect: (sel: Selection | null) => void;
   /** Increment to rebuild network/road/vehicle objects after scenario edits. */
   networkKey: number;
+  /** Colours the whole scene; changing it rebuilds the scene and keeps the camera. */
+  theme: Theme;
   /** Positions of deleted stations shown as red ghosts. */
   ghosts: DraftPoint[];
   /** New route ids to pulse-highlight in scenario view. */
@@ -174,8 +176,12 @@ const GRADE_COLORS: Record<AccessGradeKey, number> = {
 };
 
 // Rendering consumes simulation data; it never mutates it or holds sim logic.
-export default function SceneView({ simRef, layers, overlay, selection, onSelect, networkKey, ghosts, highlightRoutes, build, draft, analytics, cameraCmd, onCamera, onHoverObject, onContextPick, problemMarkers, changeMarkers, catchment, measure, measureActive, onMeasurePoint, onMeasureHover }: SceneViewProps) {
+export default function SceneView({ simRef, layers, overlay, selection, onSelect, networkKey, theme, ghosts, highlightRoutes, build, draft, analytics, cameraCmd, onCamera, onHoverObject, onContextPick, problemMarkers, changeMarkers, catchment, measure, measureActive, onMeasurePoint, onMeasureHover }: SceneViewProps) {
   const mountRef = useRef<HTMLDivElement>(null);
+  // A theme change rebuilds the scene; the camera pose rides across so the
+  // view does not jump. (A network change keeps its existing fresh start.)
+  const poseRef = useRef<{ pos: number[]; target: number[] } | null>(null);
+  const lastThemeRef = useRef(theme);
   const onSelectRef = useRef(onSelect);
   const layersRef = useRef(layers);
   const overlayRef = useRef(overlay);
@@ -235,6 +241,9 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const sim = simRef.current;
     if (!mount || !sim) return;
 
+    const P = getPalette(theme);
+    const { scene: SCENE, station: STATION, mark: MARK, ramp: RAMP } = P;
+    const light = theme === 'light';
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     const dpr = Math.min(window.devicePixelRatio, 2);
     renderer.setPixelRatio(dpr);
@@ -248,7 +257,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(SCENE.background);
-    scene.fog = new THREE.Fog(SCENE.background, 900, 1900);
+    scene.fog = new THREE.Fog(SCENE.background, P.lighting.fogNear, P.lighting.fogFar);
 
     const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.5, 4000);
     camera.position.set(330, 290, 330);
@@ -260,19 +269,24 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     controls.minDistance = 60;
     controls.maxDistance = 1000;
     controls.maxPolarAngle = Math.PI * 0.47;
+    if (lastThemeRef.current !== theme && poseRef.current) {
+      camera.position.fromArray(poseRef.current.pos);
+      controls.target.fromArray(poseRef.current.target);
+    }
+    lastThemeRef.current = theme;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 1.6));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+    scene.add(new THREE.AmbientLight(0xffffff, P.lighting.ambient));
+    const sun = new THREE.DirectionalLight(0xffffff, P.lighting.sun);
     sun.position.set(200, 320, 120);
     scene.add(sun);
 
-    const city = buildCityMeshes(sim.city);
+    const city = buildCityMeshes(sim.city, P);
     scene.add(city.group);
-    const net = buildNetworkMeshes(sim.stations, sim.routes);
+    const net = buildNetworkMeshes(sim.stations, sim.routes, P);
     scene.add(net.group);
     const rig = buildVehicles(sim.vehicles, sim.routes, sim.stations);
     scene.add(rig.group);
-    const carRig = buildCarRig(sim.city);
+    const carRig = buildCarRig(sim.city, P);
     city.roads.add(carRig.group);
     const edgeLen = new Map(sim.city.roadEdges.map((e) => [e.id, e.lengthM]));
     const pickables = [...net.pickables];
@@ -682,14 +696,14 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       ctx.clearRect(0, 0, 512, 96);
       ctx.font = '600 40px system-ui, sans-serif';
       const w = Math.min(500, ctx.measureText(text).width + 48);
-      ctx.fillStyle = 'rgba(255,255,255,0.96)';
-      ctx.strokeStyle = '#1b6fc4';
+      ctx.fillStyle = P.label.measureFill;
+      ctx.strokeStyle = P.label.measureEdge;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.roundRect((512 - w) / 2, 8, w, 80, 10);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = '#1b2026';
+      ctx.fillStyle = P.label.measureText;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, 256, 50);
@@ -770,14 +784,14 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         const w = Math.min(248, ctx.measureText(text).width + 36);
         // Share of the sprite the pill actually covers, for collision culling.
         sprite.userData.fill = w / 256;
-        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.fillStyle = P.label.fill;
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.roundRect((256 - w) / 2, 6, w, 52, 8);
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = '#1b2026';
+        ctx.fillStyle = P.label.text;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(text, 128, 33, 232);
@@ -800,18 +814,18 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           if (m) labelItems.push({ text: r.name.split(' ')[0], accent: r.color, x: m.position.x, y: 20, z: m.position.z, tier: 0, prio: 2 });
         }
         for (const z of sim0.city.zones) {
-          labelItems.push({ text: z.name, accent: '#aab3c4', x: z.center.x, y: 5, z: z.center.z, tier: 0, prio: 1 });
+          labelItems.push({ text: z.name, accent: P.label.zoneEdge, x: z.center.x, y: 5, z: z.center.z, tier: 0, prio: 1 });
         }
         for (const st of sim0.stations) {
           if (st.routeIds.length > 1) {
-            labelItems.push({ text: st.name, accent: '#d48806', x: st.pos.x, y: 15, z: st.pos.z, tier: 1, prio: 0 });
+            labelItems.push({ text: st.name, accent: P.label.interchangeEdge, x: st.pos.x, y: 15, z: st.pos.z, tier: 1, prio: 0 });
           }
         }
         // Interchanges already carry their own label from the mid tier up, so
         // the every-station tier skips them rather than stacking a second copy.
         for (const st of sim0.stations) {
           if (st.routeIds.length > 1) continue;
-          labelItems.push({ text: st.name, accent: '#97a1b3', x: st.pos.x, y: 12, z: st.pos.z, tier: 2, prio: 3 });
+          labelItems.push({ text: st.name, accent: P.label.stationEdge, x: st.pos.x, y: 12, z: st.pos.z, tier: 2, prio: 3 });
         }
         labelItems.sort((p, q) => p.prio - q.prio);
       }
@@ -869,10 +883,10 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const baseColor = new THREE.Color(STATION.regular);
     const hotColor = new THREE.Color(0xef4444);
     const routeBase = new THREE.Color();
-    const routeHot = new THREE.Color(0x111827);
+    const routeHot = new THREE.Color(light ? 0x111827 : 0xffffff);
     const groundTone = new THREE.Color(SCENE.land);
-    const rampNavy = new THREE.Color(RAMP.navy);
-    const rampDeepGreen = new THREE.Color(RAMP.deepGreen);
+    const rampNavy = new THREE.Color(RAMP.blueHigh);
+    const rampDeepGreen = new THREE.Color(RAMP.greenHigh);
     let raf = 0;
     let elapsed = 0;
     let lastFrame = performance.now();
@@ -937,13 +951,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             const level = cur.edgeState[id]?.level ?? 'free';
             mat.color.setHex(CONGESTION_COLORS[level]);
             mat.emissive.setHex(CONGESTION_COLORS[level]);
-            mat.emissiveIntensity = 0.25;
+            mat.emissiveIntensity = light ? 0.25 : 0.45;
           } else if (ov === 'status') {
             const st = cur.edgeState[id];
             if (st?.closed) {
               mat.color.setHex(0xef4444);
               mat.emissive.setHex(0xef4444);
-              mat.emissiveIntensity = 0.4 + 0.2 * Math.sin(elapsed * 5);
+              mat.emissiveIntensity = light ? 0.4 + 0.2 * Math.sin(elapsed * 5) : 0.8 + 0.4 * Math.sin(elapsed * 5);
             } else if (st && st.capMult < 1) {
               mat.color.setHex(0xfb923c);
               mat.emissive.setHex(0xfb923c);
@@ -990,31 +1004,31 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             routeBase.set(mesh.userData.baseColor as string);
             mat.color.copy(routeBase).lerp(routeHot, 0.35 + 0.3 * Math.sin(elapsed * 4));
             mat.emissive.copy(routeBase);
-            mat.emissiveIntensity = 0.6 + 0.3 * Math.sin(elapsed * 4);
+            mat.emissiveIntensity = light ? 0.6 + 0.3 * Math.sin(elapsed * 4) : 1.6 + 0.8 * Math.sin(elapsed * 4);
           } else if (ov === 'flow') {
             routeBase.set(mesh.userData.baseColor as string);
-            mat.color.copy(routeBase).lerp(routeHot, u * 0.6);
+            mat.color.copy(routeBase).lerp(routeHot, u * (light ? 0.6 : 0.45));
             mat.emissive.copy(routeBase);
-            mat.emissiveIntensity = 0.2 + 0.3 * u;
+            mat.emissiveIntensity = light ? 0.2 + 0.3 * u : 0.15 + 2.4 * u;
           } else if (ov === 'frequency') {
             // Scheduled peak headway: intense = frequent service.
             const h = cur.service[id]?.peakHeadwayMin ?? 15;
             const f = Math.min(1, Math.max(0, 1 - (h - 3) / 27));
             routeBase.set(mesh.userData.baseColor as string);
-            mat.color.copy(routeBase).lerp(routeHot, f * 0.55);
+            mat.color.copy(routeBase).lerp(routeHot, f * (light ? 0.55 : 0.3));
             mat.emissive.copy(routeBase);
-            mat.emissiveIntensity = 0.2 + 0.25 * f;
+            mat.emissiveIntensity = light ? 0.2 + 0.25 * f : 0.15 + 2.2 * f;
           } else if (ov === 'crowding') {            // Live occupancy: frequent-but-empty looks different from packed.
             const occ = occN[id] ? occSum[id] / occN[id] : 0;
             routeBase.set(mesh.userData.baseColor as string);
             if (occ >= 0.9) {
               mat.color.setHex(0xef4444);
               mat.emissive.setHex(0xef4444);
-              mat.emissiveIntensity = 0.6 + 0.3 * Math.sin(elapsed * 5);
+              mat.emissiveIntensity = light ? 0.6 + 0.3 * Math.sin(elapsed * 5) : 1.4 + 0.8 * Math.sin(elapsed * 5);
             } else if (occ >= 0.7) {
               mat.color.copy(routeBase).lerp(routeHot, 0.35);
               mat.emissive.setHex(0xfb923c);
-              mat.emissiveIntensity = 0.5;
+              mat.emissiveIntensity = light ? 0.5 : 1.1;
             } else {
               mat.color.copy(routeBase);
               mat.emissive.copy(routeBase);
@@ -1027,12 +1041,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             if (suspended) {
               mat.color.setHex(0xef4444);
               mat.emissive.setHex(0xef4444);
-              mat.emissiveIntensity = 0.6 + 0.3 * Math.sin(elapsed * 5);
+              mat.emissiveIntensity = light ? 0.6 + 0.3 * Math.sin(elapsed * 5) : 1.2 + 0.6 * Math.sin(elapsed * 5);
             } else if (reduced) {
               routeBase.set(mesh.userData.baseColor as string);
               mat.color.copy(routeBase).lerp(routeHot, 0.3);
               mat.emissive.setHex(0xfb923c);
-              mat.emissiveIntensity = 0.5;
+              mat.emissiveIntensity = light ? 0.5 : 0.9;
             } else {
               routeBase.set(mesh.userData.baseColor as string);
               mat.color.copy(routeBase);
@@ -1078,13 +1092,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
               }
             } else if (ov === 'coverage') {
               const f = Math.min(1, Math.max(0, (av.coverage[id] ?? 0) / 100));
-              loadColor.setHex(RAMP.paleBlue).lerp(rampNavy, f);
+              loadColor.setHex(RAMP.blueLow).lerp(rampNavy, f);
               mat.color.copy(loadColor);
             } else if (ov === 'popdensity' || ov === 'jobdensity') {
               const max = ov === 'popdensity' ? av.popMax : av.jobMax;
               const v = ov === 'popdensity' ? (av.popD[id] ?? 0) : (av.jobD[id] ?? 0);
               const f = max > 0 ? Math.min(1, v / max) : 0;
-              loadColor.setHex(RAMP.paleBlue).lerp(rampNavy, 0.1 + f * 0.9);
+              loadColor.setHex(RAMP.blueLow).lerp(rampNavy, 0.1 + f * 0.9);
               mat.color.copy(loadColor);
             } else if (ov === 'development') {
               const d = av.dev[id] ?? 0;
@@ -1093,7 +1107,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
               );
             } else if (ov === 'growth') {
               const f = av.growthMax > 0 ? Math.min(1, Math.max(0, (av.growth[id] ?? 0) / av.growthMax)) : 0;
-              loadColor.setHex(RAMP.paleGreen).lerp(rampDeepGreen, 0.1 + f * 0.9);
+              loadColor.setHex(RAMP.greenLow).lerp(rampDeepGreen, 0.1 + f * 0.9);
               mat.color.copy(loadColor);
             } else {
               // demand
@@ -1117,17 +1131,17 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const boosted = ov === 'load' ? Math.pow(load, 0.6) : load;
           loadColor.copy(baseColor).lerp(hotColor, boosted);
           mat.color.copy(loadColor);
-          mat.emissiveIntensity = ov === 'load' ? 0.1 + 0.6 * load : 0.1;
+          mat.emissiveIntensity = ov === 'load' ? (light ? 0.1 + 0.6 * load : 0.3 + 1.8 * load) : light ? 0.1 : 0.4;
           let sc = ov === 'load' ? 1 + load * 0.6 : 1;
           if (bottleneckSet?.has(id)) {
             mat.emissive.setHex(0xef4444);
-            mat.emissiveIntensity = 0.6 + 0.4 * Math.sin(elapsed * 5);
+            mat.emissiveIntensity = light ? 0.6 + 0.4 * Math.sin(elapsed * 5) : 1.2 + 0.8 * Math.sin(elapsed * 5);
             sc = Math.max(sc, 1.35);
           }
           if (ov === 'status' && cur.closures.closedStations.has(id)) {
             mat.color.setHex(0xef4444);
             mat.emissive.setHex(0xef4444);
-            mat.emissiveIntensity = 0.6 + 0.3 * Math.sin(elapsed * 5);
+            mat.emissiveIntensity = light ? 0.6 + 0.3 * Math.sin(elapsed * 5) : 1.2 + 0.6 * Math.sin(elapsed * 5);
             sc = Math.max(sc, 1.3);
           }
           if (ov === 'critical' && av) {
@@ -1155,9 +1169,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           for (const [id, mesh] of net.routeMeshById) {
             const mat = mesh.material as THREE.MeshStandardMaterial;
             if (id === sel.id) {
-              mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 0.8);
+              mat.emissiveIntensity = Math.max(mat.emissiveIntensity, light ? 0.8 : 1.6);
             } else {
-              mat.color.lerp(groundTone, 0.6);
+              // Not cumulative: the loop above reset mat.color from its base
+              // earlier this frame, so this dims a fresh colour exactly once.
+              if (light) mat.color.lerp(groundTone, 0.6);
+              else mat.color.multiplyScalar(0.5);
             }
           }
         }
@@ -1311,6 +1328,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       renderer.domElement.removeEventListener('mouseleave', handleLeave);
       renderer.domElement.removeEventListener('contextmenu', handleContext);
       controls.removeEventListener('start', cancelCamAnim);
+      poseRef.current = { pos: camera.position.toArray(), target: controls.target.toArray() };
       controls.dispose();
       scene.traverse((o) => {
         const mesh = o as THREE.Mesh;
@@ -1325,7 +1343,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     };
     // Full scene rebuild only on discrete scenario applies (networkKey).
     // Live data flows via simRef, which is stable for the app lifetime.
-  }, [networkKey, simRef]);
+  }, [networkKey, theme, simRef]);
 
   return <div ref={mountRef} className="scene-mount" aria-label="TransitForge 3D viewport" />;
 }

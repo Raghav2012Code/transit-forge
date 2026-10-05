@@ -118,3 +118,11 @@ export const IconCheck = (p: IconProps) => (
 export const IconPanel = (p: IconProps) => (
   <Svg {...p}><rect x="2" y="2.8" width="12" height="10.4" rx="1.4" /><path d="M10 2.8v10.4" /></Svg>
 );
+
+export const IconSun = (p: IconProps) => (
+  <Svg {...p}><circle cx="8" cy="8" r="2.9" /><path d="M8 1.6v1.5M8 12.9v1.5M1.6 8h1.5M12.9 8h1.5M3.5 3.5l1.1 1.1M11.4 11.4l1.1 1.1M12.5 3.5l-1.1 1.1M4.6 11.4l-1.1 1.1" /></Svg>
+);
+
+export const IconMoon = (p: IconProps) => (
+  <Svg {...p}><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8Z" /></Svg>
+);

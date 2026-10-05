@@ -25,7 +25,7 @@ and inset so it reads as a figure, not a hole.
 The vernacular is transit wayfinding: route bullets, line colours, tabular
 timetable figures, plain institutional language.
 
-Explicitly avoided: a dark map in a light page (the two must agree), a dark dashboard with one neon accent, glassmorphism on
+Explicitly avoided: a map whose theme differs from the page's (the two must agree), a dark dashboard with one neon accent, glassmorphism on
 chrome, gradient decoration, all-caps tracked eyebrow labels, meta strings
 joined with middle dots, monospace used as a texture for data, arrow glyphs
 stapled to buttons.
@@ -92,10 +92,36 @@ same subject is told apart by dash and a caption, not by hue; a reading that is
 good or bad takes `--ok` or `--alert`. Palettes borrowed from a charting kit are
 the fastest way to break the rule (`ui/analytics/seriesColors.ts`).
 
+## Themes
+
+Light and dark are one design with two sets of values. Every token keeps its
+name and its role; `:root[data-theme='dark']` in `src/index.css` moves the
+values and nothing else. A component never branches on theme.
+
+- **Selection is still solid ink.** In dark, ink is the light colour and
+  `--on-ink` the dark one, so every ink-filled control inverts by itself.
+- **Line colours do not change.** They are mid-tone on purpose and carry white
+  bullet text on either ground.
+- **Text holds 4.5:1 in both.** Dark values: ink 90%, strong 97%, soft 74%,
+  faint 62% lightness, measured on paper, raised, sunken and the map plate.
+  Status tones are lighter in dark (`--ok`, `--watch-ink`, `--alert`).
+- **The choice is the person's.** The first visit follows the operating system
+  and keeps following it; the first explicit choice (the masthead button, or
+  `T`) wins from then on: it is saved for future visits, and where storage is
+  blocked it still holds for the rest of this visit rather than being undone
+  when the system theme changes. An inline script in `index.html` sets the
+  theme before first paint, so a dark visitor never sees a white flash.
+- **Things that cannot use a token** — the minimap's SVG, the legend ramps, the
+  marker swatches — read CSS custom properties (`--mm-*`, `--ramp-*`,
+  `--mark-*`) that are set per theme beside the colour tokens.
+
 ## The map
 
-The 3D scene is painted from `src/rendering/palette.ts`, whose hex values are the
-sRGB of the CSS tokens above, so the canvas edge and the page agree.
+The 3D scene is painted from `src/rendering/palette.ts`, which holds one palette
+per theme. The light values are the sRGB of the CSS tokens above, so the canvas
+edge and the page agree; the dark values are the original dark plate. Switching
+theme rebuilds the scene with the other palette and carries the camera pose
+across, so the view does not jump and the selection stays.
 
 - **Ground and fabric** — land, roads, water and buildings are pale and
   desaturated. Districts differ by tint (blue CBD, green university, warm
@@ -157,8 +183,7 @@ sRGB of the CSS tokens above, so the canvas edge and the page agree.
   stroke, round caps, `currentColor`. No icon library.
 - **Copy** — plain sentences. Hints read "Drag to orbit, right-drag to pan," not
   dot-joined fragments. Empty states say what is true and what to do next.
-- **Light only** — designed for a lit room. Nothing in the interface or the map
-  is dark except ink.
+- **Both themes** — checked for contrast, focus and state in light and in dark.
 
 ## Accessibility
 

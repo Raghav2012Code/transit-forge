@@ -104,8 +104,87 @@
   --status-h: 28px;
   --panel-w: 352px;
 
+  /* ---- map furniture: the minimap, legend ramps and markers, per theme ---- */
+  --mm-river: #abc8de;
+  --mm-road: #cdd1d8;
+  --mm-arterial: #aab1bc;
+  --mm-zone: #97a1b3;
+  --mm-station: #1f2937;
+  --mm-wedge-fill: rgba(27, 111, 196, 0.16);
+  --mm-wedge: #1b6fc4;
+  --mm-selected: #d48806;
+  --ramp-blue-lo: #dfe7f5;
+  --ramp-blue-hi: #1e3a8a;
+  --ramp-green-lo: #dcefe3;
+  --ramp-green-hi: #14532d;
+  --ramp-none: #9aa3b2;
+  --mark-blue: #1b6fc4;
+  --mark-amber: #d48806;
+  --scrim: oklch(20% 0.01 250 / 0.3);
+
   font-family: var(--font);
   font-synthesis-weight: none;
+}
+
+/* =====================================================================
+ * Dark theme. Same roles, same names: only the values move. The selected
+ * state stays "solid ink" — ink is simply the light colour here, and
+ * --on-ink the dark one, so every ink-filled control inverts correctly.
+ * Line colours are untouched: they are mid-tone on purpose and carry white
+ * bullet text on either ground.
+ * ===================================================================== */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --paper: oklch(16% 0.008 250);
+  --paper-raised: oklch(21% 0.009 250);
+  --paper-sunken: oklch(13.5% 0.008 250);
+  --paper-deep: oklch(10.5% 0.008 250);
+
+  --plate: oklch(18% 0.012 250);
+  --plate-deep: oklch(14.5% 0.012 250);
+  --plate-surface: oklch(21% 0.012 250 / 0.94);
+  --plate-edge: oklch(34% 0.012 250);
+
+  --ink: oklch(90% 0.006 250);
+  --ink-strong: oklch(97% 0.004 250);
+  --ink-soft: oklch(74% 0.008 250);
+  --ink-faint: oklch(62% 0.008 250);
+  --on-ink: oklch(16% 0.008 250);
+
+  --rule: oklch(30% 0.01 250);
+  --rule-soft: oklch(25% 0.01 250);
+  --rule-strong: oklch(42% 0.012 250);
+
+  --mode-road: oklch(55% 0.008 250);
+
+  --ok: oklch(76% 0.13 160);
+  --watch: oklch(72% 0.13 70);
+  --watch-ink: oklch(80% 0.12 75);
+  --alert: oklch(70% 0.17 27);
+  --ok-wash: oklch(76% 0.13 160 / 0.16);
+  --watch-wash: oklch(72% 0.13 70 / 0.16);
+  --alert-wash: oklch(70% 0.17 27 / 0.16);
+
+  --lift: 0 1px 2px oklch(0% 0 0 / 0.45);
+  --lift-float: 0 8px 24px oklch(0% 0 0 / 0.5), 0 1px 3px oklch(0% 0 0 / 0.4);
+
+  --mm-river: #1e3a8a;
+  --mm-road: #2a3552;
+  --mm-arterial: #475569;
+  --mm-zone: #33436e;
+  --mm-station: #dbe4ff;
+  --mm-wedge-fill: rgba(110, 168, 254, 0.25);
+  --mm-wedge: #6ea8fe;
+  --mm-selected: #facc15;
+  --ramp-blue-lo: #1e3a8a;
+  --ramp-blue-hi: #f1f5ff;
+  --ramp-green-lo: #14532d;
+  --ramp-green-hi: #f1fff5;
+  --ramp-none: #475569;
+  --mark-blue: #6ea8fe;
+  --mark-amber: #facc15;
+  --scrim: oklch(0% 0 0 / 0.55);
 }
 
 @media (max-width: 1440px) {

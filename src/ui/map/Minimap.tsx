@@ -89,7 +89,7 @@ export default function Minimap({ city, routes, stations, cam, selection, onJump
         <polyline
           points={city.river.map((p) => project(frame, p.x, p.z).join(',')).join(' ')}
           fill="none"
-          stroke="#abc8de"
+          stroke="var(--mm-river)"
           strokeWidth={3}
         />
         {/* roads: arterials brighter */}
@@ -103,7 +103,7 @@ export default function Minimap({ city, routes, stations, cam, selection, onJump
             <line
               key={e.id}
               x1={x1} y1={y1} x2={x2} y2={y2}
-              stroke={e.isArterial ? '#aab1bc' : '#cdd1d8'}
+              stroke={e.isArterial ? 'var(--mm-arterial)' : 'var(--mm-road)'}
               strokeWidth={e.isArterial ? 1.4 : 0.7}
             />
           );
@@ -111,7 +111,7 @@ export default function Minimap({ city, routes, stations, cam, selection, onJump
         {/* districts */}
         {city.zones.map((z) => {
           const [cx, cy] = project(frame, z.center.x, z.center.z);
-          return <circle key={z.id} cx={cx} cy={cy} r={2.4} fill="none" stroke="#97a1b3" strokeWidth={0.8}>
+          return <circle key={z.id} cx={cx} cy={cy} r={2.4} fill="none" stroke="var(--mm-zone)" strokeWidth={0.8}>
             <title>{z.name}</title>
           </circle>;
         })}
@@ -128,13 +128,13 @@ export default function Minimap({ city, routes, stations, cam, selection, onJump
         {/* stations */}
         {stations.map((s) => {
           const [cx, cy] = project(frame, s.pos.x, s.pos.z);
-          return <circle key={s.id} cx={cx} cy={cy} r={1.3} fill="#1f2937"><title>{s.name}</title></circle>;
+          return <circle key={s.id} cx={cx} cy={cy} r={1.3} fill="var(--mm-station)"><title>{s.name}</title></circle>;
         })}
         {/* camera wedge */}
         {wedge && (
-          <polygon points={wedge.map((p) => p.join(',')).join(' ')} fill="rgba(27,111,196,0.16)" stroke="#1b6fc4" strokeWidth={0.8} />
+          <polygon points={wedge.map((p) => p.join(',')).join(' ')} fill="var(--mm-wedge-fill)" stroke="var(--mm-wedge)" strokeWidth={0.8} />
         )}
-        {selDot && <circle cx={selDot[0]} cy={selDot[1]} r={3} fill="none" stroke="#d48806" strokeWidth={1.4} />}
+        {selDot && <circle cx={selDot[0]} cy={selDot[1]} r={3} fill="none" stroke="var(--mm-selected)" strokeWidth={1.4} />}
       </svg>
     </div>
   );
