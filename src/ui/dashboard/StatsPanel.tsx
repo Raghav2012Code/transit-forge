@@ -22,39 +22,42 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
   const occTone = stats.maxOccupancy >= 95 ? 'bad' : stats.maxOccupancy >= 85 ? 'warn' : 'good';
   return (
     <>
-      <div className="tf-kpis">
-        <Kpi
-          label="Transit share"
-          value={stats.transitShare.toFixed(0)}
-          unit="%"
-          meter={stats.transitShare / 100}
-          tone={stats.transitShare >= 60 ? 'good' : stats.transitShare >= 45 ? 'plain' : 'warn'}
-          sub={`${stats.carShare}% by car`}
-        />
-        <Kpi
-          label="Avg travel"
-          value={stats.avgTravelMin.toFixed(1)}
-          unit="min"
-          meter={Math.min(1, stats.avgTravelMin / 45)}
-          tone={stats.avgTravelMin > 30 ? 'warn' : 'good'}
-          sub={`${stats.avgTransfers} transfers`}
-        />
-        <Kpi
-          label="Avg wait"
-          value={stats.avgWaitMin.toFixed(1)}
-          unit="min"
-          meter={Math.min(1, stats.avgWaitMin / 12)}
-          tone={stats.avgWaitMin > 8 ? 'warn' : 'good'}
-          sub={`${stats.avgHeadway}m headway`}
-        />
-        <Kpi
-          label="Congestion"
-          value={stats.avgCongestion.toFixed(2)}
-          meter={Math.min(1, stats.avgCongestion)}
-          threshold={0.85}
-          tone={congTone}
-          sub={`worst ${stats.worstVC}`}
-        />
+      <div className="tf-stats">
+        <h3>Overview</h3>
+        <div className="tf-kpis">
+          <Kpi
+            label="Transit share"
+            value={stats.transitShare.toFixed(0)}
+            unit="%"
+            meter={stats.transitShare / 100}
+            tone={stats.transitShare >= 60 ? 'good' : stats.transitShare >= 45 ? 'plain' : 'warn'}
+            sub={`${stats.carShare}% by car`}
+          />
+          <Kpi
+            label="Avg travel"
+            value={stats.avgTravelMin.toFixed(1)}
+            unit="min"
+            meter={Math.min(1, stats.avgTravelMin / 45)}
+            tone={stats.avgTravelMin > 30 ? 'warn' : 'good'}
+            sub={`${stats.avgTransfers} transfers`}
+          />
+          <Kpi
+            label="Avg wait"
+            value={stats.avgWaitMin.toFixed(1)}
+            unit="min"
+            meter={Math.min(1, stats.avgWaitMin / 12)}
+            tone={stats.avgWaitMin > 8 ? 'warn' : 'good'}
+            sub={`${stats.avgHeadway}m headway`}
+          />
+          <Kpi
+            label="Congestion"
+            value={stats.avgCongestion.toFixed(2)}
+            meter={Math.min(1, stats.avgCongestion)}
+            threshold={0.85}
+            tone={congTone}
+            sub={`worst ${stats.worstVC}`}
+          />
+        </div>
       </div>
 
       <Section
