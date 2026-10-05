@@ -2033,7 +2033,6 @@ export default function App() {
           </span>
         </div>
         <ModeSwitch mode={mode} onChange={selectMode} />
-        <div className="tf-hud-spacer" />
         <div className="tf-hud-right">
           <SimControls
             playing={playing}
