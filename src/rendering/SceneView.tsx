@@ -235,9 +235,15 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     if (!mount || !sim) return;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    renderer.setPixelRatio(dpr);
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     mount.appendChild(renderer.domElement);
+    // Canvas-texture label billboards (map labels, measure tool) are drawn
+    // at a fixed logical size but must rasterize at this same device-pixel
+    // density, or every one is half-resolution on a HiDPI display and reads
+    // as a blurry, illegible smudge.
+    const labelDpr = dpr;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b1020);
@@ -655,9 +661,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     measureGroup.name = 'measure';
     scene.add(measureGroup);
     const measureCanvas = document.createElement('canvas');
-    measureCanvas.width = 512;
-    measureCanvas.height = 96;
+    measureCanvas.width = 512 * labelDpr;
+    measureCanvas.height = 96 * labelDpr;
     const measureTex = new THREE.CanvasTexture(measureCanvas);
+    measureTex.generateMipmaps = false;
+    measureTex.minFilter = THREE.LinearFilter;
+    measureTex.magFilter = THREE.LinearFilter;
     const measureSprite = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: measureTex, transparent: true, depthTest: false }),
     );
@@ -668,6 +677,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const drawMeasureLabel = (text: string, mx: number, mz: number) => {
       const ctx = measureCanvas.getContext('2d');
       if (!ctx) return;
+      ctx.setTransform(labelDpr, 0, 0, labelDpr, 0, 0);
       ctx.clearRect(0, 0, 512, 96);
       ctx.font = '600 40px system-ui, sans-serif';
       const w = Math.min(500, ctx.measureText(text).width + 48);
@@ -734,10 +744,11 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       const hit = labelCache.get(key);
       if (hit) return hit;
       const canvas = document.createElement('canvas');
-      canvas.width = 256;
-      canvas.height = 64;
+      canvas.width = 256 * labelDpr;
+      canvas.height = 64 * labelDpr;
       const ctx = canvas.getContext('2d');
       if (ctx) {
+        ctx.scale(labelDpr, labelDpr);
         ctx.font = '600 30px system-ui, sans-serif';
         const w = Math.min(248, ctx.measureText(text).width + 36);
         ctx.fillStyle = 'rgba(11,16,32,0.88)';
@@ -753,6 +764,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         ctx.fillText(text, 128, 33);
       }
       const tex = new THREE.CanvasTexture(canvas);
+      // Mipmapping blurs a billboard that's frequently small/distant even
+      // further; a flat bilinear sample off the full-resolution canvas
+      // stays crisp at any camera distance.
+      tex.generateMipmaps = false;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
       sprite.scale.set(34, 8.5, 1);
       labelCache.set(key, sprite);
