@@ -23,10 +23,12 @@ interface Props {
 }
 
 function BottleneckList({ items, onSelect }: { items: Bottleneck[]; onSelect: (sel: Selection) => void }) {
-  if (items.length === 0) return <p className="tf-hint">None congested.</p>;
+  // A zero reading is not a bottleneck, so a quiet network lists nothing.
+  const live = items.filter((b) => b.value > 0);
+  if (live.length === 0) return <p className="tf-hint">Nothing is congested right now.</p>;
   return (
     <ol className="tf-ranked">
-      {items.map((b) => (
+      {live.map((b) => (
         <li key={`${b.kind}-${b.id}`}>
           <button type="button" className="tf-link" onClick={() => onSelect({ kind: b.kind, id: b.id })}>
             {b.label}
@@ -57,8 +59,12 @@ export default function AnalyticsPanel({ access, coverage, score, bottlenecks, g
   const routeById = useMemo(() => new Map(sim.routes.map((r) => [r.id, r])), [sim.routes]);
   const badRoutes = sim.routes.filter((r) => problems.routes[r.id] && problems.routes[r.id] !== 'balanced');
   const badStations = sim.stations.filter((s) => problems.stations[s.id] && problems.stations[s.id] !== 'balanced');
+  const quiet = utilization.stations.every((s) => s.boarded === 0) && utilization.routes.every((r) => r.boardings === 0);
   return (
     <Dock title="Analytics" meta={`score ${score.total}`}>
+      {quiet && (
+        <p className="tf-hint">No one has travelled yet. Press play and the rankings below fill in as the day runs.</p>
+      )}
       <div className="tf-stat-row"><dt>Access score</dt><dd>{access.cityScore}</dd></div>
       <div className="tf-stat-row"><dt>Coverage ({coverage.thresholdM}m)</dt><dd>{coverage.pct}% ({coverage.coveredPop.toLocaleString()})</dd></div>
       <div className="tf-stat-row"><dt>Metro/rail/bus pop</dt><dd>{coverage.metroPop.toLocaleString()}/{coverage.railPop.toLocaleString()}/{coverage.busPop.toLocaleString()}</dd></div>

@@ -27,6 +27,9 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
     <>
       <div className="tf-stats">
         <h3>Overview</h3>
+        {stats.completed === 0 && stats.activeNow === 0 && (
+          <p className="tf-hint">No trips have started yet. Press play and these figures update as the day runs.</p>
+        )}
         <div className="tf-kpis">
           <Kpi
             label="Transit share"

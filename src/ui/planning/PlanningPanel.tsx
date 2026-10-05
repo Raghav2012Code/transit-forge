@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { CompareRow } from '../../simulation/scenario/compare.ts';
 import type { PlanningScore } from '../../simulation/analytics/impact.ts';
 import type { Objective, ObjectiveResult, PlanConstraint, ConstraintResult } from '../../simulation/planning/objectives.ts';
@@ -89,6 +89,25 @@ function RowTable({ rows }: { rows: CompareRow[] }) {
   );
 }
 
+const SHORTCUTS: [string[], string][] = [
+  [['Space'], 'Play or pause'],
+  [['1', '2', '3'], 'Speed 1×, 5×, 20×'],
+  [['B'], 'Build mode'],
+  [['D'], 'Disrupt mode'],
+  [['P'], 'Plan mode'],
+  [['A'], 'Accessibility overlay on or off'],
+  [['I'], 'Quick inspect'],
+  [['/'], 'Search the map'],
+  [['F'], 'Focus the selection'],
+  [['0'], 'Reset the view'],
+  [['['], 'Hide the side panel'],
+  [[']'], 'Show the side panel'],
+  [['Esc'], 'Back to simulate'],
+  [['R'], 'Reset the day'],
+  [['Ctrl', 'Z'], 'Undo'],
+  [['Ctrl', 'Shift', 'Z'], 'Redo'],
+];
+
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard', 'expert'];
 const HORIZONS = [0, 1, 5, 10, 20];
 
@@ -158,7 +177,7 @@ export default function PlanningPanel(p: Props) {
                       <strong>{r.intervention}</strong>
                       <div className="tf-hint">{r.reason}</div>
                       <div className="tf-hint">{r.metrics}</div>
-                      <div className="tf-hint">Why? {r.why.join(' · ')}</div>
+                      <div className="tf-hint">Why: {r.why.join('; ')}</div>
                     </div>
                   ))}
                   {pr.target && (
@@ -357,10 +376,12 @@ export default function PlanningPanel(p: Props) {
       </Dock>
 
       {!p.tutorialDismissed && (
-        <Dock title="First run" meta={`${p.tutorialSteps.filter((s) => s.done).length}/${p.tutorialSteps.length}`}>
+        <Dock title="First run" defaultOpen={false} meta={`${p.tutorialSteps.filter((s) => s.done).length} of ${p.tutorialSteps.length} done`}>
           <ol className="tf-ranked">
             {p.tutorialSteps.map((s, i) => (
-              <li key={i} className={s.done ? 'done' : undefined}>{s.done ? '✓ ' : '· '}{s.label}</li>
+              <li key={i} className={s.done ? 'done' : undefined}>
+                {s.done && <span className="tf-sr-only">Done: </span>}{s.label}
+              </li>
             ))}
           </ol>
           <div className="tf-draft-actions">
@@ -370,11 +391,14 @@ export default function PlanningPanel(p: Props) {
       )}
 
       <Dock title="Shortcuts" defaultOpen={false}>
-        <p className="tf-hint">
-          Space play/pause · 1/2/3 speed · B build · D disrupt · A analytics · P plan ·
-          [ panel · Esc simulate · R reset · I inspect · / search · F focus · 0 overview ·
-          Ctrl+Z / Ctrl+Shift+Z undo/redo
-        </p>
+        <dl className="tf-keys">
+          {SHORTCUTS.map(([keys, does]) => (
+            <Fragment key={does}>
+              <dt>{keys.map((k) => <kbd key={k}>{k}</kbd>)}</dt>
+              <dd>{does}</dd>
+            </Fragment>
+          ))}
+        </dl>
       </Dock>
     </>
   );

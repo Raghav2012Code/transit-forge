@@ -991,7 +991,32 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   border-radius: var(--r-bullet);
 }
 .tf-ranked > li.done { color: var(--ink-faint); }
-.tf-ranked > li.done::before { color: var(--ok); background: var(--ok-wash); }
+.tf-ranked > li.done::before { content: "\2713"; color: var(--ok); background: var(--ok-wash); }
+
+/* keyboard shortcuts: the key, then what it does */
+.tf-keys {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s-3) var(--s-5);
+  align-items: center;
+  margin: 0;
+  font-size: var(--fs-small);
+}
+.tf-keys dt { display: flex; gap: var(--s-2); justify-self: start; }
+.tf-keys dd { margin: 0; color: var(--ink-soft); }
+.tf-keys kbd {
+  min-width: 22px;
+  padding: 1px 6px;
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-weight: 600;
+  text-align: center;
+  color: var(--ink-strong);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--r-sm);
+}
 .tf-score-parts {
   margin: 0;
   padding-left: var(--s-6);
@@ -1401,6 +1426,16 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
     padding: var(--s-3) var(--s-4);
     gap: var(--s-3);
   }
+  .tf-topbar > .tf-seg { width: 100%; }
+  .tf-topbar > .tf-seg .tf-seg-item { flex: 1; padding: 0 var(--s-3); }
+  .tf-hud-right {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: var(--s-3) var(--s-4);
+  }
+  .tf-controls { flex-wrap: wrap; gap: var(--s-3); }
+  .tf-clock { padding-left: var(--s-4); }
   .tf-inspector-card {
     width: min(272px, calc(100% - var(--s-6)));
     max-height: calc(100% - var(--status-h) - var(--s-7));
@@ -1408,6 +1443,11 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   .tf-overlay-hint { display: none; }
   .tf-mobile-note {
     display: block;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: var(--status-h);
+    z-index: 4;
     padding: var(--s-3) var(--s-4);
     font-size: var(--fs-fine);
     color: var(--ink-soft);
