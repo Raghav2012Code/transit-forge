@@ -210,7 +210,7 @@ function finalizeIncident(sim: SimulationState, inc: Incident, t: number): void 
   const c = sim.counters;
   const s = inc.snap ?? { rerouted: 0, completed: 0, totalWaitMin: 0, cancelledTrips: 0, strandedPeak: 0 };
   const completedDelta = Math.max(1, c.completed - s.completed);
-  const cap = capacityLostFor(inc, sim.routes, sim.routeLengths, sim.roadGraph);
+  const cap = capacityLostFor(inc, sim.routes, sim.routeLengths, sim.roadGraph, sim.routeCumDist);
   inc.result = {
     affectedPax: Math.max(0, c.rerouted - s.rerouted) + inc.strandedPeakDuringIncident,
     rerouted: Math.max(0, c.rerouted - s.rerouted),

@@ -23,10 +23,18 @@ export interface CapacityLost {
 
 /** Capacity taken offline by one incident (for results + live display). */
 export function capacityLostFor(
-  inc: { kind: Incident['kind']; targetRouteId?: string; durationMin: number; edgeIds?: string[] },
+  inc: {
+    kind: Incident['kind'];
+    targetRouteId?: string;
+    durationMin: number;
+    edgeIds?: string[];
+    segFrom?: string;
+    segTo?: string;
+  },
   routes: TransportRoute[],
   routeLengths: Map<string, number>,
   roadGraph: RoadGraph,
+  routeCumDist?: Map<string, number[]>,
 ): CapacityLost {
   const out: CapacityLost = { stationsClosed: 0, routeKmLost: 0, roadKmLost: 0, transitCapLost: 0, roadCapLost: 0 };
   const byId = new Map(routes.map((r) => [r.id, r]));
@@ -36,9 +44,25 @@ export function capacityLostFor(
   } else if ((inc.kind === 'segment-closure' || inc.kind === 'route-suspension') && inc.targetRouteId) {
     const r = byId.get(inc.targetRouteId);
     if (r) {
-      const km = (routeLengths.get(r.id) ?? 0) / 1000;
-      out.routeKmLost = Math.round(km * 10) / 10;
-      out.transitCapLost = Math.round(hourlyCapacity(r) * hours);
+      const fullKm = (routeLengths.get(r.id) ?? 0) / 1000;
+      // A segment-closure only takes a sub-span of the route offline; the
+      // rest keeps serving riders. Scale the lost km/capacity to that span
+      // instead of reporting the whole route as lost (route-suspension
+      // genuinely loses the whole route, so this stays at fullKm for it).
+      let affectedKm = fullKm;
+      if (inc.kind === 'segment-closure' && inc.segFrom && inc.segTo) {
+        const cum = routeCumDist?.get(r.id);
+        const lo = r.stationIds.indexOf(inc.segFrom);
+        const hi = r.stationIds.indexOf(inc.segTo);
+        if (cum && lo >= 0 && hi >= 0 && lo !== hi) {
+          const [a, b] = lo < hi ? [lo, hi] : [hi, lo];
+          const segKm = (cum[b] - cum[a]) / 1000;
+          affectedKm = Math.min(fullKm, Math.max(0, segKm));
+        }
+      }
+      out.routeKmLost = Math.round(affectedKm * 10) / 10;
+      const shareOfRoute = fullKm > 0 ? affectedKm / fullKm : 1;
+      out.transitCapLost = Math.round(hourlyCapacity(r) * hours * shareOfRoute);
     }
   } else if (inc.kind === 'reduced-service' || inc.kind === 'major-delay') {
     const r = inc.targetRouteId ? byId.get(inc.targetRouteId) : undefined;
