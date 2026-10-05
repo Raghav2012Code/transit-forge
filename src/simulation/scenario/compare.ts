@@ -64,10 +64,11 @@ export function compareResilience(
       activeTicks: 0,
       baselineWaiting: 0,
       recovered90: false,
+      strandedPeakDuringIncident: 0,
     });
     for (let i = 0; i < ticks; i++) sim = stepSimulation(sim, 1);
     const stats = computeStats(sim);
-    const cap = capacityLostFor(incident, sim.routes, sim.routeLengths, sim.roadGraph);
+    const cap = capacityLostFor(incident, sim.routes, sim.routeLengths, sim.roadGraph, sim.routeCumDist);
     const totalRouteKm = sim.routes.reduce((s, r) => s + (sim.routeLengths.get(r.id) ?? 0) / 1000, 0);
     const totalRoadKm = sim.roadGraph.edges.reduce((s, e) => s + e.lengthM / 1000, 0);
     const metrics = resilienceScore({

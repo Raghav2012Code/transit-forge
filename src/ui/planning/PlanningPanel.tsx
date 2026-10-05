@@ -158,7 +158,7 @@ export default function PlanningPanel(p: Props) {
                       <strong>{r.intervention}</strong>
                       <div className="tf-hint">{r.reason}</div>
                       <div className="tf-hint">{r.metrics}</div>
-                      <div className="tf-hint">Why? {r.why.join(' · ')}</div>
+                      <div className="tf-hint">Why: {r.why.join('; ')}</div>
                     </div>
                   ))}
                   {pr.target && (
@@ -357,10 +357,12 @@ export default function PlanningPanel(p: Props) {
       </Dock>
 
       {!p.tutorialDismissed && (
-        <Dock title="First run" meta={`${p.tutorialSteps.filter((s) => s.done).length}/${p.tutorialSteps.length}`}>
+        <Dock title="First run" defaultOpen={false} meta={`${p.tutorialSteps.filter((s) => s.done).length} of ${p.tutorialSteps.length} done`}>
           <ol className="tf-ranked">
             {p.tutorialSteps.map((s, i) => (
-              <li key={i} className={s.done ? 'done' : undefined}>{s.done ? '✓ ' : '· '}{s.label}</li>
+              <li key={i} className={s.done ? 'done' : undefined}>
+                {s.done && <span className="tf-sr-only">Done: </span>}{s.label}
+              </li>
             ))}
           </ol>
           <div className="tf-draft-actions">
@@ -368,14 +370,6 @@ export default function PlanningPanel(p: Props) {
           </div>
         </Dock>
       )}
-
-      <Dock title="Shortcuts" defaultOpen={false}>
-        <p className="tf-hint">
-          Space play/pause · 1/2/3 speed · B build · D disrupt · A analytics · P plan ·
-          [ panel · Esc simulate · R reset · I inspect · / search · F focus · 0 overview ·
-          Ctrl+Z / Ctrl+Shift+Z undo/redo
-        </p>
-      </Dock>
     </>
   );
 }

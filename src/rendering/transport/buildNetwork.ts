@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Station, TransportMode, TransportRoute } from '../../types/index.ts';
+import type { ScenePalette } from '../palette.ts';
 
 export const MODE_Y: Record<TransportMode, number> = {
   metro: 7,
@@ -24,7 +25,8 @@ function routePoints(route: TransportRoute, byId: Map<string, Station>): THREE.V
     .map((s) => new THREE.Vector3(s.pos.x, y, s.pos.z));
 }
 
-export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]): NetworkMeshes {
+export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[], palette: ScenePalette): NetworkMeshes {
+  const STATION = palette.station;
   const group = new THREE.Group();
   group.name = 'network';
   const byMode: Record<TransportMode, THREE.Group> = {
@@ -64,9 +66,9 @@ export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]
     const mesh = new THREE.Mesh(
       interchange ? interchangeGeo : stationGeo,
       new THREE.MeshStandardMaterial({
-        color: interchange ? 0xf8fafc : 0xcbd5e1,
-        emissive: 0x334155,
-        emissiveIntensity: 0.4,
+        color: interchange ? STATION.interchange : STATION.regular,
+        emissive: STATION.glow,
+        emissiveIntensity: 0.1,
       }),
     );
     const topMode = st.modes.includes('metro') ? 'metro' : st.modes.includes('rail') ? 'rail' : 'bus';

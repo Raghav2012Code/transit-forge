@@ -30,6 +30,8 @@ interface Props {
   onRedo: () => void;
   opCount: number;
   scenarioCost: string;
+  /** The workbench rail carries the tool picker; show it here only when it does not. */
+  showTools?: boolean;
 }
 
 const TOOLS: { key: BuildTool; label: string }[] = [
@@ -45,18 +47,20 @@ export default function BuildPanel(p: Props) {
   return (
     <div className="tf-build">
       <h3>Build</h3>
-      <div className="tf-tool-grid" role="group" aria-label="Build tools" data-tour="build-tools">
-        {TOOLS.map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            className={`tf-btn small${p.tool === t.key ? ' active' : ''}`}
-            onClick={() => p.onTool(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {p.showTools !== false && (
+        <div className="tf-tool-grid" role="group" aria-label="Build tools" data-tour="build-tools">
+          {TOOLS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`tf-btn small${p.tool === t.key ? ' active' : ''}`}
+              onClick={() => p.onTool(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
       <p className="tf-hint">{p.draft.hint}</p>
       {p.tool === 'road' && (
         <div className="tf-speeds" role="group" aria-label="Road type">
@@ -98,7 +102,7 @@ export default function BuildPanel(p: Props) {
       <div className="tf-draft-actions">
         <button type="button" className="tf-btn small" disabled={!p.canUndo} onClick={p.onUndo}>Undo</button>
         <button type="button" className="tf-btn small" disabled={!p.canRedo} onClick={p.onRedo}>Redo</button>
-        <span className="tf-hint">{p.opCount} edits · {p.scenarioCost}</span>
+        <span className="tf-hint">{p.opCount} edits, {p.scenarioCost}</span>
       </div>
     </div>
   );

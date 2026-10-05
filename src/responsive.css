@@ -1,0 +1,134 @@
+/* One workspace, three shapes.
+
+   desktop (1024 and up)   rail | map | panel, with the day bar underneath
+   tablet  (700 to 1023)   rail | map; the panel becomes a drawer over the map
+   phone   (under 700)     map; the rail becomes a bar along the bottom and the
+                           panel a sheet above it
+
+   The same components throughout: only where they sit changes. */
+
+/* ---- narrower desktop: say less, not less accurately ---- */
+
+@media (max-width: 1180px) {
+  .tf-scenario-edits { display: none; }
+  .tf-readings { gap: var(--s-5); }
+  .tf-reading:nth-child(n + 5) { display: none; }
+}
+
+/* ---- tablet: the panel is a drawer ---- */
+
+@media (max-width: 1023px) {
+  .tf-app,
+  .tf-app.panel-closed {
+    grid-template-columns: var(--rail-w) minmax(0, 1fr);
+    grid-template-areas:
+      'bar bar'
+      'rail stage'
+      'dock dock';
+  }
+  .tf-app > .tf-panel {
+    position: fixed;
+    z-index: 30;
+    top: var(--bar-h);
+    right: 0;
+    bottom: var(--dock-h);
+    width: min(340px, 92vw);
+    border-left: 1px solid var(--rule-strong);
+    box-shadow: var(--lift-float);
+    animation: tf-drawer-in var(--d-slow) var(--ease) both;
+  }
+  .tf-readings .tf-reading:nth-child(n + 4) { display: none; }
+  .tf-map-br .tf-minimap { display: none; }
+}
+@keyframes tf-drawer-in {
+  from { transform: translateX(16px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* ---- phone ---- */
+
+@media (max-width: 699px) {
+  :root {
+    --rail-h: 58px;
+    --dock-h: 60px;
+    --reports-h: min(64vh, 520px);
+  }
+
+  .tf-app,
+  .tf-app.panel-closed {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--bar-h) minmax(0, 1fr) var(--dock-h) var(--rail-h);
+    grid-template-areas:
+      'bar'
+      'stage'
+      'dock'
+      'rail';
+  }
+
+  /* top bar: the mark, the scenario, search as a button */
+  .tf-bar { grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s-3); padding: 0 var(--s-4); }
+  .tf-brand-name { display: none; }
+  .tf-bar-left { gap: var(--s-3); }
+  .tf-command { width: 34px; padding: 0; justify-content: center; }
+  .tf-command > span,
+  .tf-command > kbd { display: none; }
+  .tf-bar-right .tf-btn[aria-label='Keyboard shortcuts'] { display: none; }
+
+  /* the rail becomes a bar: modes, then the mode's tools, scrolling sideways */
+  .tf-rail {
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--s-3);
+    padding: var(--s-2) var(--s-3);
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-top: 1px solid var(--rule);
+  }
+  .tf-rail-group { flex-direction: row; flex: none; }
+  .tf-rail-group + .tf-rail-group { padding: 0 0 0 var(--s-3); border-top: 0; border-left: 1px solid var(--rule-soft); }
+  .tf-rail-group.end { margin-top: 0; margin-left: auto; }
+  .tf-rail-item,
+  .tf-rail-item.tool { width: 64px; min-height: 0; padding: 4px 2px; }
+
+  /* the day bar keeps the clock and transport; the strip and readings step aside */
+  .tf-daybar { grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-3); padding: 0 var(--s-4); }
+  .tf-strip,
+  .tf-readings { display: none; }
+  .tf-daybar .tf-controls { gap: var(--s-3); }
+  .tf-daybar .tf-controls .tf-btn[aria-label='Advance 1 minute'] { display: none; }
+  .tf-daybar .tf-clock { padding-left: var(--s-3); }
+  .tf-reports-toggle span { display: none; }
+  .tf-reports-toggle { padding: 0 var(--s-3); }
+
+  /* the panel is a sheet above the bar */
+  .tf-app > .tf-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--dock-h) + var(--rail-h));
+    width: auto;
+    max-height: 62vh;
+    border-left: 0;
+    border-top: 1px solid var(--rule-strong);
+    animation-name: tf-sheet-in;
+  }
+
+  /* the map's furniture tightens */
+  .tf-map-top { top: 8px; left: 8px; right: 8px; }
+  .tf-lens .tf-legend,
+  .tf-lens .tf-overlay-group { width: min(264px, 100%); }
+  .tf-lens-seg { max-width: 100%; overflow-x: auto; }
+  .tf-map-br { right: 8px; bottom: 8px; }
+  .tf-stage .tf-toasts { left: 8px; bottom: 8px; width: min(300px, calc(100% - 64px)); }
+  .tf-map-bc { bottom: 8px; }
+  .tf-popover-panel { max-width: calc(100vw - 16px); }
+  /* a tall sheet leaves no room for the camera or events: they wait */
+  .tf-stage[data-reports='open'] .tf-map-br,
+  .tf-stage[data-reports='open'] .tf-map-bc,
+  .tf-stage[data-reports='open'] .tf-toasts { display: none; }
+}
+@keyframes tf-sheet-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}

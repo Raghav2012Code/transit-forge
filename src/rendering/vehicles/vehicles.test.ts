@@ -45,7 +45,7 @@ describe('vehicle path follows the drawn route line', () => {
     const total = seg?.total ?? 1;
     const mesh = rig.meshById.get('v1');
     if (!mesh || !seg?.curve) throw new Error('rig setup failed');
-    updateVehicles(rig, [vehicle(rt.id, total / 2)]);
+    updateVehicles(rig, [vehicle(rt.id, total / 2)], 1 / 60);
     const expected = seg.curve.getPointAt(0.5, new THREE.Vector3());
     expect(mesh.position.distanceTo(expected)).toBeLessThan(1e-6);
 
@@ -61,7 +61,7 @@ describe('vehicle path follows the drawn route line', () => {
     syncVehicleMeshes(rig, [v], [rt, shuttle], stations);
     expect(rig.segmentsByRoute.has(shuttle.id)).toBe(true);
     expect(rig.meshById.has(v.id)).toBe(true);
-    updateVehicles(rig, [v]);
+    updateVehicles(rig, [v], 1 / 60);
     const mesh = rig.meshById.get(v.id);
     expect(mesh?.userData.init).toBe(true);
   });
@@ -71,6 +71,6 @@ describe('vehicle path follows the drawn route line', () => {
     const byId = new Map(stations.map((s) => [s.id, s]));
     expect(buildRoutePath(solo, byId).curve).toBeNull();
     const rig = buildVehicles([vehicle(solo.id, 0)], [solo], stations);
-    expect(() => updateVehicles(rig, [vehicle(solo.id, 0)])).not.toThrow();
+    expect(() => updateVehicles(rig, [vehicle(solo.id, 0)], 1 / 60)).not.toThrow();
   });
 });

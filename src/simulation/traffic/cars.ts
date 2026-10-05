@@ -125,10 +125,10 @@ export function refreshEdges(w: TrafficWorld): void {
       st.vc = vc;
       st.currentMin = free * bprRatio(vc);
       st.level = congestionLevel(vc);
-    }
-    if (st.vc > maxVC && st.vc < 90) {
-      maxVC = st.vc;
-      maxEdge = e.id;
+      if (st.vc > maxVC) {
+        maxVC = st.vc;
+        maxEdge = e.id;
+      }
     }
   }
   if (maxVC > w.roadCounters.maxVC) {

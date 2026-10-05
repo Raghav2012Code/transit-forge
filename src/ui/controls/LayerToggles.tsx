@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { Layers } from '../../rendering/SceneView.tsx';
 
 interface Props {
@@ -10,8 +11,8 @@ const GROUPS: { title: string; items: { key: keyof Layers; label: string; color:
     title: 'Base',
     items: [
       { key: 'roads', label: 'Roads', color: 'var(--mode-road)', hint: 'Road network and bridges' },
-      { key: 'buildings', label: 'Buildings', color: 'var(--faint)', hint: 'City blocks' },
-      { key: 'labels', label: 'Labels', color: 'var(--signal)', hint: 'Map labels by zoom' },
+      { key: 'buildings', label: 'Buildings', color: 'var(--ink-faint)', hint: 'City blocks' },
+      { key: 'labels', label: 'Labels', color: 'var(--ink)', hint: 'Map labels by zoom' },
     ],
   },
   {
@@ -20,13 +21,13 @@ const GROUPS: { title: string; items: { key: keyof Layers; label: string; color:
       { key: 'metro', label: 'Metro', color: 'var(--mode-metro)', hint: 'Metro lines and stations' },
       { key: 'rail', label: 'Rail', color: 'var(--mode-rail)', hint: 'Rail lines and stations' },
       { key: 'bus', label: 'Bus', color: 'var(--mode-bus)', hint: 'Bus routes' },
-      { key: 'vehicles', label: 'Vehicles', color: 'var(--good)', hint: 'Moving vehicles' },
+      { key: 'vehicles', label: 'Vehicles', color: 'var(--ok)', hint: 'Moving vehicles' },
     ],
   },
   {
     title: 'Planning',
     items: [
-      { key: 'problems', label: 'Problems', color: 'var(--bad)', hint: 'Planning problem markers' },
+      { key: 'problems', label: 'Problems', color: 'var(--alert)', hint: 'Planning problem markers' },
     ],
   },
 ];
@@ -41,7 +42,12 @@ export default function LayerToggles({ layers, onChange }: Props) {
           <span className="tf-hint">{g.title}</span>
           <div className="tf-layer-row">
             {g.items.map((it) => (
-              <label key={it.key} className="tf-check" title={it.hint}>
+              <label
+                key={it.key}
+                className="tf-check"
+                title={it.hint}
+                style={{ '--chip-color': it.color } as CSSProperties}
+              >
                 <input
                   type="checkbox"
                   checked={layers[it.key]}

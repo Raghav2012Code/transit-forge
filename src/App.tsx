@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
+import './shell.css';
+import './map.css';
+import './reports.css';
+import './panel.css';
+import './responsive.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
 import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
@@ -69,9 +74,9 @@ import { sanitizeFares, type FarePolicy } from './simulation/economics/fares.ts'
 import { deleteScenario, duplicateScenario, listScenarios, saveScenario } from './simulation/scenario/store.ts';
 import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
-import SimControls, { type Speed } from './ui/controls/SimControls.tsx';
-import LayerToggles from './ui/controls/LayerToggles.tsx';
-import OverlaySwitch, { type DemandLayer, type TravelDest } from './ui/controls/OverlaySwitch.tsx';
+import { type Speed } from './ui/controls/SimControls.tsx';
+import LensOptions from './ui/controls/LensOptions.tsx';
+import { LENS_GROUPS, LENS_NOTE, type DemandLayer, type TravelDest } from './ui/controls/lenses.ts';
 import StatsPanel from './ui/dashboard/StatsPanel.tsx';
 import DebugPanel from './ui/dashboard/DebugPanel.tsx';
 import Inspector from './ui/inspectors/Inspector.tsx';
@@ -87,24 +92,37 @@ import GrowthPanel, { type ForecastView } from './ui/growth/GrowthPanel.tsx';
 import type { Zone } from './types/index.ts';
 import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
 import ServicePanel from './ui/service/ServicePanel.tsx';
-import ModeSwitch, { type AppMode as Mode } from './ui/shell/ModeSwitch.tsx';
-import StatusBar from './ui/shell/StatusBar.tsx';
+import FaresPanel from './ui/service/FaresPanel.tsx';
+import SimulateHome from './ui/panel/SimulateHome.tsx';
+import { MODE_LABEL, type AppMode as Mode } from './ui/shell/modes.ts';
+import TopBar from './ui/shell/TopBar.tsx';
+import Workbench from './ui/shell/Workbench.tsx';
+import DayBar from './ui/shell/DayBar.tsx';
+import HelpSheet from './ui/shell/HelpSheet.tsx';
+import { IconCompare } from './ui/shell/icons.tsx';
 import Legend from './ui/shell/Legend.tsx';
 import { APP_VERSION } from './version.ts';
-import { cameraPreset, poseFor, type PresetId, type TiltName, type CameraCmd } from './rendering/map/camera.ts';
+import { cameraPreset, poseFor, zoomPose, type PresetId, type TiltName, type CameraCmd } from './rendering/map/camera.ts';
 import { buildSearchIndex, type SearchEntry } from './rendering/map/searchIndex.ts';
 import { changeMarkers, problemMarkers, type MapMarker } from './rendering/map/markers.ts';
 import { formatDistance, snapStation, straightDistance } from './rendering/map/measure.ts';
 import { loadLayers, saveLayers } from './rendering/map/layerPrefs.ts';
 import { findShortestPath } from './simulation/transport/graph.ts';
-import NavWidget from './ui/map/NavWidget.tsx';
+import LensBar from './ui/map/LensBar.tsx';
+import MapControls from './ui/map/MapControls.tsx';
+import ObjectivesChip from './ui/map/ObjectivesChip.tsx';
 import Minimap from './ui/map/Minimap.tsx';
 import { ContextMenu, HoverTooltip, type ContextAction } from './ui/map/MapChrome.tsx';
 import SearchPalette from './ui/map/SearchPalette.tsx';
 import CompareSplit from './ui/map/CompareSplit.tsx';
 import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './rendering/SceneView.tsx';
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
-import { IconClose, IconInspect, IconMeasure, IconPlan, IconSearch } from './ui/shell/icons.tsx';
+import ReportsSheet from './ui/shell/ReportsSheet.tsx';
+import { type ReportTab } from './ui/shell/reportTabs.ts';
+import type { Command } from './ui/shell/commands.ts';
+import { PRESETS } from './ui/map/places.ts';
+import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme.ts';
+import type { Theme } from './rendering/palette.ts';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
 import { headwayAt } from './simulation/service/servicePlan.ts';
 import { LOOP_ROUTES } from './simulation/passengers/passengers.ts';
@@ -115,12 +133,7 @@ const ROAD_SNAP_M = 45;
 const TOAST_TTL_MS = 7000;
 const MAX_TOASTS = 4;
 
-const MODE_LABEL: Record<Mode, string> = {
-  simulate: 'Simulate',
-  build: 'Build',
-  disrupt: 'Disrupt',
-  plan: 'Plan',
-};
+
 
 interface PendingDelete {
   kind: 'station' | 'route' | 'road';
@@ -146,12 +159,17 @@ export default function App() {
     saveLayers(next);
   }
   const [overlay, setOverlay] = useState<Overlay>('normal');
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [selection, setSelectionRaw] = useState<Selection | null>(null);
+  // Below 1024px the panel is a drawer, and a selection is only readable in it,
+  // so selecting opens it. (Declared as a function so every handler can use it.)
+  function setSelection(sel: Selection | null) {
+    setSelectionRaw(sel);
+    if (sel && window.innerWidth < 1024) setRailOpen(true);
+  }
   const [travelDest, setTravelDest] = useState<TravelDest>('cbd');
   const [coverageThreshold, setCoverageThreshold] = useState(500);
   const [history, setHistory] = useState<SeriesPoint[]>([]);
   const lastHistTick = useRef(0);
-  const [serviceRouteId, setServiceRouteId] = useState<string | null>(null);
   const fleetNonce = useRef(0);
 
   // Scenario + build state. Base city/seed never mutate; ops replay into mod.
@@ -219,14 +237,68 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seenEvents = useRef<Set<string>>(new Set());
   const toastSeq = useRef(1);
-  const [railOpen, setRailOpen] = useState(true);
+  const toastTimers = useRef<Set<number>>(new Set());
+  const [railOpen, setRailOpen] = useState(() => window.innerWidth >= 1024);
+  const [helpOpen, setHelpOpen] = useState(false);
+  // The overview map: open by default where there is room, and remembered.
+  const [minimapOpen, setMinimapOpen] = useState(() => {
+    try {
+      const v = localStorage.getItem('transitforge.minimap');
+      if (v === 'open' || v === 'closed') return v === 'open';
+    } catch {
+      // Fall through to the width default.
+    }
+    return window.innerWidth >= 1280;
+  });
+  function toggleMinimap() {
+    const next = !minimapOpen;
+    setMinimapOpen(next);
+    try {
+      localStorage.setItem('transitforge.minimap', next ? 'open' : 'closed');
+    } catch {
+      // The choice then lasts for this visit only.
+    }
+  }
+  // "Run until": the sim speeds up toward this absolute minute, then pauses.
+  const runTargetRef = useRef<number | null>(null);
+  const [runTarget, setRunTarget] = useState<number | null>(null);
+  function clearRunTarget() {
+    runTargetRef.current = null;
+    setRunTarget(null);
+  }
+  // Theme: an explicit choice is remembered; until one is made, follow the system.
+  const [theme, setTheme] = useState<Theme>(() => savedTheme() ?? systemTheme());
+  const themePinned = useRef(savedTheme() !== null);
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const onChange = () => {
+      if (!themePinned.current) setTheme(mq.matches ? 'dark' : 'light');
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  function toggleTheme() {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark';
+    themePinned.current = true;
+    saveTheme(next);
+    setTheme(next);
+  }
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsTab, setReportsTab] = useState<ReportTab>('network');
+  const railRef = useRef<HTMLElement>(null);
 
   function pushToast(level: Toast['level'], text: string) {
     const id = toastSeq.current++;
     setToasts((t) => [{ id, level, text, time: formatClock(simRef.current.timeMinutes) }, ...t].slice(0, MAX_TOASTS));
-    window.setTimeout(() => {
+    const timerId = window.setTimeout(() => {
+      toastTimers.current.delete(timerId);
       setToasts((t) => t.filter((x) => x.id !== id));
     }, TOAST_TTL_MS);
+    toastTimers.current.add(timerId);
   }
 
   // ---- interactive map state (§3–§30) ----
@@ -245,6 +317,41 @@ export default function App() {
   const [splitView, setSplitView] = useState(false);
   const [announcement, setAnnouncement] = useState('');
 
+  function openReports(tab: ReportTab) {
+    setReportsTab(tab);
+    setReportsOpen(true);
+  }
+
+  function toggleMeasure() {
+    if (measureTool) {
+      setMeasureTool(false);
+      setMeasure(null);
+      setMeasureHover(null);
+    } else {
+      setMeasureTool(true);
+      pushToast('info', 'Measure: click two points on the map.');
+    }
+  }
+
+  /** Play or pause. Pausing also ends a "run until", so resuming is an ordinary resume. */
+  function togglePlay() {
+    if (mode !== 'simulate') {
+      enterSimulate();
+      setPlaying(true);
+      return;
+    }
+    if (playing) clearRunTarget();
+    setPlaying((p) => !p);
+  }
+
+  function runTo(absoluteMinute: number) {
+    if (absoluteMinute <= simRef.current.timeMinutes) return;
+    if (mode !== 'simulate') enterSimulate();
+    runTargetRef.current = absoluteMinute;
+    setRunTarget(absoluteMinute);
+    setPlaying(true);
+  }
+
   function requestCameraPose(pos: [number, number, number], target: [number, number, number]) {
     setCameraCmd({ seq: camSeq.current++, pose: { pos, target } });
   }
@@ -260,11 +367,19 @@ export default function App() {
       const dt = Math.min(0.25, (now - last) / 1000);
       last = now;
       if (playing) {
-        acc += dt * TICKS_PER_SEC[speed];
+        const target = runTargetRef.current;
+        acc += dt * TICKS_PER_SEC[target !== null ? 20 : speed];
         let n = Math.floor(acc);
         acc -= n;
         n = Math.min(n, 8); // avoid spiral after tab-switch
+        if (target !== null) n = Math.min(n, Math.max(0, Math.ceil(target - simRef.current.timeMinutes)));
         for (let i = 0; i < n; i++) simRef.current = stepSimulation(simRef.current, 1);
+        if (target !== null && simRef.current.timeMinutes >= target) {
+          runTargetRef.current = null;
+          setRunTarget(null);
+          setPlaying(false);
+          setSnapshot(simRef.current);
+        }
         if (n > 0 && now - lastUi > 500) {
           lastUi = now;
           const sim = simRef.current;
@@ -312,8 +427,9 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA');
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
       const mod = e.ctrlKey || e.metaKey;
+      if (helpOpen) return;
       if (mod && (e.key === 'z' || e.key === 'Z')) {
         if (typing) return;
         e.preventDefault();
@@ -330,10 +446,7 @@ export default function App() {
       if (typing) return;
       if (e.key === ' ') {
         e.preventDefault();
-        if (mode !== 'simulate') {
-          enterSimulate();
-          setPlaying(true);
-        } else setPlaying((p) => !p);
+        togglePlay();
       } else if (e.key === '1') setSpeed(1);
       else if (e.key === '2') setSpeed(5);
       else if (e.key === '3') setSpeed(20);
@@ -364,12 +477,22 @@ export default function App() {
       } else if (e.key === 'Escape') {
         if (contextMenu) setContextMenu(null);
         else if (searchOpen) setSearchOpen(false);
+        else if (reportsOpen) setReportsOpen(false);
         else if (measureTool) {
           setMeasureTool(false);
           setMeasure(null);
           setMeasureHover(null);
         } else if (inspectMode) setInspectMode(false);
+        else if (mode === 'simulate' && selection) setSelection(null);
         else enterSimulate();
+      } else if ((e.key === 't' || e.key === 'T') && !mod && !e.altKey) {
+        toggleTheme();
+      } else if ((e.key === 's' || e.key === 'S') && !mod && !e.altKey) {
+        setReportsOpen((v) => !v);
+      } else if ((e.key === 'm' || e.key === 'M') && !mod && !e.altKey) {
+        toggleMeasure();
+      } else if (e.key === '?') {
+        setHelpOpen(true);
       } else if (e.key === 'r' || e.key === 'R') {
         resetAll();
       }
@@ -393,11 +516,35 @@ export default function App() {
     }));
     setToasts((t) => [...batch, ...t].slice(0, MAX_TOASTS));
     const ids = batch.map((b) => b.id);
-    const timer = window.setTimeout(() => {
+    // Each batch gets its own independent dismiss timer. This effect reruns
+    // on every snapshot (every ~500ms while playing) — returning a cleanup
+    // here would cancel the PREVIOUS batch's still-pending timer on every
+    // subsequent run, so toasts would only ever disappear once pushed out
+    // by the MAX_TOASTS cap rather than after TOAST_TTL_MS.
+    const timerId = window.setTimeout(() => {
+      toastTimers.current.delete(timerId);
       setToasts((t) => t.filter((x) => !ids.includes(x.id)));
     }, TOAST_TTL_MS);
-    return () => window.clearTimeout(timer);
+    toastTimers.current.add(timerId);
   }, [snapshot]);
+
+  // Changing mode swaps the side panel's contents wholesale, so start the
+  // new reading at the top rather than wherever the last one was scrolled to.
+  // If the control that had focus went with the old contents (switching mode
+  // by hotkey while a rail tab was focused), catch focus on the rail itself
+  // so keyboard users carry on from there instead of falling back to body.
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    rail.scrollTo({ top: 0 });
+    if (document.activeElement === document.body) rail.focus({ preventScroll: true });
+  }, [mode]);
+
+  // Unmount-only: clear any still-pending toast timers.
+  useEffect(() => () => {
+    for (const id of toastTimers.current) window.clearTimeout(id);
+    toastTimers.current.clear();
+  }, []);
 
   const stats = computeStats(snapshot);
 
@@ -566,7 +713,7 @@ export default function App() {
         kind: 'district' as const,
         id: z.id,
         name: z.name,
-        typeLabel: `District · ${z.kind}`,
+        typeLabel: `${z.kind} district`,
         metric: `${z.population.toLocaleString()} residents`,
         x: z.center.x,
         z: z.center.z,
@@ -582,7 +729,7 @@ export default function App() {
         kind: 'road' as const,
         id: e.id,
         name: `${e.isBridge ? 'Bridge' : e.isArterial ? 'Arterial' : 'Local'} ${e.a.replace(/^rn-/, '').toUpperCase()}–${e.b.replace(/^rn-/, '').toUpperCase()}`,
-        typeLabel: `Road · ${e.lanes} lanes`,
+        typeLabel: `${e.lanes}-lane road`,
         metric: st ? `V/C ${Math.round(st.vc * 100) / 100}` : '',
         x: (a.x + b.x) / 2,
         z: (a.z + b.z) / 2,
@@ -928,6 +1075,7 @@ export default function App() {
       activeTicks: 0,
       baselineWaiting: 0,
       recovered90: false,
+      strandedPeakDuringIncident: 0,
     });
     sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
     setSelectedIncidentId(id);
@@ -1190,7 +1338,7 @@ export default function App() {
     const cfg = p.build(Math.round(sim.timeMinutes + 5));
     const id = `inc-${sim.nextIncidentId}`;
     sim.nextIncidentId++;
-    sim.incidents.push({ ...cfg, id, status: 'scheduled', activeTicks: 0, baselineWaiting: 0, recovered90: false });
+    sim.incidents.push({ ...cfg, id, status: 'scheduled', activeTicks: 0, baselineWaiting: 0, recovered90: false, strandedPeakDuringIncident: 0 });
     sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
     setSelectedIncidentId(id);
     setSnapshot({ ...sim });
@@ -1241,6 +1389,7 @@ export default function App() {
   // ---- scenario application ----
   function resetSimTo(city: typeof baseCity, net: typeof baseNet) {
     simRef.current = createSimulationFromParts(SEED, city, net);
+    clearRunTarget();
     setSnapshot(simRef.current);
     setSelection(null);
     setHistory([]);
@@ -1282,6 +1431,7 @@ export default function App() {
   function enterDisrupt() {
     setMode('disrupt');
     setPlaying(false);
+    clearRunTarget();
   }
 
   function enterSimulate() {
@@ -1321,6 +1471,12 @@ export default function App() {
 
   function applyCameraPreset(id: PresetId) {
     const pose = cameraPreset(id, presetInput(), tilt);
+    requestCameraPose(pose.pos, pose.target);
+  }
+
+  function zoomBy(factor: number) {
+    if (!camInfo) return;
+    const pose = zoomPose({ pos: camInfo.pos, target: camInfo.target }, factor);
     requestCameraPose(pose.pos, pose.target);
   }
 
@@ -1424,6 +1580,70 @@ export default function App() {
     requestCameraPose(pose.pos, pose.target);
   }
 
+  // ---- commands: everything the workspace can do, findable by typing ----
+  function buildCommands(): Command[] {
+    const list: Command[] = [];
+    const add = (c: Command) => list.push(c);
+    const modes: { key: Mode; label: string; keys: string[]; words: string; suggested?: boolean }[] = [
+      { key: 'simulate', label: 'Go to Simulate', keys: ['Esc'], words: 'run watch day' },
+      { key: 'build', label: 'Go to Build', keys: ['B'], words: 'draw lines stations roads edit design', suggested: true },
+      { key: 'disrupt', label: 'Go to Disrupt', keys: ['D'], words: 'break stress incident closure outage' },
+      { key: 'plan', label: 'Go to Plan', keys: ['P'], words: 'brief objectives goals submit score', suggested: true },
+    ];
+    for (const m of modes) {
+      add({ id: `mode-${m.key}`, group: 'Mode', label: m.label, keys: m.keys, keywords: m.words, suggested: m.suggested, run: () => selectMode(m.key) });
+    }
+
+    add({ id: 'play', group: 'Day', label: playing ? 'Pause the day' : 'Play the day', keys: ['Space'], keywords: 'start stop resume clock', suggested: true, run: togglePlay });
+    add({ id: 'speed-1', group: 'Day', label: 'Run at normal speed', keys: ['1'], keywords: 'slow 1x', run: () => setSpeed(1) });
+    add({ id: 'speed-5', group: 'Day', label: 'Run at 5× speed', keys: ['2'], keywords: 'faster fast 5x', run: () => setSpeed(5) });
+    add({ id: 'speed-20', group: 'Day', label: 'Run at 20× speed', keys: ['3'], keywords: 'fastest fast 20x', run: () => setSpeed(20) });
+    add({ id: 'step', group: 'Day', label: 'Advance one minute', keywords: 'step tick', run: () => { clearRunTarget(); simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); } });
+    add({ id: 'reset', group: 'Day', label: 'Reset the day', keys: ['R'], keywords: 'restart start over', run: resetAll });
+
+    for (const g of LENS_GROUPS) {
+      for (const it of g.items) {
+        add({
+          id: `lens-${it.key}`,
+          group: 'Lens',
+          label: it.key === 'normal' ? 'Show the map with no lens' : `Show ${it.label.toLowerCase()}`,
+          keywords: `overlay lens map layer ${g.title.toLowerCase()}`,
+          run: () => setOverlay(it.key),
+        });
+      }
+    }
+
+    add({ id: 'view-reset', group: 'View', label: 'Reset the view', keys: ['0'], keywords: 'home overview camera', run: resetCamera });
+    add({ id: 'zoom-in', group: 'View', label: 'Zoom in', keywords: 'closer camera', run: () => zoomBy(0.75) });
+    add({ id: 'zoom-out', group: 'View', label: 'Zoom out', keywords: 'farther camera', run: () => zoomBy(1 / 0.75) });
+    if (selection) add({ id: 'focus', group: 'View', label: 'Focus the selection', keys: ['F'], keywords: 'center camera', run: focusSelection });
+    add({ id: 'tilt-3d', group: 'View', label: 'View the city in 3D', keywords: 'perspective camera', run: () => setTilt('perspective') });
+    add({ id: 'tilt-top', group: 'View', label: 'View the city from above', keywords: 'plan top down camera', run: () => setTilt('top') });
+    add({ id: 'tilt-street', group: 'View', label: 'View the city at street level', keywords: 'camera low', run: () => setTilt('street') });
+    for (const pr of PRESETS) {
+      add({ id: `place-${pr.id}`, group: 'View', label: `Jump to ${pr.label}`, keywords: 'go fly camera place', run: () => applyCameraPreset(pr.id) });
+    }
+    add({ id: 'measure', group: 'Map', label: measureTool ? 'Stop measuring' : 'Measure a distance', keys: ['M'], keywords: 'ruler length', run: toggleMeasure });
+    add({ id: 'minimap', group: 'Map', label: minimapOpen ? 'Hide the overview map' : 'Show the overview map', keywords: 'minimap', run: toggleMinimap });
+
+    add({ id: 'reports', group: 'Workspace', label: reportsOpen ? 'Close reports' : 'Open reports', keys: ['S'], keywords: 'tables numbers statistics data', suggested: true, run: () => setReportsOpen((v) => !v) });
+    for (const [tab, label] of [['network', 'Network'], ['analysis', 'Analysis'], ['growth', 'Growth'], ['compare', 'Compare']] as const) {
+      add({ id: `reports-${tab}`, group: 'Workspace', label: `Open the ${label} report`, keywords: 'tables numbers', run: () => openReports(tab) });
+    }
+    add({ id: 'panel', group: 'Workspace', label: railOpen ? 'Hide the side panel' : 'Show the side panel', keys: [railOpen ? '[' : ']'], keywords: 'sidebar inspector', run: () => setRailOpen((r) => !r) });
+    add({ id: 'theme', group: 'Workspace', label: theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme', keys: ['T'], keywords: 'appearance night day mode colour', suggested: true, run: toggleTheme });
+    add({ id: 'help', group: 'Workspace', label: 'Show keyboard shortcuts', keys: ['?'], keywords: 'help keys hotkeys', suggested: true, run: () => setHelpOpen(true) });
+
+    if (ops.length > 0) {
+      add({ id: 'compare', group: 'Scenario', label: 'Compare this scenario with the baseline', keywords: 'diff versus', run: () => openReports('compare') });
+      add({ id: 'view-base', group: 'Scenario', label: 'Show the baseline network', keywords: 'original before', run: () => onView('base') });
+      add({ id: 'view-scenario', group: 'Scenario', label: 'Show the scenario network', keywords: 'edited after', run: () => onView('scenario') });
+      add({ id: 'undo', group: 'Scenario', label: 'Undo the last edit', keys: ['Ctrl', 'Z'], run: doUndo });
+    }
+    if (redo.length > 0) add({ id: 'redo', group: 'Scenario', label: 'Redo the edit', keys: ['Ctrl', 'Shift', 'Z'], run: doRedo });
+    return list;
+  }
+
   // ---- search (§29): pick focuses the camera, selects, and inspects ----
   function pickSearchResult(e: SearchEntry) {
     if (e.kind === 'district') setSelection({ kind: 'zone', id: e.id });
@@ -1508,8 +1728,9 @@ export default function App() {
         {
           label: 'Modify service',
           run: () => {
-            setServiceRouteId(sel.id);
-            pushToast('info', 'Service panel now edits this route.');
+            setSelection(sel);
+            setRailOpen(true);
+            announceSelection(sel);
           },
         },
         {
@@ -1965,7 +2186,6 @@ export default function App() {
             pickKinds: ['station', 'route', 'road'] as Selection['kind'][],
             onPick: (sel: Selection) => {
               setSelection(sel);
-              if (sel.kind === 'route') setServiceRouteId(sel.id);
               setIncidentDraft((prev) => {
                 const d = { ...prev };
                 if (sel.kind === 'station') {
@@ -2004,89 +2224,83 @@ export default function App() {
                 ? `Delete ${pendingDelete.label}? Confirm below.`
                 : 'Delete: click a route, station, or road. Used infrastructure asks for confirmation.';
 
+  // What is selected, shown beside the mode's own panel. Simulate and Plan are
+  // about reading it, so it leads; Build and Disrupt are about filling in a form,
+  // so the form keeps the top and the selection follows it.
+  const selectionBlock = selection ? (
+            <div className={mode === 'simulate' ? 'tf-rail-body' : 'tf-selected'} data-place={mode === 'plan' ? 'top' : 'bottom'}>
+              <Inspector
+                selection={selection}
+                sim={snapshot}
+                onClose={() => setSelection(null)}
+                problems={problems}
+                onFocusStation={focusStation}
+                onInvestigate={investigateProblem}
+                onOverlay={setOverlay}
+                onOpenDisrupt={enterDisrupt}
+                catchmentRadius={catchmentRadius}
+                onCatchmentRadius={setCatchmentRadius}
+                zoneCoverage={selection.kind === 'zone' ? coverage.perZone.find((z) => z.zoneId === selection.id)?.pct : undefined}
+                zoneTravel={selection.kind === 'zone' ? (access.zones.find((z) => z.zoneId === selection.id)?.toCBD ?? null) : undefined}
+              >
+                {selection.kind === 'route' ? (
+                  <ServicePanel sim={snapshot} routeId={selection.id} onPatch={onServicePatch} />
+                ) : null}
+              </Inspector>
+            </div>
+  ) : null;
+
   return (
-    <div className={`tf-root${railOpen ? '' : ' rail-collapsed'}`}>
-      <header className="tf-topbar">
-        <div className="tf-brand">
-          <span className="tf-brand-mark" aria-hidden="true">
-            <IconPlan size={17} />
-          </span>
-          <span className="tf-brand-name">
-            <b>TransitForge</b>
-            <span>v{APP_VERSION} · seed {SEED}</span>
-          </span>
-        </div>
-        <ModeSwitch mode={mode} onChange={selectMode} />
-        <div className="tf-hud-spacer" />
-        <div className="tf-hud-right">
-          <SimControls
-            playing={playing}
-            speed={speed}
-            tick={snapshot.tick}
-            timeMinutes={snapshot.timeMinutes}
-            onToggle={() => {
-              if (mode !== 'simulate') {
-                enterSimulate();
-                setPlaying(true);
-              } else setPlaying((p) => !p);
+    <div className={`tf-app${railOpen ? '' : ' panel-closed'}`} data-mode={mode}>
+      <TopBar
+        scenarioName={scenarioMeta.name}
+        edits={ops.length}
+        scenarioMenu={
+          <ScenarioPanel
+            name={scenarioMeta.name}
+            onName={(n) => setScenarioMeta((s) => ({ ...s, name: n }))}
+            onSave={() => {
+              saveScenario({ ...scenarioMeta, seed: SEED, ops, version: 1 });
+              setSaved(listScenarios());
             }}
-            onSpeed={(s) => setSpeed(s)}
-            onReset={resetAll}
-            onStep={() => { simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); }}
+            saved={saved}
+            onLoad={(s) => {
+              setScenarioMeta(s);
+              setViewing('scenario');
+              applyOps(s.ops, [], 'scenario');
+            }}
+            onRename={(s, name) => {
+              saveScenario({ ...s, name });
+              setSaved(listScenarios());
+            }}
+            onDuplicate={(s) => {
+              duplicateScenario(s);
+              setSaved(listScenarios());
+            }}
+            onDelete={(id) => {
+              deleteScenario(id);
+              setSaved(listScenarios());
+            }}
           />
-          <button
-            type="button"
-            className="tf-btn icon ghost"
-            onClick={() => setRailOpen((r) => !r)}
-            title={railOpen ? 'Hide side panel' : 'Show side panel'}
-            aria-label={railOpen ? 'Hide side panel' : 'Show side panel'}
-            aria-pressed={railOpen}
-          >
-            {railOpen ? <IconClose /> : <IconPlan />}
-          </button>
-          <button
-            type="button"
-            className={`tf-btn icon ghost${searchOpen ? ' active' : ''}`}
-            onClick={() => setSearchOpen((v) => !v)}
-            title="Search map (/)"
-            aria-label="Search map"
-            aria-pressed={searchOpen}
-          >
-            <IconSearch />
-          </button>
-          <button
-            type="button"
-            className={`tf-btn icon ghost${measureTool ? ' active' : ''}`}
-            onClick={() => {
-              setMeasureTool((v) => {
-                if (v) {
-                  setMeasure(null);
-                  setMeasureHover(null);
-                } else {
-                  pushToast('info', 'Measure: click two points on the map.');
-                }
-                return !v;
-              });
-            }}
-            title="Measure distance"
-            aria-label="Measure distance"
-            aria-pressed={measureTool}
-          >
-            <IconMeasure />
-          </button>
-          <button
-            type="button"
-            className={`tf-btn icon ghost${inspectMode ? ' active' : ''}`}
-            onClick={() => setInspectMode((v) => !v)}
-            title="Quick inspect (I)"
-            aria-label="Quick inspect"
-            aria-pressed={inspectMode}
-          >
-            <IconInspect />
-          </button>
-        </div>
-      </header>
-      <main className="tf-main">
+        }
+        onSearch={() => setSearchOpen(true)}
+        theme={theme}
+        onTheme={toggleTheme}
+        onHelp={() => setHelpOpen(true)}
+        panelOpen={railOpen}
+        onPanel={() => setRailOpen((r) => !r)}
+      />
+      <Workbench
+        mode={mode}
+        onMode={selectMode}
+        tool={tool}
+        onTool={(t) => { setTool(t); clearDraft(); }}
+        measureOn={measureTool}
+        onMeasure={toggleMeasure}
+        inspectOn={inspectMode}
+        onInspect={() => setInspectMode((v) => !v)}
+      />
+      <main className="tf-stage" aria-label="Map" data-reports={reportsOpen ? 'open' : undefined}>
         <section className="tf-viewport">
           {splitView ? (
             <CompareSplit
@@ -2097,10 +2311,10 @@ export default function App() {
               selection={selection}
               onSelect={mode === 'build' ? () => {} : (sel) => {
                 setSelection(sel);
-                if (sel?.kind === 'route') setServiceRouteId(sel.id);
                 announceSelection(sel);
               }}
               networkKey={networkKey}
+              theme={theme}
               build={inspectMode ? null : buildIx}
               analytics={analyticsView}
               draft={draftView}
@@ -2122,10 +2336,10 @@ export default function App() {
             selection={selection}
             onSelect={mode === 'build' && !inspectMode ? () => {} : (sel) => {
               setSelection(sel);
-              if (sel?.kind === 'route') setServiceRouteId(sel.id);
               announceSelection(sel);
             }}
             networkKey={networkKey}
+            theme={theme}
             ghosts={viewing === 'scenario' ? diff.removedStations : []}
             highlightRoutes={viewing === 'scenario' ? diff.addedRoutes : []}
             build={inspectMode ? null : buildIx}
@@ -2144,113 +2358,22 @@ export default function App() {
             onMeasureHover={(x, z) => setMeasureHover({ x, z })}
           />
           )}
-          <span className="tf-bracket tl" />
-          <span className="tf-bracket tr" />
-          <span className="tf-bracket bl" />
-          <span className="tf-bracket br" />
-          <div className="tf-hud-tl">
-            <span className={`tf-hud-chip mode-${mode}`}>
-              {MODE_LABEL[mode]} · {viewing === 'base' ? 'Baseline network' : 'Scenario network'}
-            </span>
-            {snapshot.incidents.filter((i) => i.status === 'active').map((i) => (
-              <span className="tf-hud-chip alert" key={i.id}>
-                {i.label} · {Math.max(0, Math.round(i.startMin + i.durationMin - snapshot.timeMinutes))}m left
-              </span>
-            ))}
-            {stats.worstVC >= 0.85 && (
-              <span className="tf-hud-chip alert">Congested: {stats.worstRoad} · V/C {stats.worstVC}</span>
-            )}
-          </div>
-          <Toasts toasts={toasts} />
-          <div className="tf-overlay-hint">
-            {mode === 'build'
-              ? 'build mode · sim paused · edits reset the day'
-              : mode === 'disrupt'
-                ? 'disrupt mode · sim paused · click infrastructure to target it'
-                : mode === 'plan'
-                  ? 'plan mode · pick a brief, build, then submit for evaluation'
-                  : 'drag orbit · right-drag pan · wheel zoom · click station/route/road/district'}
-          </div>
-          <Legend
-            overlay={overlay}
-            demandLayer={demandLayer}
-            extras={{
-              problems: problemMarkerList.length > 0,
-              catchment: catchmentView !== null,
-              measure: measureView !== null,
-              changes: changeMarkerList.length > 0,
-              split: splitView,
-            }}
-          />
-          <StatusBar stats={stats} viewing={viewing} incidents={stats.activeIncidents} opCost={stats.opCost} />
-          {!splitView && (
-            <>
-              <NavWidget
-                cam={camInfo}
-                tilt={tilt}
-                onTilt={setTilt}
-                onPreset={applyCameraPreset}
-                onReset={resetCamera}
-                onFocusSelection={focusSelection}
-                canFocus={selection !== null}
-              />
-              <Minimap
-                city={snapshot.city}
-                routes={snapshot.routes}
-                stations={snapshot.stations}
-                cam={camInfo}
-                selection={selection}
-                onJump={minimapJump}
-              />
-            </>
-          )}
-          <HoverTooltip hover={hoverInfo} />
-          <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
-          {searchOpen && (
-            <SearchPalette entries={searchEntries} onPick={pickSearchResult} onClose={() => setSearchOpen(false)} />
-          )}
-          {measureTool && (
-            <div className="tf-measure-bar" role="status">
-              <span>{measureView?.label ?? 'Click a start point on the map (Esc cancels)'}</span>
-              {measureNetworkNote() && <span className="tf-hint">{measureNetworkNote()}</span>}
-              <button type="button" className="tf-btn small" onClick={() => { setMeasureTool(false); setMeasure(null); setMeasureHover(null); }}>
-                Done
-              </button>
-            </div>
-          )}
-          {inspectMode && (
-            <div className="tf-overlay-hint tf-inspect-chip">
-              Quick inspect on · clicks select instead of building · I to exit
-            </div>
-          )}
-          <div className="tf-mobile-note">TransitForge works best on desktop — the full map needs room.</div>
-          <div className="tf-sr-only" aria-live="polite">{announcement}</div>
-          {selection && (
-            <div className="tf-inspector-card">
-              <Inspector
-                selection={selection}
-                sim={snapshot}
-                onClose={() => setSelection(null)}
-                problems={problems}
-                onFocusStation={focusStation}
-                onInvestigate={investigateProblem}
-                onOverlay={setOverlay}
-                onOpenDisrupt={enterDisrupt}
-                catchmentRadius={catchmentRadius}
-                onCatchmentRadius={setCatchmentRadius}
-                zoneCoverage={selection.kind === 'zone' ? coverage.perZone.find((z) => z.zoneId === selection.id)?.pct : undefined}
-                zoneTravel={selection.kind === 'zone' ? (access.zones.find((z) => z.zoneId === selection.id)?.toCBD ?? null) : undefined}
-              />
-            </div>
-          )}
-        </section>
-        <aside className="tf-panel">
-          {mode === 'simulate' ? (
-            <>
-              <LayerToggles layers={layers} onChange={onLayers} />
-              <OverlaySwitch
+          <div className="tf-map-top">
+            <LensBar overlay={overlay} onOverlay={setOverlay} layers={layers} onLayers={onLayers}>
+              <Legend
                 overlay={overlay}
-                onChange={setOverlay}
+                demandLayer={demandLayer}
+                note={LENS_NOTE[overlay]}
+                extras={{
+                  problems: problemMarkerList.length > 0,
+                  catchment: catchmentView !== null,
+                  measure: measureView !== null,
+                  changes: changeMarkerList.length > 0,
+                  split: splitView,
+                }}
+              />
+              <LensOptions
+                overlay={overlay}
                 travelDest={travelDest}
                 onTravelDest={setTravelDest}
                 coverageThreshold={coverageThreshold}
@@ -2258,40 +2381,162 @@ export default function App() {
                 demandLayer={demandLayer}
                 onDemandLayer={setDemandLayer}
               />
-              <StatsPanel stats={stats} />
-              <ServicePanel
-                sim={snapshot}
-                selectedRouteId={serviceRouteId}
-                onSelectRoute={setServiceRouteId}
-                onPatch={onServicePatch}
-                onFares={onFarePolicy}
+            </LensBar>
+            <div className="tf-map-tr">
+              {activeBrief && (
+                <ObjectivesChip
+                  briefTitle={activeBrief.title}
+                  objectives={activeBrief.objectives}
+                  results={liveObjectiveResults}
+                  constraints={activeBrief.constraints}
+                  constraintResults={liveConstraintResults}
+                  onOpenPlan={() => selectMode('plan')}
+                />
+              )}
+              {ops.length > 0 && (
+                <div className="tf-map-scenario">
+                <div className="tf-seg" role="radiogroup" aria-label="Which network the map shows">
+                  <button type="button" role="radio" aria-checked={viewing === 'scenario'} className="tf-seg-item" onClick={() => onView('scenario')}>
+                    Scenario
+                  </button>
+                  <button type="button" role="radio" aria-checked={viewing === 'base'} className="tf-seg-item" onClick={() => onView('base')}>
+                    Baseline
+                  </button>
+                </div>
+                <button type="button" className="tf-lens-btn" onClick={() => openReports('compare')}>
+                  <IconCompare />
+                  <span>Compare</span>
+                </button>
+                </div>
+              )}
+              {snapshot.incidents.filter((i) => i.status === 'active').map((i) => (
+                <span className="tf-hud-chip alert" key={i.id}>
+                  {i.label}, {Math.max(0, Math.round(i.startMin + i.durationMin - snapshot.timeMinutes))}m left
+                </span>
+              ))}
+              {stats.worstVC >= 0.85 && (
+                <span className="tf-hud-chip alert">{stats.worstRoad} congested at V/C {stats.worstVC}</span>
+              )}
+            </div>
+          </div>
+          <Toasts toasts={toasts} />
+          {!splitView && (
+            <MapControls
+              cam={camInfo}
+              tilt={tilt}
+              onTilt={setTilt}
+              onPreset={applyCameraPreset}
+              onReset={resetCamera}
+              onFocusSelection={focusSelection}
+              canFocus={selection !== null}
+              onZoom={zoomBy}
+              minimapOpen={minimapOpen}
+              onMinimap={toggleMinimap}
+              minimap={
+                <Minimap
+                  city={snapshot.city}
+                  routes={snapshot.routes}
+                  stations={snapshot.stations}
+                  cam={camInfo}
+                  selection={selection}
+                  onJump={minimapJump}
+                />
+              }
+            />
+          )}
+          <HoverTooltip hover={hoverInfo} />
+          <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
+          {searchOpen && (
+            <SearchPalette entries={searchEntries} commands={buildCommands()} onPick={pickSearchResult} onClose={() => setSearchOpen(false)} />
+          )}
+          {(measureTool || inspectMode) && (
+            <div className="tf-map-bc">
+              {measureTool && (
+                <div className="tf-measure-bar" role="status">
+                  <span>{measureView?.label ?? 'Click a start point on the map (Esc cancels)'}</span>
+                  {measureNetworkNote() && <span className="tf-hint">{measureNetworkNote()}</span>}
+                  <button type="button" className="tf-btn small" onClick={toggleMeasure}>
+                    Done
+                  </button>
+                </div>
+              )}
+              {inspectMode && (
+                <div className="tf-map-note">Quick inspect: clicking selects instead of building. Press I to exit.</div>
+              )}
+            </div>
+          )}
+          <div className="tf-sr-only" aria-live="polite">{announcement}</div>
+        </section>
+        {reportsOpen && (
+          <ReportsSheet tab={reportsTab} onTab={setReportsTab} onClose={() => setReportsOpen(false)}>
+            {reportsTab === 'network' && <StatsPanel stats={stats} />}
+            {reportsTab === 'analysis' && (
+              <>
+                <AnalyticsPanel
+                  access={access}
+                  coverage={coverage}
+                  score={score}
+                  bottlenecks={bottlenecks}
+                  gaps={gaps}
+                  utilization={utilization}
+                  sim={snapshot}
+                  onSelect={setSelection}
+                />
+                <ChartsPanel history={history} topStations={topStations} />
+              </>
+            )}
+            {reportsTab === 'growth' && (
+              <>
+                <GrowthPanel
+                  year={BASE_YEAR + yearsApplied}
+                  summary={growthSummary}
+                  districts={districtBars}
+                  history={growthHistory}
+                  onAdvance={onAdvanceYears}
+                  advancing={growing}
+                  forecast={forecast}
+                  onForecast={onForecast}
+                  advice={advice}
+                />
+                <DebugPanel sim={snapshot} />
+              </>
+            )}
+            {reportsTab === 'compare' && (
+              <ComparePanel
+                result={compareResult}
+                running={compareRunning}
+                progress={compareProgress}
+                onRun={onRunCompare}
+                viewing={viewing}
+                onView={onView}
+                hasEdits={ops.length > 0}
+                horizonYears={compareHorizon}
+                onHorizon={setCompareHorizon}
+                splitView={splitView}
+                onSplitView={setSplitView}
               />
-              <AnalyticsPanel
-                access={access}
-                coverage={coverage}
-                score={score}
-                bottlenecks={bottlenecks}
-                gaps={gaps}
-                utilization={utilization}
-                sim={snapshot}
-                onSelect={setSelection}
-              />
-              <ChartsPanel history={history} topStations={topStations} />
-              <GrowthPanel
-                year={BASE_YEAR + yearsApplied}
-                summary={growthSummary}
-                districts={districtBars}
-                history={growthHistory}
-                onAdvance={onAdvanceYears}
-                advancing={growing}
-                forecast={forecast}
-                onForecast={onForecast}
-                advice={advice}
-              />
-              <DebugPanel sim={snapshot} />
-            </>
+            )}
+          </ReportsSheet>
+        )}
+      </main>
+      <aside className="tf-panel" ref={railRef} tabIndex={-1} aria-label={selection ? 'Details' : `${MODE_LABEL[mode]} panel`}>
+          {(mode === 'simulate' || mode === 'plan') && selectionBlock}
+          {mode === 'simulate' ? (
+            selection ? null : (
+              <div className="tf-rail-body">
+                <SimulateHome
+                  routes={snapshot.routes}
+                  peakHeadway={Object.fromEntries(snapshot.routes.map((r) => [r.id, snapshot.service[r.id]?.peakHeadwayMin ?? r.headwayMin]))}
+                  boardings={snapshot.counters.routeBoardings}
+                  problems={problems}
+                  onSelectRoute={(id) => { setSelection({ kind: 'route', id }); announceSelection({ kind: 'route', id }); }}
+                  onLocateProblem={onLocateProblem}
+                  fares={<FaresPanel fares={snapshot.fares} onFares={onFarePolicy} />}
+                />
+              </div>
+            )
           ) : mode === 'disrupt' ? (
-            <>
+            <div className="tf-rail-body">
               <DisruptPanel
                 sim={snapshot}
                 draft={incidentDraft}
@@ -2313,9 +2558,9 @@ export default function App() {
                 resilienceRunning={resilienceRunning}
                 onCompareResilience={compareResilienceLive}
               />
-            </>
+            </div>
           ) : mode === 'plan' ? (
-            <>
+            <div className="tf-rail-body">
               <PlanningPanel
                 briefs={briefs}
                 briefId={briefId}
@@ -2347,12 +2592,13 @@ export default function App() {
                 tutorialDismissed={tutorialDismissed}
                 onDismissTutorial={dismissTutorial}
               />
-            </>
+            </div>
           ) : (
-            <>
+            <div className="tf-rail-body">
               <BuildPanel
                 tool={tool}
                 onTool={(t) => { setTool(t); clearDraft(); }}
+                showTools={false}
                 draft={{
                   stationCount: tool === 'extend' ? extendStations.length : draftStations.length,
                   nodeCount: draftNodes.length,
@@ -2382,49 +2628,32 @@ export default function App() {
                 opCount={ops.length}
                 scenarioCost={formatCost(mod.cost)}
               />
-              <ScenarioPanel
-                name={scenarioMeta.name}
-                onName={(n) => setScenarioMeta((s) => ({ ...s, name: n }))}
-                onSave={() => {
-                  saveScenario({ ...scenarioMeta, seed: SEED, ops, version: 1 });
-                  setSaved(listScenarios());
-                }}
-                saved={saved}
-                onLoad={(s) => {
-                  setScenarioMeta(s);
-                  setViewing('scenario');
-                  applyOps(s.ops, [], 'scenario');
-                }}
-                onRename={(s, name) => {
-                  saveScenario({ ...s, name });
-                  setSaved(listScenarios());
-                }}
-                onDuplicate={(s) => {
-                  duplicateScenario(s);
-                  setSaved(listScenarios());
-                }}
-                onDelete={(id) => {
-                  deleteScenario(id);
-                  setSaved(listScenarios());
-                }}
-              />
-              <ComparePanel
-                result={compareResult}
-                running={compareRunning}
-                progress={compareProgress}
-                onRun={onRunCompare}
-                viewing={viewing}
-                onView={onView}
-                hasEdits={ops.length > 0}
-                horizonYears={compareHorizon}
-                onHorizon={setCompareHorizon}
-                splitView={splitView}
-                onSplitView={setSplitView}
-              />
-            </>
+            </div>
           )}
-        </aside>
-      </main>
+          {(mode === 'build' || mode === 'disrupt') && selectionBlock}
+      </aside>
+      <DayBar
+        playing={playing}
+        speed={speed}
+        tick={snapshot.tick}
+        timeMinutes={snapshot.timeMinutes}
+        onToggle={togglePlay}
+        onSpeed={(sp) => setSpeed(sp)}
+        onReset={resetAll}
+        onStep={() => {
+          clearRunTarget();
+          simRef.current = stepSimulation(simRef.current, 1);
+          setSnapshot(simRef.current);
+        }}
+        stats={stats}
+        history={history}
+        incidents={snapshot.incidents}
+        runTarget={runTarget}
+        onRunTo={runTo}
+        reportsOpen={reportsOpen}
+        onReports={() => setReportsOpen((v) => !v)}
+      />
+      {helpOpen && <HelpSheet version={APP_VERSION} seed={SEED} onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }

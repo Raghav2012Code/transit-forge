@@ -75,6 +75,22 @@ export function cameraPreset(id: PresetId, input: PresetInput, tilt: TiltName = 
   return poseFor(zone.center, zone.radius * 2.4 + 80, tilt);
 }
 
+/**
+ * Dolly toward (factor < 1) or away from (factor > 1) the point being looked
+ * at, along the current line of sight, within the controls' distance limits.
+ */
+export function zoomPose(pose: CameraPose, factor: number): CameraPose {
+  const [px, py, pz] = pose.pos;
+  const [tx, ty, tz] = pose.target;
+  const dx = px - tx;
+  const dy = py - ty;
+  const dz = pz - tz;
+  const dist = Math.hypot(dx, dy, dz);
+  if (dist <= 0 || !Number.isFinite(factor) || factor <= 0) return pose;
+  const k = clampDist(dist * factor) / dist;
+  return { pos: [tx + dx * k, ty + dy * k, tz + dz * k], target: pose.target };
+}
+
 /** Camera command envelope: SceneView applies a command once per sequence id. */
 export interface CameraCmd {
   seq: number;

@@ -230,6 +230,7 @@ export function createSimulationFromParts(
       activeTicks: 0,
       baselineWaiting: 0,
       recovered90: false,
+      strandedPeakDuringIncident: 0,
     })),
     events: [],
     closures: emptyClosures(),

@@ -17,7 +17,14 @@ import type { SimulationState } from '../index.ts';
 
 export type IncidentConfig = Omit<
   Incident,
-  'status' | 'activeTicks' | 'baselineWaiting' | 'recovered90' | 'replacementRouteId' | 'snap' | 'result'
+  | 'status'
+  | 'activeTicks'
+  | 'baselineWaiting'
+  | 'recovered90'
+  | 'replacementRouteId'
+  | 'snap'
+  | 'result'
+  | 'strandedPeakDuringIncident'
 >;
 
 export interface DerivedClosures {
@@ -136,6 +143,12 @@ function totalWaiting(sim: SimulationState): number {
   return Math.round(n);
 }
 
+function strandedCount(sim: SimulationState): number {
+  let n = 0;
+  for (const p of sim.passengers) if (p.state === 'STRANDED') n++;
+  return n;
+}
+
 function snapCounters(sim: SimulationState) {
   const c = sim.counters;
   return {
@@ -158,10 +171,12 @@ export function updateIncidentLifecycle(sim: SimulationState, _dtMin: number): I
       inc.baselineWaiting = totalWaiting(sim);
       inc.recovered90 = false;
       inc.snap = snapCounters(sim);
+      inc.strandedPeakDuringIncident = strandedCount(sim);
       events.push({ t, text: `${inc.label} — disruption started`, level: 'warn' });
       if (inc.replacement) events.push(...deployReplacement(sim, inc));
     } else if (inc.status === 'active') {
       inc.activeTicks++;
+      inc.strandedPeakDuringIncident = Math.max(inc.strandedPeakDuringIncident, strandedCount(sim));
       if (t >= inc.startMin + inc.durationMin) {
         inc.status = 'recovering';
         inc.activeTicks = 0;
@@ -169,6 +184,7 @@ export function updateIncidentLifecycle(sim: SimulationState, _dtMin: number): I
       }
     } else if (inc.status === 'recovering') {
       inc.activeTicks++;
+      inc.strandedPeakDuringIncident = Math.max(inc.strandedPeakDuringIncident, strandedCount(sim));
       const waiting = totalWaiting(sim);
       if (!inc.recovered90 && waiting <= inc.baselineWaiting * 1.1 + 5) {
         inc.recovered90 = true;
@@ -194,11 +210,11 @@ function finalizeIncident(sim: SimulationState, inc: Incident, t: number): void 
   const c = sim.counters;
   const s = inc.snap ?? { rerouted: 0, completed: 0, totalWaitMin: 0, cancelledTrips: 0, strandedPeak: 0 };
   const completedDelta = Math.max(1, c.completed - s.completed);
-  const cap = capacityLostFor(inc, sim.routes, sim.routeLengths, sim.roadGraph);
+  const cap = capacityLostFor(inc, sim.routes, sim.routeLengths, sim.roadGraph, sim.routeCumDist);
   inc.result = {
-    affectedPax: Math.max(0, c.rerouted - s.rerouted) + Math.max(0, c.strandedPeak - s.strandedPeak),
+    affectedPax: Math.max(0, c.rerouted - s.rerouted) + inc.strandedPeakDuringIncident,
     rerouted: Math.max(0, c.rerouted - s.rerouted),
-    strandedPeak: Math.max(s.strandedPeak, c.strandedPeak),
+    strandedPeak: inc.strandedPeakDuringIncident,
     extraWaitMin: Math.max(0, c.totalWaitMin - s.totalWaitMin),
     cancelledTrips: Math.max(0, c.cancelledTrips - s.cancelledTrips),
     completedDelta,
@@ -404,7 +420,7 @@ export function removeReplacement(sim: SimulationState, inc: Incident): void {
   const rep = inc.replacement;
   const route = sim.routes.find((r) => r.id === routeId);
   const endA = rep?.fromStationId ?? route?.stationIds[0];
-  const endB = rep?.toStationId ?? route?.stationIds[route?.stationIds.length ?? 0 - 1];
+  const endB = rep?.toStationId ?? route?.stationIds[(route?.stationIds.length ?? 1) - 1];
   const byId = new Map(sim.passengers.map((p) => [p.id, p]));
   const cum = sim.routeCumDist.get(routeId) ?? [0, 1];
   const total = Math.max(1, cum[cum.length - 1]);

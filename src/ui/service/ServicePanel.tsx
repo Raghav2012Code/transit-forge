@@ -2,19 +2,18 @@
 // consequences derived from live simulation state (no hard-coded estimates).
 import type { SimulationState } from '../../simulation/index.ts';
 import type { ServicePatch } from '../../simulation/scenario/scenario.ts';
-import { MAX_FARE, type FarePolicy } from '../../simulation/economics/fares.ts';
 import { clampHeadway } from '../../simulation/service/servicePlan.ts';
 import { effectiveHeadway, fleetRequired } from '../../simulation/service/timetable.ts';
 import { routeServiceMath } from '../../simulation/service/routeService.ts';
 import { formatClock } from '../../simulation/index.ts';
 import Dock from '../shell/Dock.tsx';
+import Stepper from '../shell/Stepper.tsx';
 
 interface Props {
   sim: SimulationState;
-  selectedRouteId: string | null;
-  onSelectRoute: (id: string) => void;
+  /** The route being edited: the one selected on the map. */
+  routeId: string;
   onPatch: (routeId: string, patch: ServicePatch) => void;
-  onFares: (fares: FarePolicy) => void;
 }
 
 const QUICK_HEADWAYS: Record<string, number[]> = {
@@ -32,29 +31,7 @@ const CAPACITY_OPTIONS: Record<string, number[]> = {
 const TIME_STEPS: number[] = [];
 for (let t = 240; t <= 1440; t += 30) TIME_STEPS.push(t);
 
-function Stepper({ label, value, display, onChange, min, max, step = 1 }: {
-  label: string;
-  value: number;
-  display: string;
-  onChange: (v: number) => void;
-  min: number;
-  max: number;
-  step?: number;
-}) {
-  return (
-    <div className="tf-stat-row">
-      <dt>{label}</dt>
-      <dd className="tf-stepper">
-        <button type="button" className="tf-btn small" onClick={() => onChange(Math.max(min, value - step))}>−</button>
-        <span>{display}</span>
-        <button type="button" className="tf-btn small" onClick={() => onChange(Math.min(max, value + step))}>+</button>
-      </dd>
-    </div>
-  );
-}
-
-export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPatch, onFares }: Props) {
-  const routeId = selectedRouteId ?? sim.routes[0]?.id ?? '';
+export default function ServicePanel({ sim, routeId, onPatch }: Props) {
   const math = routeId ? routeServiceMath(sim, routeId) : null;
   const route = sim.routes.find((r) => r.id === routeId);
   const plan = sim.service[routeId];
@@ -72,44 +49,39 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
   };
 
   return (
-    <Dock title="Service planning" meta={`${plan.peakHeadwayMin}m peak`}>
-      <label className="tf-namelabel">
-        Route
-        <select value={route.id} onChange={(e) => onSelectRoute(e.target.value)}>
-          {sim.routes.map((r) => (
-            <option key={r.id} value={r.id}>{r.name}</option>
-          ))}
-        </select>
-      </label>
-
-      <h5>Headway (min)</h5>
+    <Dock title="Service plan" meta={`${plan.peakHeadwayMin} min at peak`}>
+      <h5>Time between vehicles</h5>
       <dl>
         <Stepper label="Peak" value={plan.peakHeadwayMin} display={`${plan.peakHeadwayMin} min`}
           min={3} max={30} onChange={(v) => patch({ peakHeadwayMin: clampHeadway(mode, v) })} />
-        <Stepper label="Off-peak" value={plan.offPeakHeadwayMin} display={`${plan.offPeakHeadwayMin} min`}
-          min={3} max={30} onChange={(v) => patch({ offPeakHeadwayMin: clampHeadway(mode, v) })} />
       </dl>
-      <div className="tf-speeds" role="group" aria-label="Quick headways">
+      <div className="tf-speeds" role="group" aria-label="Peak headway presets, in minutes">
         {quick.map((h) => (
           <button key={h} type="button"
             className={`tf-btn small${plan.peakHeadwayMin === h ? ' active' : ''}`}
+            aria-pressed={plan.peakHeadwayMin === h}
             onClick={() => patch({ peakHeadwayMin: h })}>
-            {h}
+            {h} min
           </button>
         ))}
       </div>
-      {(() => {
-        const pv = preview(Math.max(3, plan.peakHeadwayMin - 1));
+      {plan.peakHeadwayMin > 3 && (() => {
+        const pv = preview(plan.peakHeadwayMin - 1);
         return (
           <p className="tf-hint">
-            −1 min headway → fleet {math.fleet}→{pv.req}, wait {(math.estWait).toFixed(1)}→{(pv.eff / 2).toFixed(1)} min
+            One minute sooner at peak needs {pv.req} vehicles instead of {math.fleet}, and cuts the
+            average wait from {math.estWait.toFixed(1)} to {(pv.eff / 2).toFixed(1)} min.
           </p>
         );
       })()}
-
-      <h5>Fleet &amp; vehicles</h5>
       <dl>
-        <Stepper label="Fleet (0=auto)" value={plan.fleetSize} display={plan.fleetSize === 0 ? `auto (${math.fleet})` : String(plan.fleetSize)}
+        <Stepper label="Off-peak" value={plan.offPeakHeadwayMin} display={`${plan.offPeakHeadwayMin} min`}
+          min={3} max={30} onChange={(v) => patch({ offPeakHeadwayMin: clampHeadway(mode, v) })} />
+      </dl>
+
+      <h5>Fleet and vehicles</h5>
+      <dl>
+        <Stepper label="Fleet size" value={plan.fleetSize} display={plan.fleetSize === 0 ? `auto (${math.fleet})` : String(plan.fleetSize)}
           min={0} max={24} onChange={(v) => patch({ fleetSize: v })} />
         <Stepper label="Speed" value={plan.speedKph} display={`${plan.speedKph} kph`}
           min={5} max={120} onChange={(v) => patch({ speedKph: v })} />
@@ -139,7 +111,7 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
             ))}
           </select>
         </dd></div>
-        <Stepper label="Dwell base" value={plan.dwellBaseSec} display={`${plan.dwellBaseSec}s`}
+        <Stepper label="Station stop" value={plan.dwellBaseSec} display={`${plan.dwellBaseSec}s`}
           min={5} max={90} step={5} onChange={(v) => patch({ dwellBaseSec: v })} />
         <Stepper label="Turnaround" value={plan.turnaroundMin} display={`${plan.turnaroundMin} min`}
           min={0} max={30} onChange={(v) => patch({ turnaroundMin: v })} />
@@ -149,33 +121,19 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
         Synchronize transfers
       </label>
 
-      <h5>Fares (OCU / trip, all routes)</h5>
-      <dl>
-        <Stepper label="Metro fare" value={sim.fares.metro} display={`${sim.fares.metro} OCU`}
-          min={0} max={MAX_FARE} onChange={(v) => onFares({ ...sim.fares, metro: v })} />
-        <Stepper label="Rail fare" value={sim.fares.rail} display={`${sim.fares.rail} OCU`}
-          min={0} max={MAX_FARE} onChange={(v) => onFares({ ...sim.fares, rail: v })} />
-        <Stepper label="Bus fare" value={sim.fares.bus} display={`${sim.fares.bus} OCU`}
-          min={0} max={MAX_FARE} onChange={(v) => onFares({ ...sim.fares, bus: v })} />
-      </dl>
-      <p className="tf-hint">
-        One ticket at the entry mode; transfers are free. Higher fares push riders
-        to cars, and denied or unfinished trips earn nothing.
-      </p>
-
       <h5>Reliability</h5>
       <dl>
-        <Stepper label="Delay prob" value={plan.reliability.delayProb} display={`${Math.round(plan.reliability.delayProb * 100)}%`}
+        <Stepper label="Delay chance" value={plan.reliability.delayProb} display={`${Math.round(plan.reliability.delayProb * 100)}%`}
           min={0} max={0.3} step={0.01} onChange={(v) => patch({ reliability: { delayProb: Math.round(v * 100) / 100 } })} />
-        <Stepper label="Avg delay" value={plan.reliability.meanDelayMin} display={`${plan.reliability.meanDelayMin} min`}
+        <Stepper label="Average delay" value={plan.reliability.meanDelayMin} display={`${plan.reliability.meanDelayMin} min`}
           min={0} max={15} step={0.5} onChange={(v) => patch({ reliability: { meanDelayMin: v } })} />
-        <Stepper label="Cancel prob" value={plan.reliability.cancelProb} display={`${(plan.reliability.cancelProb * 100).toFixed(1)}%`}
+        <Stepper label="Cancel chance" value={plan.reliability.cancelProb} display={`${(plan.reliability.cancelProb * 100).toFixed(1)}%`}
           min={0} max={0.1} step={0.005} onChange={(v) => patch({ reliability: { cancelProb: Math.round(v * 1000) / 1000 } })} />
       </dl>
 
       <h5>Derived</h5>
       <dl>
-        <div className="tf-stat-row"><dt>Round trip + turn</dt><dd>{math.cycle.toFixed(1)} min cycle</dd></div>
+        <div className="tf-stat-row"><dt>Full cycle</dt><dd>{math.cycle.toFixed(1)} min</dd></div>
         <div className="tf-stat-row"><dt>Required fleet</dt><dd>{fleetRequired(math.cycle, math.scheduled)}</dd></div>
         <div className="tf-stat-row"><dt>Assigned / spare</dt><dd>{math.assigned} / {math.spare}</dd></div>
         <div className="tf-stat-row"><dt>Effective headway</dt><dd>{Number.isFinite(math.eff) ? `${math.eff.toFixed(1)} min` : 'no service'}</dd></div>
@@ -183,8 +141,8 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
         <div className="tf-stat-row"><dt>Est. wait</dt><dd>{Number.isFinite(math.estWait) ? `${math.estWait.toFixed(1)} min` : '—'}</dd></div>
         <div className="tf-stat-row"><dt>Peak occupancy</dt><dd>{math.peakOcc.toFixed(1)}%</dd></div>
         <div className="tf-stat-row"><dt>Denied boardings</dt><dd>{math.denied.toLocaleString()}</dd></div>
-        <div className="tf-stat-row"><dt>Op. cost/day</dt><dd>{Math.round(math.dayCost).toLocaleString()} OCU</dd></div>
-        <div className="tf-stat-row"><dt>Cost / pax</dt><dd>{math.costPerPax.toFixed(2)} OCU</dd></div>
+        <div className="tf-stat-row"><dt>Operating cost per day</dt><dd>{Math.round(math.dayCost).toLocaleString()} OCU</dd></div>
+        <div className="tf-stat-row"><dt>Cost per passenger</dt><dd>{math.costPerPax.toFixed(2)} OCU</dd></div>
         <div className="tf-stat-row"><dt>Revenue</dt><dd>{math.revenue.toLocaleString()} OCU</dd></div>
         <div className="tf-stat-row"><dt>Cost recovery</dt><dd>{math.recovery.toFixed(1)}%</dd></div>
         <div className="tf-stat-row"><dt>Break-even fare</dt><dd>{math.breakEven.toFixed(2)} OCU</dd></div>

@@ -1,0 +1,213 @@
+/* What sits on the map, and where.
+
+   Four corners, one job each, nothing in the middle:
+     top left      the lens (what the map shows) and the legend that explains it
+     top right     which network is on screen, and anything that needs attention
+     bottom right  the camera: view, zoom, places, the overview map
+     bottom left   events as they happen
+
+   Everything floating here is one surface (--plate-surface, --plate-edge). */
+
+.tf-map-top {
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-4);
+  pointer-events: none;
+}
+.tf-map-top > * { pointer-events: auto; }
+
+/* ---- lens ---- */
+
+.tf-lens { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-4); min-width: 0; max-width: 100%; }
+.tf-lens-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+.tf-lens-seg,
+.tf-map-tr .tf-seg,
+.tf-tilt {
+  background: var(--plate-surface);
+  border-color: var(--plate-edge);
+}
+.tf-lens-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: 34px;
+  padding: 0 var(--s-4);
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--plate-surface);
+  border: 1px solid var(--plate-edge);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--d-fast) var(--ease), color var(--d-fast) var(--ease);
+}
+.tf-lens-btn:hover,
+.tf-lens-btn.open { background: var(--paper-raised); border-color: var(--rule-strong); }
+.tf-lens-btn.active { color: var(--on-ink); background: var(--ink-strong); border-color: var(--ink-strong); font-weight: 600; }
+.tf-lens-btn .tf-caret { transition: transform var(--d-fast) var(--ease); }
+.tf-lens-btn.open .tf-caret { transform: rotate(180deg); }
+.tf-lens-menu { display: flex; flex-direction: column; gap: var(--s-5); width: 340px; max-width: 100%; }
+
+.tf-lens .tf-legend {
+  position: static;
+  width: 264px;
+  max-width: 100%;
+  pointer-events: auto;
+}
+.tf-legend-note {
+  margin: 0 0 var(--s-4);
+  font-size: var(--fs-fine);
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.tf-lens .tf-overlay-group {
+  width: 264px;
+  max-width: 100%;
+  padding: var(--s-4);
+  background: var(--plate-surface);
+  border: 1px solid var(--plate-edge);
+  border-radius: var(--r-md);
+}
+
+/* ---- top right ---- */
+
+.tf-map-tr { display: flex; flex-direction: column; align-items: flex-end; gap: var(--s-3); margin-left: auto; }
+
+/* ---- bottom right: the camera ---- */
+
+.tf-map-br {
+  position: absolute;
+  z-index: 6;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s-3);
+}
+.tf-map-br .tf-minimap { position: static; }
+.tf-mapctl {
+  display: flex;
+  flex-direction: column;
+  background: var(--plate-surface);
+  border: 1px solid var(--plate-edge);
+  border-radius: var(--r-md);
+}
+.tf-mapctl > * + * { border-top: 1px solid var(--rule-soft); }
+.tf-mapctl .tf-popover { display: flex; }
+.tf-mapctl-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background var(--d-fast) var(--ease), color var(--d-fast) var(--ease);
+}
+.tf-mapctl > :first-child { border-radius: var(--r-md) var(--r-md) 0 0; }
+.tf-mapctl > :last-child { border-radius: 0 0 var(--r-md) var(--r-md); }
+.tf-mapctl-btn:hover:not(:disabled),
+.tf-mapctl-btn.open { background: var(--paper-sunken); }
+.tf-mapctl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.tf-mapctl-btn[aria-pressed='true'] { color: var(--on-ink); background: var(--ink-strong); }
+.tf-mapctl-btn svg { transition: transform var(--d-base) var(--ease); }
+
+.tf-places .tf-popover-panel { min-width: 208px; padding: var(--s-2); }
+.tf-places-list { margin: 0; padding: 0; list-style: none; }
+.tf-places-item {
+  display: block;
+  width: 100%;
+  padding: 7px var(--s-4);
+  font: inherit;
+  font-size: var(--fs-small);
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.tf-places-item:hover { background: var(--paper-sunken); }
+
+/* ---- bottom left: events ---- */
+
+.tf-stage .tf-toasts {
+  top: auto;
+  bottom: 12px;
+  left: 12px;
+  transform: none;
+  flex-direction: column-reverse;
+}
+
+/* ---- bottom centre: the tool you are in the middle of ---- */
+
+.tf-map-bc {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  max-width: calc(100% - 24px);
+}
+.tf-map-bc .tf-measure-bar { position: static; transform: none; }
+.tf-map-note {
+  padding: 4px var(--s-4);
+  font-size: var(--fs-fine);
+  color: var(--ink-soft);
+  background: var(--plate-surface);
+  border: 1px solid var(--plate-edge);
+  border-radius: var(--r-sm);
+}
+.tf-map-scenario { display: flex; align-items: center; gap: var(--s-3); }
+
+/* ---- objectives: your goals, in every mode ---- */
+
+.tf-objectives {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  height: 34px;
+  align-items: center;
+  padding: 0 var(--s-4);
+  font: inherit;
+  font-size: var(--fs-small);
+  color: var(--ink);
+  background: var(--plate-surface);
+  border: 1px solid var(--plate-edge);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease);
+}
+.tf-objectives strong { font-family: var(--font-data); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink-strong); }
+.tf-objectives:hover,
+.tf-objectives.open { background: var(--paper-raised); border-color: var(--rule-strong); }
+.tf-objectives.good { border-color: var(--ok); }
+.tf-objectives.good strong { color: var(--ok); }
+.tf-objectives.bad { border-color: var(--alert); }
+.tf-objectives-flag { font-weight: 600; color: var(--alert); }
+
+.tf-objectives-list { display: flex; flex-direction: column; gap: var(--s-4); width: 320px; max-width: 100%; }
+.tf-objectives-list h3 { margin: 0; font-size: var(--fs-lead); font-weight: 600; color: var(--ink-strong); }
+.tf-objectives-list h4 { margin: var(--s-3) 0 0; font-size: var(--fs-small); font-weight: 600; color: var(--ink-strong); }
+.tf-objectives-list ul { display: flex; flex-direction: column; gap: var(--s-4); margin: 0; padding: 0; list-style: none; }
+.tf-objectives-list li { display: flex; flex-direction: column; gap: var(--s-2); }
+.tf-objectives-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-4); font-size: var(--fs-small); }
+.tf-objectives-state { flex: none; font-weight: 600; color: var(--ink-soft); }
+.tf-objectives-state.met { color: var(--ok); }
+.tf-objectives-state.broken { color: var(--alert); }
+.tf-objectives-list .tf-btn { align-self: flex-start; }
