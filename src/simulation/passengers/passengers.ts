@@ -130,7 +130,11 @@ export function replanFromStation(
   const destLeg = p.legs[p.legs.length - 1];
   if (!destLeg) return false;
   const dest = destLeg.alight;
+  // Transfers already made before this replan (one per leg boundary ridden
+  // so far); the stale spawn-time count must not carry past a reroute.
+  const transfersSoFar = p.legIndex;
   if (stationId === dest) {
+    p.transfers = transfersSoFar;
     finishJourney(w, p, zoneById, stationId);
     return true;
   }
@@ -140,6 +144,7 @@ export function replanFromStation(
   p.legIndex = 0;
   p.atStation = stationId;
   p.vehicleId = null;
+  p.transfers = transfersSoFar + Math.max(0, trip.legs.length - 1);
   return true;
 }
 
