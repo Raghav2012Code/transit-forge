@@ -119,7 +119,7 @@ const tmpB = new THREE.Vector3();
 const tmpT = new THREE.Vector3();
 const tmpTan = new THREE.Vector3();
 const tmpLook = new THREE.Vector3();
-export function updateVehicles(rig: VehicleRig, vehicles: VehicleState[]): void {
+export function updateVehicles(rig: VehicleRig, vehicles: VehicleState[], dt: number): void {
   for (const v of vehicles) {
     const mesh = rig.meshById.get(v.id);
     const seg = rig.segmentsByRoute.get(v.routeId);
@@ -147,11 +147,15 @@ export function updateVehicles(rig: VehicleRig, vehicles: VehicleState[]): void 
       tmpLook.copy(v.direction === 1 ? tmpB : tmpA);
     }
     // Ease toward the target so fixed 1-minute sim steps render smoothly.
+    // Frame-rate independent: converges at the same real-world rate
+    // regardless of refresh rate (was a fixed 0.18-per-frame lerp, which
+    // moved vehicles faster on high-refresh displays and slower under a
+    // throttled/background tab). 12 matches the old factor's feel at 60fps.
     if (!mesh.userData.init) {
       mesh.position.copy(tmpT);
       mesh.userData.init = true;
     } else {
-      mesh.position.lerp(tmpT, 0.18);
+      mesh.position.lerp(tmpT, 1 - Math.exp(-12 * dt));
     }
     mesh.lookAt(tmpLook);
   }

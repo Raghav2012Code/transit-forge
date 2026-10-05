@@ -846,7 +846,8 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const animate = () => {
       raf = requestAnimationFrame(animate);
       const now = performance.now();
-      elapsed += Math.min(0.1, (now - lastFrame) / 1000);
+      const dt = Math.min(0.1, (now - lastFrame) / 1000);
+      elapsed += dt;
       lastFrame = now;
       frame++;
       // Camera commands from presets / focus / minimap / search.
@@ -873,7 +874,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       const cur = simRef.current;
       if (cur) {
         syncVehicleMeshes(rig, cur.vehicles, cur.routes, cur.stations);
-        updateVehicles(rig, cur.vehicles);
+        updateVehicles(rig, cur.vehicles, dt);
         updateCarRig(carRig, cur.cars, edgeLen);
         rebuildDraft();
         rebuildMarkers();
