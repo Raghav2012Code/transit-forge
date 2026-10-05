@@ -1,0 +1,349 @@
+/* TransitForge workspace shell.
+
+   One grid, five jobs:
+
+     bar    what you are working on, search, settings
+     rail   what you are doing: the mode and its tools
+     stage  the map, edge to edge, with its own controls laid on it
+     side   what is selected, or what this mode needs
+     dock   the clock, the service day, the readings
+
+   Everything is paper and ink. The map is the one place colour is allowed to
+   mean something, so the chrome stays quiet around it. */
+
+:root {
+  --bar-h: 44px;
+  --rail-w: 68px;
+  --dock-h: 60px;
+}
+
+.tf-app {
+  display: grid;
+  height: 100vh;
+  height: 100dvh;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--panel-w);
+  grid-template-rows: var(--bar-h) minmax(0, 1fr) var(--dock-h);
+  grid-template-areas:
+    'bar bar bar'
+    'rail stage side'
+    'dock dock dock';
+  overflow: hidden;
+  background: var(--paper);
+}
+.tf-app.panel-closed { grid-template-columns: var(--rail-w) minmax(0, 1fr) 0; }
+.tf-app.panel-closed > .tf-panel { display: none; }
+
+.tf-app > .tf-bar { grid-area: bar; }
+.tf-app > .tf-rail { grid-area: rail; }
+.tf-app > .tf-stage { grid-area: stage; }
+.tf-app > .tf-panel { grid-area: side; }
+.tf-app > .tf-daybar { grid-area: dock; }
+
+.tf-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background: var(--plate);
+}
+/* The map fills the stage: no frame, no inset. The rules around it are enough. */
+.tf-app .tf-viewport {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+/* =====================================================================
+ * Bar
+ * ===================================================================== */
+
+.tf-bar {
+  position: relative;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 520px) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s-6);
+  padding: 0 var(--s-5);
+  background: var(--paper-raised);
+  border-bottom: 1px solid var(--rule);
+}
+.tf-bar-left { display: flex; align-items: center; gap: var(--s-5); min-width: 0; }
+.tf-bar-right { display: flex; align-items: center; justify-content: flex-end; gap: var(--s-2); }
+
+.tf-scenario-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  max-width: 100%;
+  height: 28px;
+  padding: 0 var(--s-4) 0 var(--s-3);
+  font: inherit;
+  font-size: var(--fs-small);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease);
+}
+.tf-scenario-chip:hover,
+.tf-scenario-chip.open { background: var(--paper-sunken); border-color: var(--rule); }
+.tf-scenario-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+.tf-scenario-edits { flex: none; font-family: var(--font-data); font-size: var(--fs-fine); color: var(--ink-soft); }
+.tf-scenario-chip .tf-caret { flex: none; color: var(--ink-soft); transition: transform var(--d-fast) var(--ease); }
+.tf-scenario-chip.open .tf-caret { transform: rotate(180deg); }
+.tf-scenario-pop { min-width: 0; }
+
+.tf-command {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--s-4);
+  font: inherit;
+  font-size: var(--fs-small);
+  color: var(--ink-soft);
+  text-align: left;
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: border-color var(--d-fast) var(--ease), background var(--d-fast) var(--ease);
+}
+.tf-command:hover { border-color: var(--rule-strong); background: var(--paper); }
+.tf-command > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-command kbd {
+  padding: 0 6px;
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  color: var(--ink-soft);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+}
+
+/* =====================================================================
+ * Popover
+ * ===================================================================== */
+
+.tf-popover { position: relative; display: inline-flex; min-width: 0; }
+.tf-popover-panel {
+  position: absolute;
+  z-index: 40;
+  min-width: 280px;
+  max-width: min(380px, calc(100vw - 24px));
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  padding: var(--s-5);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift-float);
+  animation: tf-pop var(--d-base) var(--ease) both;
+}
+.tf-popover-panel:focus { outline: none; }
+.tf-popover-panel.below { top: calc(100% + 6px); }
+.tf-popover-panel.above { bottom: calc(100% + 6px); }
+.tf-popover-panel.start { left: 0; }
+.tf-popover-panel.end { right: 0; }
+@keyframes tf-pop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.tf-popover-panel.above { animation-name: tf-pop-up; }
+@keyframes tf-pop-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* =====================================================================
+ * Rail
+ * ===================================================================== */
+
+.tf-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+  min-height: 0;
+  padding: var(--s-4) var(--s-2);
+  overflow-y: auto;
+  scrollbar-width: none;
+  background: var(--paper-raised);
+  border-right: 1px solid var(--rule);
+}
+.tf-rail::-webkit-scrollbar { display: none; }
+.tf-rail-group { display: flex; flex-direction: column; gap: 2px; }
+.tf-rail-group + .tf-rail-group { padding-top: var(--s-5); border-top: 1px solid var(--rule-soft); }
+.tf-rail-group.end { margin-top: auto; }
+
+.tf-rail-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  min-height: 52px;
+  padding: 6px 2px;
+  font: inherit;
+  font-size: var(--fs-fine);
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--d-fast) var(--ease), color var(--d-fast) var(--ease);
+}
+.tf-rail-item.tool { min-height: 46px; }
+.tf-rail-item:hover { color: var(--ink-strong); background: var(--paper-sunken); }
+.tf-rail-item[aria-checked='true'],
+.tf-rail-item[aria-pressed='true'] {
+  color: var(--on-ink);
+  background: var(--ink-strong);
+  font-weight: 600;
+}
+
+/* =====================================================================
+ * Day bar
+ * ===================================================================== */
+
+.tf-daybar {
+  position: relative;
+  z-index: 15;
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr) auto auto;
+  align-items: center;
+  gap: var(--s-6);
+  min-width: 0;
+  padding: 0 var(--s-5);
+  background: var(--paper-raised);
+  border-top: 1px solid var(--rule);
+}
+
+.tf-strip {
+  position: relative;
+  height: 44px;
+  min-width: 0;
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  touch-action: none;
+}
+.tf-strip[data-reaching] { cursor: pointer; }
+.tf-strip svg { display: block; border-radius: var(--r-sm); }
+.tf-strip-peak { fill: color-mix(in oklch, var(--ink) 8%, transparent); }
+.tf-strip-past { fill: var(--ink); opacity: 0.05; }
+.tf-strip-tick { stroke: var(--rule-strong); }
+.tf-strip-hour { fill: var(--ink-faint); font-family: var(--font-data); font-size: 10px; }
+.tf-strip-trace { stroke: var(--ink-soft); stroke-width: 1.4; stroke-linejoin: round; }
+.tf-strip-incident { fill: var(--alert); }
+.tf-strip-incident.scheduled { fill: none; stroke: var(--alert); stroke-width: 1.2; stroke-dasharray: 3 2; }
+.tf-strip-incident.recovering { opacity: 0.55; }
+.tf-strip-now { stroke: var(--ink-strong); stroke-width: 2; }
+.tf-strip-flag { fill: var(--ink-strong); }
+.tf-strip-ghost { stroke: var(--ink-soft); stroke-width: 1; stroke-dasharray: 2 2; }
+.tf-strip-target { stroke: var(--ink-strong); stroke-width: 1; stroke-dasharray: 4 3; }
+.tf-strip-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--on-ink);
+  background: var(--ink-strong);
+  border-radius: var(--r-sm);
+}
+
+.tf-readings { display: flex; gap: var(--s-6); margin: 0; }
+.tf-reading { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tf-reading dt { font-size: var(--fs-fine); color: var(--ink-soft); white-space: nowrap; }
+.tf-reading dd {
+  margin: 0;
+  font-family: var(--font-data);
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-strong);
+  white-space: nowrap;
+}
+.tf-reading.good dd { color: var(--ok); }
+.tf-reading.warn dd { color: var(--watch-ink); }
+.tf-reading.bad dd { color: var(--alert); }
+
+.tf-reports-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: 32px;
+  padding: 0 var(--s-4);
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--d-fast) var(--ease), color var(--d-fast) var(--ease);
+}
+.tf-reports-toggle:hover { background: var(--paper-sunken); }
+.tf-reports-toggle .tf-caret { transform: rotate(180deg); transition: transform var(--d-fast) var(--ease); }
+.tf-reports-toggle.open { color: var(--on-ink); background: var(--ink-strong); border-color: var(--ink-strong); }
+.tf-reports-toggle.open .tf-caret { transform: none; }
+
+/* The old per-button clock divider no longer needs its own rule on a quiet bar. */
+.tf-daybar .tf-clock { padding-left: var(--s-5); }
+
+/* =====================================================================
+ * Help
+ * ===================================================================== */
+
+.tf-modal-scrim:has(> .tf-help) { display: grid; justify-items: center; align-items: start; padding: 9vh var(--s-5) 0; }
+.tf-help {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, 100%);
+  max-height: min(78vh, 640px);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift-float);
+  animation: tf-pop var(--d-base) var(--ease) both;
+}
+.tf-help:focus { outline: none; }
+.tf-help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s-4) var(--s-5) var(--s-4) var(--s-6);
+  border-bottom: 1px solid var(--rule);
+}
+.tf-help-head h2 { margin: 0; font-size: var(--fs-head); font-weight: 600; color: var(--ink-strong); }
+.tf-help-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-7) var(--s-8);
+  padding: var(--s-6);
+  overflow-y: auto;
+}
+.tf-help-group h3 { margin: 0 0 var(--s-4); font-size: var(--fs-body); font-weight: 600; color: var(--ink-strong); }
+.tf-help-foot { padding: var(--s-4) var(--s-6); font-size: var(--fs-small); color: var(--ink-soft); border-top: 1px solid var(--rule); }
+
+@media (max-width: 640px) {
+  .tf-help-body { grid-template-columns: 1fr; }
+}

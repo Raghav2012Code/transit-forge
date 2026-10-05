@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
+import './shell.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
 import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
@@ -69,7 +70,7 @@ import { sanitizeFares, type FarePolicy } from './simulation/economics/fares.ts'
 import { deleteScenario, duplicateScenario, listScenarios, saveScenario } from './simulation/scenario/store.ts';
 import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
-import SimControls, { type Speed } from './ui/controls/SimControls.tsx';
+import { type Speed } from './ui/controls/SimControls.tsx';
 import LayerToggles from './ui/controls/LayerToggles.tsx';
 import OverlaySwitch, { type DemandLayer, type TravelDest } from './ui/controls/OverlaySwitch.tsx';
 import StatsPanel from './ui/dashboard/StatsPanel.tsx';
@@ -87,8 +88,11 @@ import GrowthPanel, { type ForecastView } from './ui/growth/GrowthPanel.tsx';
 import type { Zone } from './types/index.ts';
 import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
 import ServicePanel from './ui/service/ServicePanel.tsx';
-import ModeSwitch, { type AppMode as Mode } from './ui/shell/ModeSwitch.tsx';
-import StatusBar from './ui/shell/StatusBar.tsx';
+import { MODE_LABEL, type AppMode as Mode } from './ui/shell/modes.ts';
+import TopBar from './ui/shell/TopBar.tsx';
+import Workbench from './ui/shell/Workbench.tsx';
+import DayBar from './ui/shell/DayBar.tsx';
+import HelpSheet from './ui/shell/HelpSheet.tsx';
 import Legend from './ui/shell/Legend.tsx';
 import { APP_VERSION } from './version.ts';
 import { cameraPreset, poseFor, type PresetId, type TiltName, type CameraCmd } from './rendering/map/camera.ts';
@@ -105,7 +109,6 @@ import CompareSplit from './ui/map/CompareSplit.tsx';
 import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './rendering/SceneView.tsx';
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
 import RailTabs, { type RailTab } from './ui/shell/RailTabs.tsx';
-import { IconInspect, IconMeasure, IconMoon, IconPanel, IconPlan, IconSearch, IconSun } from './ui/shell/icons.tsx';
 import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme.ts';
 import type { Theme } from './rendering/palette.ts';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
@@ -128,12 +131,6 @@ const SIM_TABS: readonly RailTab<SimTab>[] = [
   { id: 'growth', label: 'Growth' },
 ];
 
-const MODE_LABEL: Record<Mode, string> = {
-  simulate: 'Simulate',
-  build: 'Build',
-  disrupt: 'Disrupt',
-  plan: 'Plan',
-};
 
 interface PendingDelete {
   kind: 'station' | 'route' | 'road';
@@ -234,6 +231,14 @@ export default function App() {
   const toastSeq = useRef(1);
   const toastTimers = useRef<Set<number>>(new Set());
   const [railOpen, setRailOpen] = useState(true);
+  const [helpOpen, setHelpOpen] = useState(false);
+  // "Run until": the sim speeds up toward this absolute minute, then pauses.
+  const runTargetRef = useRef<number | null>(null);
+  const [runTarget, setRunTarget] = useState<number | null>(null);
+  function clearRunTarget() {
+    runTargetRef.current = null;
+    setRunTarget(null);
+  }
   // Theme: an explicit choice is remembered; until one is made, follow the system.
   const [theme, setTheme] = useState<Theme>(() => savedTheme() ?? systemTheme());
   const themePinned = useRef(savedTheme() !== null);
@@ -284,6 +289,36 @@ export default function App() {
   const [splitView, setSplitView] = useState(false);
   const [announcement, setAnnouncement] = useState('');
 
+  function toggleMeasure() {
+    if (measureTool) {
+      setMeasureTool(false);
+      setMeasure(null);
+      setMeasureHover(null);
+    } else {
+      setMeasureTool(true);
+      pushToast('info', 'Measure: click two points on the map.');
+    }
+  }
+
+  /** Play or pause. Pausing also ends a "run until", so resuming is an ordinary resume. */
+  function togglePlay() {
+    if (mode !== 'simulate') {
+      enterSimulate();
+      setPlaying(true);
+      return;
+    }
+    if (playing) clearRunTarget();
+    setPlaying((p) => !p);
+  }
+
+  function runTo(absoluteMinute: number) {
+    if (absoluteMinute <= simRef.current.timeMinutes) return;
+    if (mode !== 'simulate') enterSimulate();
+    runTargetRef.current = absoluteMinute;
+    setRunTarget(absoluteMinute);
+    setPlaying(true);
+  }
+
   function requestCameraPose(pos: [number, number, number], target: [number, number, number]) {
     setCameraCmd({ seq: camSeq.current++, pose: { pos, target } });
   }
@@ -299,11 +334,19 @@ export default function App() {
       const dt = Math.min(0.25, (now - last) / 1000);
       last = now;
       if (playing) {
-        acc += dt * TICKS_PER_SEC[speed];
+        const target = runTargetRef.current;
+        acc += dt * TICKS_PER_SEC[target !== null ? 20 : speed];
         let n = Math.floor(acc);
         acc -= n;
         n = Math.min(n, 8); // avoid spiral after tab-switch
+        if (target !== null) n = Math.min(n, Math.max(0, Math.ceil(target - simRef.current.timeMinutes)));
         for (let i = 0; i < n; i++) simRef.current = stepSimulation(simRef.current, 1);
+        if (target !== null && simRef.current.timeMinutes >= target) {
+          runTargetRef.current = null;
+          setRunTarget(null);
+          setPlaying(false);
+          setSnapshot(simRef.current);
+        }
         if (n > 0 && now - lastUi > 500) {
           lastUi = now;
           const sim = simRef.current;
@@ -353,6 +396,7 @@ export default function App() {
       const t = e.target as HTMLElement | null;
       const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
       const mod = e.ctrlKey || e.metaKey;
+      if (helpOpen) return;
       if (mod && (e.key === 'z' || e.key === 'Z')) {
         if (typing) return;
         e.preventDefault();
@@ -369,10 +413,7 @@ export default function App() {
       if (typing) return;
       if (e.key === ' ') {
         e.preventDefault();
-        if (mode !== 'simulate') {
-          enterSimulate();
-          setPlaying(true);
-        } else setPlaying((p) => !p);
+        togglePlay();
       } else if (e.key === '1') setSpeed(1);
       else if (e.key === '2') setSpeed(5);
       else if (e.key === '3') setSpeed(20);
@@ -411,6 +452,10 @@ export default function App() {
         else enterSimulate();
       } else if ((e.key === 't' || e.key === 'T') && !mod && !e.altKey) {
         toggleTheme();
+      } else if ((e.key === 'm' || e.key === 'M') && !mod && !e.altKey) {
+        toggleMeasure();
+      } else if (e.key === '?') {
+        setHelpOpen(true);
       } else if (e.key === 'r' || e.key === 'R') {
         resetAll();
       }
@@ -1307,6 +1352,7 @@ export default function App() {
   // ---- scenario application ----
   function resetSimTo(city: typeof baseCity, net: typeof baseNet) {
     simRef.current = createSimulationFromParts(SEED, city, net);
+    clearRunTarget();
     setSnapshot(simRef.current);
     setSelection(null);
     setHistory([]);
@@ -1348,6 +1394,7 @@ export default function App() {
   function enterDisrupt() {
     setMode('disrupt');
     setPlaying(false);
+    clearRunTarget();
   }
 
   function enterSimulate() {
@@ -2071,98 +2118,54 @@ export default function App() {
                 : 'Delete: click a route, station, or road. Used infrastructure asks for confirmation.';
 
   return (
-    <div className={`tf-root${railOpen ? '' : ' rail-collapsed'}`}>
-      <header className="tf-topbar">
-        <div className="tf-brand" title={`TransitForge v${APP_VERSION}`}>
-          <span className="tf-brand-mark" aria-hidden="true">
-            <IconPlan size={17} />
-          </span>
-          <span className="tf-brand-name">
-            <b>TransitForge</b>
-            <span>Seed {SEED}</span>
-          </span>
-        </div>
-        <ModeSwitch mode={mode} onChange={selectMode} />
-        <div className="tf-hud-right">
-          <SimControls
-            playing={playing}
-            speed={speed}
-            tick={snapshot.tick}
-            timeMinutes={snapshot.timeMinutes}
-            onToggle={() => {
-              if (mode !== 'simulate') {
-                enterSimulate();
-                setPlaying(true);
-              } else setPlaying((p) => !p);
+    <div className={`tf-app${railOpen ? '' : ' panel-closed'}`} data-mode={mode}>
+      <TopBar
+        scenarioName={scenarioMeta.name}
+        edits={ops.length}
+        scenarioMenu={
+          <ScenarioPanel
+            name={scenarioMeta.name}
+            onName={(n) => setScenarioMeta((s) => ({ ...s, name: n }))}
+            onSave={() => {
+              saveScenario({ ...scenarioMeta, seed: SEED, ops, version: 1 });
+              setSaved(listScenarios());
             }}
-            onSpeed={(s) => setSpeed(s)}
-            onReset={resetAll}
-            onStep={() => { simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); }}
+            saved={saved}
+            onLoad={(s) => {
+              setScenarioMeta(s);
+              setViewing('scenario');
+              applyOps(s.ops, [], 'scenario');
+            }}
+            onRename={(s, name) => {
+              saveScenario({ ...s, name });
+              setSaved(listScenarios());
+            }}
+            onDuplicate={(s) => {
+              duplicateScenario(s);
+              setSaved(listScenarios());
+            }}
+            onDelete={(id) => {
+              deleteScenario(id);
+              setSaved(listScenarios());
+            }}
           />
-          <div className="tf-tools" role="toolbar" aria-label="Map tools">
-            <button
-              type="button"
-              className={`tf-btn icon ghost${searchOpen ? ' active' : ''}`}
-              onClick={() => setSearchOpen((v) => !v)}
-              title="Search the map (/)"
-              aria-label="Search the map"
-              aria-pressed={searchOpen}
-            >
-              <IconSearch />
-            </button>
-            <button
-              type="button"
-              className={`tf-btn icon ghost${measureTool ? ' active' : ''}`}
-              onClick={() => {
-                setMeasureTool((v) => {
-                  if (v) {
-                    setMeasure(null);
-                    setMeasureHover(null);
-                  } else {
-                    pushToast('info', 'Measure: click two points on the map.');
-                  }
-                  return !v;
-                });
-              }}
-              title="Measure distance"
-              aria-label="Measure distance"
-              aria-pressed={measureTool}
-            >
-              <IconMeasure />
-            </button>
-            <button
-              type="button"
-              className={`tf-btn icon ghost${inspectMode ? ' active' : ''}`}
-              onClick={() => setInspectMode((v) => !v)}
-              title="Quick inspect (I)"
-              aria-label="Quick inspect"
-              aria-pressed={inspectMode}
-            >
-              <IconInspect />
-            </button>
-            <button
-              type="button"
-              className="tf-btn icon ghost"
-              onClick={toggleTheme}
-              title={theme === 'dark' ? 'Switch to light theme (T)' : 'Switch to dark theme (T)'}
-              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-            >
-              {theme === 'dark' ? <IconSun /> : <IconMoon />}
-            </button>
-            <button
-              type="button"
-              className={`tf-btn icon ghost${railOpen ? ' active' : ''}`}
-              onClick={() => setRailOpen((r) => !r)}
-              title={railOpen ? 'Hide side panel ([)' : 'Show side panel (])'}
-              aria-label="Side panel"
-              aria-pressed={railOpen}
-            >
-              <IconPanel />
-            </button>
-          </div>
-        </div>
-      </header>
-      <main className="tf-main">
+        }
+        onSearch={() => setSearchOpen(true)}
+        theme={theme}
+        onTheme={toggleTheme}
+        onHelp={() => setHelpOpen(true)}
+      />
+      <Workbench
+        mode={mode}
+        onMode={selectMode}
+        tool={tool}
+        onTool={(t) => { setTool(t); clearDraft(); }}
+        measureOn={measureTool}
+        onMeasure={toggleMeasure}
+        inspectOn={inspectMode}
+        onInspect={() => setInspectMode((v) => !v)}
+      />
+      <main className="tf-stage">
         <section className="tf-viewport">
           {splitView ? (
             <CompareSplit
@@ -2257,7 +2260,6 @@ export default function App() {
               split: splitView,
             }}
           />
-          <StatusBar stats={stats} viewing={viewing} incidents={stats.activeIncidents} opCost={stats.opCost} />
           {!splitView && (
             <div className="tf-map-stack">
               <NavWidget
@@ -2319,7 +2321,8 @@ export default function App() {
             </div>
           )}
         </section>
-        <aside className="tf-panel" ref={railRef} tabIndex={-1}>
+      </main>
+      <aside className="tf-panel" ref={railRef} tabIndex={-1}>
           {mode === 'simulate' ? (
             <>
               <RailTabs tabs={SIM_TABS} active={railTab} onChange={setRailTab} label="Rail sections" />
@@ -2450,6 +2453,7 @@ export default function App() {
               <BuildPanel
                 tool={tool}
                 onTool={(t) => { setTool(t); clearDraft(); }}
+                showTools={false}
                 draft={{
                   stationCount: tool === 'extend' ? extendStations.length : draftStations.length,
                   nodeCount: draftNodes.length,
@@ -2479,32 +2483,6 @@ export default function App() {
                 opCount={ops.length}
                 scenarioCost={formatCost(mod.cost)}
               />
-              <ScenarioPanel
-                name={scenarioMeta.name}
-                onName={(n) => setScenarioMeta((s) => ({ ...s, name: n }))}
-                onSave={() => {
-                  saveScenario({ ...scenarioMeta, seed: SEED, ops, version: 1 });
-                  setSaved(listScenarios());
-                }}
-                saved={saved}
-                onLoad={(s) => {
-                  setScenarioMeta(s);
-                  setViewing('scenario');
-                  applyOps(s.ops, [], 'scenario');
-                }}
-                onRename={(s, name) => {
-                  saveScenario({ ...s, name });
-                  setSaved(listScenarios());
-                }}
-                onDuplicate={(s) => {
-                  duplicateScenario(s);
-                  setSaved(listScenarios());
-                }}
-                onDelete={(id) => {
-                  deleteScenario(id);
-                  setSaved(listScenarios());
-                }}
-              />
               <ComparePanel
                 result={compareResult}
                 running={compareRunning}
@@ -2520,8 +2498,27 @@ export default function App() {
               />
             </div>
           )}
-        </aside>
-      </main>
+      </aside>
+      <DayBar
+        playing={playing}
+        speed={speed}
+        tick={snapshot.tick}
+        timeMinutes={snapshot.timeMinutes}
+        onToggle={togglePlay}
+        onSpeed={(sp) => setSpeed(sp)}
+        onReset={resetAll}
+        onStep={() => {
+          clearRunTarget();
+          simRef.current = stepSimulation(simRef.current, 1);
+          setSnapshot(simRef.current);
+        }}
+        stats={stats}
+        history={history}
+        incidents={snapshot.incidents}
+        runTarget={runTarget}
+        onRunTo={runTo}
+      />
+      {helpOpen && <HelpSheet version={APP_VERSION} seed={SEED} onClose={() => setHelpOpen(false)} />}
     </div>
   );
 }
