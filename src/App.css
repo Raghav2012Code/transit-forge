@@ -317,12 +317,6 @@
 .tf-route-list { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); }
 .tf-hint.tf-warn { color: var(--alert); font-weight: 500; }
 
-/* keep the control hint clear of the selection card */
-.tf-viewport:has(.tf-inspector-card) .tf-overlay-hint { left: calc(296px + 2 * var(--s-4)); }
-@media (max-width: 1200px) {
-  .tf-viewport:has(.tf-inspector-card) .tf-overlay-hint:not(.tf-inspect-chip) { display: none; }
-}
-
 /* legend */
 .tf-legend {
   position: absolute;
@@ -1406,67 +1400,4 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
-}
-
-.tf-mobile-note { display: none; }
-
-/* =====================================================================
- * 9. Narrower windows
- * ===================================================================== */
-
-@media (max-width: 1200px) {
-  .tf-status-cell:nth-of-type(n + 9):not(.tf-status-more) { display: none; }
-  .tf-status-more { display: flex; }
-}
-@media (max-width: 980px) {
-  .tf-status-cell:nth-of-type(n + 7):not(.tf-status-more) { display: none; }
-  .tf-minimap { display: none; }
-}
-
-@media (max-width: 900px) {
-  .tf-main {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr) auto;
-    padding: var(--s-4);
-    gap: var(--s-4);
-  }
-  .tf-panel { max-height: 46vh; }
-  .tf-legend, .tf-nav { display: none; }
-  .tf-topbar {
-    display: flex;
-    flex-wrap: wrap;
-    height: auto;
-    padding: var(--s-3) var(--s-4);
-    gap: var(--s-3);
-  }
-  .tf-topbar > .tf-seg { width: 100%; }
-  .tf-topbar > .tf-seg .tf-seg-item { flex: 1; padding: 0 var(--s-3); }
-  .tf-hud-right {
-    width: 100%;
-    flex-wrap: wrap;
-    justify-content: flex-start;
-    gap: var(--s-3) var(--s-4);
-  }
-  .tf-controls { flex-wrap: wrap; gap: var(--s-3); }
-  .tf-clock { padding-left: var(--s-4); }
-  .tf-tools { padding-left: var(--s-4); }
-  .tf-inspector-card {
-    width: min(272px, calc(100% - var(--s-6)));
-    max-height: calc(100% - var(--status-h) - var(--s-7));
-  }
-  .tf-overlay-hint { display: none; }
-  .tf-mobile-note {
-    display: block;
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: var(--status-h);
-    z-index: 4;
-    padding: var(--s-3) var(--s-4);
-    font-size: var(--fs-fine);
-    color: var(--ink-soft);
-    background: var(--paper-sunken);
-    border-top: 1px solid var(--rule);
-    text-align: center;
-  }
 }

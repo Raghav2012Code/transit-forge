@@ -4,6 +4,7 @@ import './shell.css';
 import './map.css';
 import './reports.css';
 import './panel.css';
+import './responsive.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
 import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
@@ -158,7 +159,13 @@ export default function App() {
     saveLayers(next);
   }
   const [overlay, setOverlay] = useState<Overlay>('normal');
-  const [selection, setSelection] = useState<Selection | null>(null);
+  const [selection, setSelectionRaw] = useState<Selection | null>(null);
+  // Below 1024px the panel is a drawer, and a selection is only readable in it,
+  // so selecting opens it. (Declared as a function so every handler can use it.)
+  function setSelection(sel: Selection | null) {
+    setSelectionRaw(sel);
+    if (sel && window.innerWidth < 1024) setRailOpen(true);
+  }
   const [travelDest, setTravelDest] = useState<TravelDest>('cbd');
   const [coverageThreshold, setCoverageThreshold] = useState(500);
   const [history, setHistory] = useState<SeriesPoint[]>([]);
@@ -231,7 +238,7 @@ export default function App() {
   const seenEvents = useRef<Set<string>>(new Set());
   const toastSeq = useRef(1);
   const toastTimers = useRef<Set<number>>(new Set());
-  const [railOpen, setRailOpen] = useState(true);
+  const [railOpen, setRailOpen] = useState(() => window.innerWidth >= 1024);
   const [helpOpen, setHelpOpen] = useState(false);
   // The overview map: open by default where there is room, and remembered.
   const [minimapOpen, setMinimapOpen] = useState(() => {
@@ -2293,7 +2300,7 @@ export default function App() {
         inspectOn={inspectMode}
         onInspect={() => setInspectMode((v) => !v)}
       />
-      <main className="tf-stage" data-reports={reportsOpen ? 'open' : undefined}>
+      <main className="tf-stage" aria-label="Map" data-reports={reportsOpen ? 'open' : undefined}>
         <section className="tf-viewport">
           {splitView ? (
             <CompareSplit
@@ -2458,7 +2465,6 @@ export default function App() {
               )}
             </div>
           )}
-          <div className="tf-mobile-note">TransitForge works best on desktop — the full map needs room.</div>
           <div className="tf-sr-only" aria-live="polite">{announcement}</div>
         </section>
         {reportsOpen && (
