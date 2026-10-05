@@ -70,7 +70,7 @@ One family, two widths — a signage system, not a font pairing.
 | Sunken | `--paper-sunken` | `oklch(92.4% 0.005 250)` |
 | Map plate | `--plate` / `--plate-deep` | `oklch(18% 0.012 250)` / `oklch(14.5% 0.012 250)` |
 | Text / selected | `--ink` / `--ink-strong` | `oklch(21% 0.008 250)` / `oklch(14% 0.008 250)` |
-| Secondary text | `--ink-soft` / `--ink-faint` | `oklch(44% 0.009 250)` / `oklch(58% 0.008 250)` |
+| Secondary text | `--ink-soft` / `--ink-faint` | `oklch(40% 0.009 250)` / `oklch(49% 0.008 250)` |
 | Rules | `--rule` | `oklch(86% 0.006 250)` |
 
 Line colours — shared verbatim with the 3D scene (`transport/network.ts`) so a
@@ -81,7 +81,14 @@ paper.
 `--line-blue #1b6fc4` · `--line-green #0e7a52` · `--line-red #c0392f` ·
 `--line-amber #e0a21a` · `--line-violet #6d4bb8` · `--line-rose #c14b78`
 
-Status colours mean a condition only: `--ok`, `--watch`, `--alert`.
+Status colours mean a condition only: `--ok`, `--watch`, `--alert`. Amber as text
+uses `--watch-ink`, a darker ink, because the fill amber fails contrast on paper.
+Every text token is held to 4.5:1 on paper, raised and sunken surfaces.
+
+**Charts follow the same rule.** A plain series is ink; a second series on the
+same subject is told apart by dash and a caption, not by hue; a reading that is
+good or bad takes `--ok` or `--alert`. Palettes borrowed from a charting kit are
+the fastest way to break the rule (`ui/analytics/seriesColors.ts`).
 
 ## Spacing, radius, elevation
 
@@ -96,12 +103,17 @@ Status colours mean a condition only: `--ok`, `--watch`, `--alert`.
 `masthead (54px) → map plate + rail → status strip`
 
 - **Masthead** — three regions: brand, mode switch centred, transport controls
-  and map tools right. Paper, with a single bottom rule.
+  and map tools right. The tools (search, measure, inspect, side panel) sit in
+  one group set apart by a rule, the way the clock is. Paper, with a single
+  bottom rule.
 - **Map plate** — the dark figure. Floating on it: mode chips (top-left), the
-  navigation cluster and minimap as one aligned column (top-right), the legend
-  (bottom-right), the selection card (bottom-left), the control hint and the
-  status strip along the bottom. Everything on the plate is dark, because the
-  plate is.
+  navigation cluster and minimap as one flex column (top-right, so they cannot
+  overlap), the legend (bottom-right), the control hint and the status strip
+  along the bottom. Everything that floats shares `--plate-surface` and a
+  `--plate-edge` hairline, with no blur.
+- **Selection card** — the one exception: a sheet of paper laid on the plate
+  (bottom-left). It is a document, so its figures read like the rail and a
+  route bullet sits on the ground it was designed for.
 - **Rail** — a document column, not a stack of cards. Sections are separated by
   rules and space. In simulate mode it is tabbed by task (Map, Network, Service,
   Analysis, Growth) so reading the network never means scrolling past the fare
@@ -132,13 +144,16 @@ Status colours mean a condition only: `--ok`, `--watch`, `--alert`.
   `tablist`/`tab`/`tabpanel`, docks expose `aria-expanded`, the status strip is
   `aria-live="off"` because it changes every tick.
 - Bullet text contrast is computed per line colour rather than assumed.
-- Every interactive target is ≥ 24px tall; most are 28px.
+- Every interactive target is ≥ 24px tall; most are 28px. Layer chips are the
+  target for their checkbox (the label is the hit area).
+- Map labels are collision-culled in screen space: when two overlap, the higher
+  priority (interchange, district, line, station) wins and the other waits.
 
 ## Known rough edges
 
-- The map labels drawn into the 3D scene are canvas sprites, so they don't
-  inherit the type system — they're the one surface still set in the system
-  sans rather than Barlow.
+- Map labels are canvas sprites. They are drawn in Barlow Semi Condensed and
+  redrawn once the face has loaded, but they cannot inherit CSS, so a type
+  change must be made in `SceneView.tsx` (`LABEL_FONT`) as well.
 - Build and disrupt rails are still single scrolls; only simulate mode is
   tabbed. They're short enough today, but the same treatment applies when they
   grow.
