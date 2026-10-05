@@ -95,10 +95,12 @@ export interface LegendExtras {
   split: boolean;
 }
 
-export default function Legend({ overlay, demandLayer, extras }: {
+export default function Legend({ overlay, demandLayer, extras, note }: {
   overlay: Overlay;
   demandLayer: string;
   extras?: Partial<LegendExtras>;
+  /** One plain sentence on what the lens shows. */
+  note?: string;
 }) {
   const entry = LEGENDS[overlay];
   // Markers are conditions, not lines, so each group is titled by what it
@@ -135,6 +137,7 @@ export default function Legend({ overlay, demandLayer, extras }: {
   return (
     <div className="tf-legend">
       <h4>{title}</h4>
+      {note && <p className="tf-legend-note">{note}</p>}
       {entry && entry.kind === 'ramp' ? (
         <>
           <div className="tf-ramp" style={{ backgroundImage: entry.gradient }} />

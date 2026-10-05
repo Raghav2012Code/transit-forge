@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import './shell.css';
+import './map.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
 import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
@@ -71,8 +72,8 @@ import { deleteScenario, duplicateScenario, listScenarios, saveScenario } from '
 import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
 import { type Speed } from './ui/controls/SimControls.tsx';
-import LayerToggles from './ui/controls/LayerToggles.tsx';
-import OverlaySwitch, { type DemandLayer, type TravelDest } from './ui/controls/OverlaySwitch.tsx';
+import LensOptions from './ui/controls/LensOptions.tsx';
+import { LENS_NOTE, type DemandLayer, type TravelDest } from './ui/controls/lenses.ts';
 import StatsPanel from './ui/dashboard/StatsPanel.tsx';
 import DebugPanel from './ui/dashboard/DebugPanel.tsx';
 import Inspector from './ui/inspectors/Inspector.tsx';
@@ -88,20 +89,21 @@ import GrowthPanel, { type ForecastView } from './ui/growth/GrowthPanel.tsx';
 import type { Zone } from './types/index.ts';
 import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
 import ServicePanel from './ui/service/ServicePanel.tsx';
-import { MODE_LABEL, type AppMode as Mode } from './ui/shell/modes.ts';
+import { type AppMode as Mode } from './ui/shell/modes.ts';
 import TopBar from './ui/shell/TopBar.tsx';
 import Workbench from './ui/shell/Workbench.tsx';
 import DayBar from './ui/shell/DayBar.tsx';
 import HelpSheet from './ui/shell/HelpSheet.tsx';
 import Legend from './ui/shell/Legend.tsx';
 import { APP_VERSION } from './version.ts';
-import { cameraPreset, poseFor, type PresetId, type TiltName, type CameraCmd } from './rendering/map/camera.ts';
+import { cameraPreset, poseFor, zoomPose, type PresetId, type TiltName, type CameraCmd } from './rendering/map/camera.ts';
 import { buildSearchIndex, type SearchEntry } from './rendering/map/searchIndex.ts';
 import { changeMarkers, problemMarkers, type MapMarker } from './rendering/map/markers.ts';
 import { formatDistance, snapStation, straightDistance } from './rendering/map/measure.ts';
 import { loadLayers, saveLayers } from './rendering/map/layerPrefs.ts';
 import { findShortestPath } from './simulation/transport/graph.ts';
-import NavWidget from './ui/map/NavWidget.tsx';
+import LensBar from './ui/map/LensBar.tsx';
+import MapControls from './ui/map/MapControls.tsx';
 import Minimap from './ui/map/Minimap.tsx';
 import { ContextMenu, HoverTooltip, type ContextAction } from './ui/map/MapChrome.tsx';
 import SearchPalette from './ui/map/SearchPalette.tsx';
@@ -122,9 +124,8 @@ const TOAST_TTL_MS = 7000;
 const MAX_TOASTS = 4;
 
 /** Simulate mode's rail, scoped by the job you're doing rather than one scroll. */
-type SimTab = 'map' | 'network' | 'service' | 'analysis' | 'growth';
+type SimTab = 'network' | 'service' | 'analysis' | 'growth';
 const SIM_TABS: readonly RailTab<SimTab>[] = [
-  { id: 'map', label: 'Map' },
   { id: 'network', label: 'Network' },
   { id: 'service', label: 'Service' },
   { id: 'analysis', label: 'Analysis' },
@@ -232,6 +233,25 @@ export default function App() {
   const toastTimers = useRef<Set<number>>(new Set());
   const [railOpen, setRailOpen] = useState(true);
   const [helpOpen, setHelpOpen] = useState(false);
+  // The overview map: open by default where there is room, and remembered.
+  const [minimapOpen, setMinimapOpen] = useState(() => {
+    try {
+      const v = localStorage.getItem('transitforge.minimap');
+      if (v === 'open' || v === 'closed') return v === 'open';
+    } catch {
+      // Fall through to the width default.
+    }
+    return window.innerWidth >= 1280;
+  });
+  function toggleMinimap() {
+    const next = !minimapOpen;
+    setMinimapOpen(next);
+    try {
+      localStorage.setItem('transitforge.minimap', next ? 'open' : 'closed');
+    } catch {
+      // The choice then lasts for this visit only.
+    }
+  }
   // "Run until": the sim speeds up toward this absolute minute, then pauses.
   const runTargetRef = useRef<number | null>(null);
   const [runTarget, setRunTarget] = useState<number | null>(null);
@@ -260,7 +280,7 @@ export default function App() {
     saveTheme(next);
     setTheme(next);
   }
-  const [railTab, setRailTab] = useState<SimTab>('map');
+  const [railTab, setRailTab] = useState<SimTab>('network');
   const railRef = useRef<HTMLElement>(null);
 
   function pushToast(level: Toast['level'], text: string) {
@@ -1437,6 +1457,12 @@ export default function App() {
     requestCameraPose(pose.pos, pose.target);
   }
 
+  function zoomBy(factor: number) {
+    if (!camInfo) return;
+    const pose = zoomPose({ pos: camInfo.pos, target: camInfo.target }, factor);
+    requestCameraPose(pose.pos, pose.target);
+  }
+
   function resetCamera() {
     const pose = cameraPreset('overview', presetInput(), tilt);
     requestCameraPose(pose.pos, pose.target);
@@ -2225,79 +2251,95 @@ export default function App() {
             onMeasureHover={(x, z) => setMeasureHover({ x, z })}
           />
           )}
-          <div className="tf-hud-tl">
-            <span className={`tf-hud-chip mode-${mode}`}>
-              <strong>{MODE_LABEL[mode]}</strong>
-              <span>{viewing === 'base' ? 'baseline network' : 'scenario network'}</span>
-            </span>
-            {snapshot.incidents.filter((i) => i.status === 'active').map((i) => (
-              <span className="tf-hud-chip alert" key={i.id}>
-                {i.label}, {Math.max(0, Math.round(i.startMin + i.durationMin - snapshot.timeMinutes))}m left
-              </span>
-            ))}
-            {stats.worstVC >= 0.85 && (
-              <span className="tf-hud-chip alert">{stats.worstRoad} congested at V/C {stats.worstVC}</span>
-            )}
+          <div className="tf-map-top">
+            <LensBar overlay={overlay} onOverlay={setOverlay} layers={layers} onLayers={onLayers}>
+              <Legend
+                overlay={overlay}
+                demandLayer={demandLayer}
+                note={LENS_NOTE[overlay]}
+                extras={{
+                  problems: problemMarkerList.length > 0,
+                  catchment: catchmentView !== null,
+                  measure: measureView !== null,
+                  changes: changeMarkerList.length > 0,
+                  split: splitView,
+                }}
+              />
+              <LensOptions
+                overlay={overlay}
+                travelDest={travelDest}
+                onTravelDest={setTravelDest}
+                coverageThreshold={coverageThreshold}
+                onCoverageThreshold={setCoverageThreshold}
+                demandLayer={demandLayer}
+                onDemandLayer={setDemandLayer}
+              />
+            </LensBar>
+            <div className="tf-map-tr">
+              {ops.length > 0 && (
+                <div className="tf-seg" role="radiogroup" aria-label="Which network the map shows">
+                  <button type="button" role="radio" aria-checked={viewing === 'scenario'} className="tf-seg-item" onClick={() => onView('scenario')}>
+                    Scenario
+                  </button>
+                  <button type="button" role="radio" aria-checked={viewing === 'base'} className="tf-seg-item" onClick={() => onView('base')}>
+                    Baseline
+                  </button>
+                </div>
+              )}
+              {snapshot.incidents.filter((i) => i.status === 'active').map((i) => (
+                <span className="tf-hud-chip alert" key={i.id}>
+                  {i.label}, {Math.max(0, Math.round(i.startMin + i.durationMin - snapshot.timeMinutes))}m left
+                </span>
+              ))}
+              {stats.worstVC >= 0.85 && (
+                <span className="tf-hud-chip alert">{stats.worstRoad} congested at V/C {stats.worstVC}</span>
+              )}
+            </div>
           </div>
           <Toasts toasts={toasts} />
-          <div className="tf-overlay-hint">
-            {mode === 'build'
-              ? 'Build mode. The clock is paused, and edits reset the day.'
-              : mode === 'disrupt'
-                ? 'Disrupt mode. The clock is paused. Click infrastructure to target it.'
-                : mode === 'plan'
-                  ? 'Plan mode. Pick a brief, build against it, then submit for evaluation.'
-                  : 'Drag to orbit, right-drag to pan, scroll to zoom. Click anything to inspect it.'}
-          </div>
-          <Legend
-            overlay={overlay}
-            demandLayer={demandLayer}
-            extras={{
-              problems: problemMarkerList.length > 0,
-              catchment: catchmentView !== null,
-              measure: measureView !== null,
-              changes: changeMarkerList.length > 0,
-              split: splitView,
-            }}
-          />
           {!splitView && (
-            <div className="tf-map-stack">
-              <NavWidget
-                cam={camInfo}
-                tilt={tilt}
-                onTilt={setTilt}
-                onPreset={applyCameraPreset}
-                onReset={resetCamera}
-                onFocusSelection={focusSelection}
-                canFocus={selection !== null}
-              />
-              <Minimap
-                city={snapshot.city}
-                routes={snapshot.routes}
-                stations={snapshot.stations}
-                cam={camInfo}
-                selection={selection}
-                onJump={minimapJump}
-              />
-            </div>
+            <MapControls
+              cam={camInfo}
+              tilt={tilt}
+              onTilt={setTilt}
+              onPreset={applyCameraPreset}
+              onReset={resetCamera}
+              onFocusSelection={focusSelection}
+              canFocus={selection !== null}
+              onZoom={zoomBy}
+              minimapOpen={minimapOpen}
+              onMinimap={toggleMinimap}
+              minimap={
+                <Minimap
+                  city={snapshot.city}
+                  routes={snapshot.routes}
+                  stations={snapshot.stations}
+                  cam={camInfo}
+                  selection={selection}
+                  onJump={minimapJump}
+                />
+              }
+            />
           )}
           <HoverTooltip hover={hoverInfo} />
           <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
           {searchOpen && (
             <SearchPalette entries={searchEntries} onPick={pickSearchResult} onClose={() => setSearchOpen(false)} />
           )}
-          {measureTool && (
-            <div className="tf-measure-bar" role="status">
-              <span>{measureView?.label ?? 'Click a start point on the map (Esc cancels)'}</span>
-              {measureNetworkNote() && <span className="tf-hint">{measureNetworkNote()}</span>}
-              <button type="button" className="tf-btn small" onClick={() => { setMeasureTool(false); setMeasure(null); setMeasureHover(null); }}>
-                Done
-              </button>
-            </div>
-          )}
-          {inspectMode && (
-            <div className="tf-overlay-hint tf-inspect-chip">
-              Quick inspect: clicking selects instead of building. Press I to exit.
+          {(measureTool || inspectMode) && (
+            <div className="tf-map-bc">
+              {measureTool && (
+                <div className="tf-measure-bar" role="status">
+                  <span>{measureView?.label ?? 'Click a start point on the map (Esc cancels)'}</span>
+                  {measureNetworkNote() && <span className="tf-hint">{measureNetworkNote()}</span>}
+                  <button type="button" className="tf-btn small" onClick={toggleMeasure}>
+                    Done
+                  </button>
+                </div>
+              )}
+              {inspectMode && (
+                <div className="tf-map-note">Quick inspect: clicking selects instead of building. Press I to exit.</div>
+              )}
             </div>
           )}
           <div className="tf-mobile-note">TransitForge works best on desktop — the full map needs room.</div>
@@ -2332,21 +2374,6 @@ export default function App() {
                 id={`railpanel-${railTab}`}
                 aria-labelledby={`railtab-${railTab}`}
               >
-                {railTab === 'map' && (
-                  <>
-                    <LayerToggles layers={layers} onChange={onLayers} />
-                    <OverlaySwitch
-                      overlay={overlay}
-                      onChange={setOverlay}
-                      travelDest={travelDest}
-                      onTravelDest={setTravelDest}
-                      coverageThreshold={coverageThreshold}
-                      onCoverageThreshold={setCoverageThreshold}
-                      demandLayer={demandLayer}
-                      onDemandLayer={setDemandLayer}
-                    />
-                  </>
-                )}
                 {railTab === 'network' && <StatsPanel stats={stats} />}
                 {railTab === 'service' && (
                   <ServicePanel
