@@ -138,7 +138,7 @@ export function generateBriefs(facts: BriefFacts, difficulty: Difficulty, opCost
       ],
       objectives: [
         { id: 'su-access', title: `${z.name} accessibility > 60`, description: 'Connect the growing edge.', category: 'accessibility', metric: 'access-zone', targetId: z.id, op: '>', target: 60, horizonYears: horizon },
-        { id: 'su-pop', title: `Support ${Math.round(z.population * 1.15).toLocaleString()} residents`, description: 'House the projected population.', category: 'growth', metric: 'population', op: '>', target: Math.round(z.population * 1.1), horizonYears: horizon },
+        { id: 'su-pop', title: `Support ${Math.round(z.population * 1.1).toLocaleString()} residents`, description: 'House the projected population.', category: 'growth', metric: 'population', op: '>', target: Math.round(z.population * 1.1), horizonYears: horizon },
       ],
       constraints: [budgetConstraint(difficulty), opConstraint(difficulty, opCost)],
       focus: [{ kind: 'zone', id: z.id }],
