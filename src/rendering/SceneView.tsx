@@ -471,6 +471,23 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     }
     scene.add(ghostGroup);
 
+    // Dispose a removed child's GPU resources. Only safe for meshes/lines
+    // built fresh per rebuild — never pass an object whose geometry or
+    // material is a shared, reused instance held outside the group.
+    const disposeChild = (o: THREE.Object3D) => {
+      const geom = (o as THREE.Mesh | THREE.Line).geometry as THREE.BufferGeometry | undefined;
+      geom?.dispose();
+      const mat = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+      else mat?.dispose();
+    };
+    // Dispose every child's geometry/material, then empty the group. Only
+    // for groups whose children are all rebuilt fresh each call.
+    const clearGroupDisposing = (group: THREE.Group) => {
+      for (const child of group.children) disposeChild(child);
+      group.clear();
+    };
+
     // Incident markers: rebuilt when the active incident set changes.
     const incidentGroup = new THREE.Group();
     incidentGroup.name = 'incidents';
@@ -481,7 +498,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const rebuildIncidentMarkers = (sig: string) => {
       if (sig === lastIncidentSig) return;
       lastIncidentSig = sig;
-      incidentGroup.clear();
+      clearGroupDisposing(incidentGroup);
       const sim = simRef.current;
       if (!sim) return;
       for (const inc of sim.incidents) {
@@ -542,6 +559,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       const key = d ? JSON.stringify(d) : '';
       if (key === lastDraftKey) return;
       lastDraftKey = key;
+      // Only the connecting line's geometry is fresh per call; the dot
+      // geometry/materials (draftDotGeo/draftDotMat/hoverDotMat) are shared
+      // and reused below, so they must survive the clear.
+      for (const child of draftGroup.children) {
+        if (child instanceof THREE.Line) child.geometry.dispose();
+      }
       draftGroup.clear();
       if (!d) return;
       const y = 9;
@@ -579,8 +602,8 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       const key = JSON.stringify([problemMarkersRef.current, changeMarkersRef.current]);
       if (key === lastMarkerKey) return;
       lastMarkerKey = key;
-      problemGroup.clear();
-      changeGroup.clear();
+      clearGroupDisposing(problemGroup);
+      clearGroupDisposing(changeGroup);
       markerPos.clear();
       let phase = 0;
       const add = (group: THREE.Group, m: MapMarker) => {
@@ -608,7 +631,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       const key = c ? JSON.stringify(c) : '';
       if (key === lastCatchKey) return;
       lastCatchKey = key;
-      catchmentGroup.clear();
+      clearGroupDisposing(catchmentGroup);
       if (!c) return;
       for (const r of c.radii) {
         const ring = new THREE.Mesh(
@@ -671,7 +694,10 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       // Clear previous line/dots but keep the reused label sprite.
       for (let i = measureGroup.children.length - 1; i >= 0; i--) {
         const child = measureGroup.children[i];
-        if (child !== measureSprite) measureGroup.remove(child);
+        if (child !== measureSprite) {
+          disposeChild(child);
+          measureGroup.remove(child);
+        }
       }
       measureSprite.visible = false;
       if (!m || !m.a) return;
