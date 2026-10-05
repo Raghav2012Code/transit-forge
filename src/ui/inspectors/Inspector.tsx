@@ -5,6 +5,7 @@ import { stationCatchment } from '../../simulation/analytics/catchment.ts';
 import type { CityProblem } from '../../simulation/planning/problems.ts';
 import { LOOP_ROUTES } from '../../simulation/passengers/passengers.ts';
 import { nextArrivalMin, nextTerminusDeparture, routeEffectiveHeadway } from '../../simulation/service/timetable.ts';
+import type { ReactNode } from 'react';
 import { RouteRef } from '../shell/RouteBullet.tsx';
 import { IconClose } from '../shell/icons.tsx';
 
@@ -91,6 +92,8 @@ interface Props {
   onCatchmentRadius: (r: number | null) => void;
   zoneCoverage?: number;
   zoneTravel?: number | null;
+  /** For a route: the service plan, shown right after its key figures. */
+  children?: ReactNode;
 }
 
 function roadLabel(sim: SimulationState, id: string): string {
@@ -117,7 +120,7 @@ function CloseButton({ onClose }: { onClose: () => void }) {
   );
 }
 
-export default function Inspector({ selection, sim, onClose, problems, onFocusStation, onInvestigate, onOverlay, onOpenDisrupt, catchmentRadius, onCatchmentRadius, zoneCoverage, zoneTravel }: Props) {
+export default function Inspector({ selection, sim, onClose, problems, onFocusStation, onInvestigate, onOverlay, onOpenDisrupt, catchmentRadius, onCatchmentRadius, zoneCoverage, zoneTravel, children }: Props) {
   if (!selection) {
     return (
       <div className="tf-inspector">
@@ -291,24 +294,28 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
           <p className="tf-hint tf-warn">Reduced service, vehicles come {sim.closures.headwayMult.get(r.id)}× less often</p>
         )}
         <dl>
-          <div className="tf-stat-row"><dt>Headway</dt><dd>{r.headwayMin} min</dd></div>
-          <div className="tf-stat-row"><dt>Speed</dt><dd>{r.speedKph} kph</dd></div>
+          {!children && <div className="tf-stat-row"><dt>Headway</dt><dd>{r.headwayMin} min</dd></div>}
+          {!children && <div className="tf-stat-row"><dt>Speed</dt><dd>{r.speedKph} kph</dd></div>}
           <div className="tf-stat-row"><dt>Vehicles</dt><dd>{vehicles.length}</dd></div>
-          <div className="tf-stat-row"><dt>Veh. cap</dt><dd>{r.vehicleCapacity}</dd></div>
+          {!children && <div className="tf-stat-row"><dt>Veh. cap</dt><dd>{r.vehicleCapacity}</dd></div>}
           <div className="tf-stat-row"><dt>Boardings</dt><dd>{Math.round(boardings).toLocaleString()}</dd></div>
           <div className="tf-stat-row"><dt>Onboard now</dt><dd>{onboard} / {cap} ({occ}%)</dd></div>
+          {plan && (
+            <>
+              <div className="tf-stat-row"><dt>Peak occupancy</dt><dd>{peakOcc}%</dd></div>
+              <div className="tf-stat-row"><dt>Denied</dt><dd>{Math.round(denied).toLocaleString()}</dd></div>
+            </>
+          )}
         </dl>
-        {plan && (
+        {plan && !children && (
           <>
             <p className="tf-hint">Service (peak {plan.peakHeadwayMin}m / off-peak {plan.offPeakHeadwayMin}m)</p>
             <dl>
               <div className="tf-stat-row"><dt>Fleet</dt><dd>{plan.fleetSize === 0 ? `auto (${vehicles.length})` : plan.fleetSize}</dd></div>
-              <div className="tf-stat-row"><dt>Peak occupancy</dt><dd>{peakOcc}%</dd></div>
-              <div className="tf-stat-row"><dt>Denied</dt><dd>{Math.round(denied).toLocaleString()}</dd></div>
-              <div className="tf-stat-row"><dt>Delay total</dt><dd>{Math.round(sim.counters.totalDelayMin)} min</dd></div>
             </dl>
           </>
         )}
+        {children}
         {departures.length > 0 && (
           <>
             <p className="tf-hint">Next from {departures[0].from}</p>

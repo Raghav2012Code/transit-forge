@@ -126,3 +126,55 @@ export const IconSun = (p: IconProps) => (
 export const IconMoon = (p: IconProps) => (
   <Svg {...p}><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8Z" /></Svg>
 );
+
+export const IconMetro = (p: IconProps) => (
+  <Svg {...p}><rect x="3.5" y="2" width="9" height="9.6" rx="2.2" /><path d="M3.5 7.2h9M5.4 13.9l1-2.3M10.6 13.9l-1-2.3" /><circle cx="6" cy="9.5" r="0.4" /><circle cx="10" cy="9.5" r="0.4" /></Svg>
+);
+
+export const IconStationPin = (p: IconProps) => (
+  <Svg {...p}><path d="M8 14.2s4.6-4.1 4.6-7.8a4.6 4.6 0 0 0-9.2 0c0 3.7 4.6 7.8 4.6 7.8Z" /><circle cx="8" cy="6.4" r="1.6" /></Svg>
+);
+
+export const IconBus = (p: IconProps) => (
+  <Svg {...p}><rect x="2.5" y="2.8" width="11" height="8.6" rx="1.8" /><path d="M2.5 7.6h11M4.6 13.6v-2.2M11.4 13.6v-2.2" /><circle cx="5.2" cy="9.5" r="0.4" /><circle cx="10.8" cy="9.5" r="0.4" /></Svg>
+);
+
+export const IconRoad = (p: IconProps) => (
+  <Svg {...p}><path d="M5.4 2.2 3 13.8M10.6 2.2 13 13.8M8 3.2v1.8M8 7v2M8 11v2" /></Svg>
+);
+
+export const IconExtend = (p: IconProps) => (
+  <Svg {...p}><path d="M2.4 12.4 6.4 8.2l3 2.2 4.2-5.4M10.4 5h3.2v3.2" /></Svg>
+);
+
+export const IconHelp = (p: IconProps) => (
+  <Svg {...p}><circle cx="8" cy="8" r="6.2" /><path d="M6.2 6.4a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.9.7-.9 1.4M8 11.6v.1" /></Svg>
+);
+
+export const IconTarget = (p: IconProps) => (
+  <Svg {...p}><circle cx="8" cy="8" r="2.3" /><path d="M8 1.8v2.4M8 11.8v2.4M1.8 8h2.4M11.8 8h2.4" /></Svg>
+);
+
+export const IconFocus = (p: IconProps) => (
+  <Svg {...p}><path d="M2.5 5.6v-3h3.1M10.4 2.6h3.1v3M13.5 10.4v3h-3.1M5.6 13.4H2.5v-3" /><circle cx="8" cy="8" r="1.5" /></Svg>
+);
+
+export const IconReports = (p: IconProps) => (
+  <Svg {...p}><path d="M2.5 13.5h11M4.5 12V8M8 12V3.5M11.5 12V6" strokeWidth={2} /></Svg>
+);
+
+export const IconMapFold = (p: IconProps) => (
+  <Svg {...p}><path d="m2 4 4-1.6L10 4l4-1.6v9.6L10 13.6 6 12l-4 1.6ZM6 2.4V12M10 4v9.6" /></Svg>
+);
+
+export const IconMore = (p: IconProps) => (
+  <Svg {...p}><circle cx="3.6" cy="8" r="1" fill="currentColor" stroke="none" /><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none" /><circle cx="12.4" cy="8" r="1" fill="currentColor" stroke="none" /></Svg>
+);
+
+export const IconCompare = (p: IconProps) => (
+  <Svg {...p}><rect x="2" y="3" width="5" height="10" rx="1" /><rect x="9" y="3" width="5" height="10" rx="1" /></Svg>
+);
+
+export const IconScenario = (p: IconProps) => (
+  <Svg {...p}><path d="M2.5 4.2a1 1 0 0 1 1-1h3l1.4 1.6h4.6a1 1 0 0 1 1 1v6.2a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1Z" /></Svg>
+);

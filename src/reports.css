@@ -1,0 +1,83 @@
+/* Reports: a wide sheet that rises over the lower map, above the day bar.
+   Panels written for a 340px column flow into columns here. */
+
+:root { --reports-h: min(46vh, 460px); }
+
+.tf-tabs { display: flex; align-items: stretch; }
+.tf-tab {
+  appearance: none;
+  padding: var(--s-4) var(--s-5);
+  font: inherit;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease);
+}
+.tf-tab:hover { color: var(--ink-strong); }
+.tf-tab[aria-selected='true'] { color: var(--ink-strong); font-weight: 600; border-bottom-color: var(--ink-strong); }
+
+.tf-reports {
+  position: absolute;
+  z-index: 12;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--reports-h);
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-raised);
+  border-top: 1px solid var(--rule-strong);
+  box-shadow: 0 -10px 28px oklch(20% 0.01 250 / 0.12);
+  animation: tf-sheet-up var(--d-slow) var(--ease) both;
+}
+@keyframes tf-sheet-up {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.tf-reports-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--s-5) 0 var(--s-4);
+  border-bottom: 1px solid var(--rule);
+}
+.tf-reports-head .tf-tabs { margin-bottom: -1px; }
+.tf-reports-body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--s-6) var(--s-7);
+  overflow-y: auto;
+}
+/* Auto height, so the browser balances the columns instead of filling them sideways. */
+.tf-reports-cols {
+  column-width: 300px;
+  column-gap: var(--s-8);
+}
+.tf-reports-body:focus { outline: none; }
+.tf-reports-body:focus-visible { outline: 2px solid var(--ink-strong); outline-offset: -2px; }
+
+/* Keep a block whole when it fits; let the long ones (growth, tables) split. */
+.tf-reports-body .tf-stats,
+.tf-reports-body .tf-compare,
+.tf-reports-body .tf-debug,
+.tf-reports-body .tf-series,
+.tf-reports-body .tf-draft,
+.tf-reports-body .tf-tile,
+.tf-reports-body .tf-stat-row,
+.tf-reports-body .tf-compare-table { break-inside: avoid; }
+.tf-reports-body h3,
+.tf-reports-body h4,
+.tf-reports-body h5 { break-after: avoid; }
+.tf-reports-body .tf-dock { break-inside: auto; }
+.tf-reports-body .tf-dock-head { break-after: avoid; }
+
+/* The map's own furniture rises with the sheet instead of hiding under it. */
+.tf-stage[data-reports='open'] .tf-map-br,
+.tf-stage[data-reports='open'] .tf-map-bc,
+.tf-stage[data-reports='open'] .tf-toasts { bottom: calc(var(--reports-h) + 12px); }
+.tf-stage[data-reports='open'] .tf-map-br .tf-minimap { display: none; }

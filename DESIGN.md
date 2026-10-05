@@ -106,7 +106,7 @@ values and nothing else. A component never branches on theme.
   faint 62% lightness, measured on paper, raised, sunken and the map plate.
   Status tones are lighter in dark (`--ok`, `--watch-ink`, `--alert`).
 - **The choice is the person's.** The first visit follows the operating system
-  and keeps following it; the first explicit choice (the masthead button, or
+  and keeps following it; the first explicit choice (the top bar button, or
   `T`) wins from then on: it is saved for future visits, and where storage is
   blocked it still holds for the rest of this visit rather than being undone
   when the system theme changes. An inline script in `index.html` sets the
@@ -149,25 +149,61 @@ across, so the view does not jump and the selection stays.
 
 ## Layout
 
-`masthead (54px) → map plate + rail → status strip`
+A workbench. Each region has one job, and a control lives where its job is.
 
-- **Masthead** — three regions: brand, mode switch centred, transport controls
-  and map tools right. The tools (search, measure, inspect, side panel) sit in
-  one group set apart by a rule, the way the clock is. Paper, with a single
-  bottom rule.
-- **Map plate** — the light figure. Floating on it: mode chips (top-left), the
-  navigation cluster and minimap as one flex column (top-right, so they cannot
-  overlap), the legend (bottom-right), the control hint and the status strip
-  along the bottom. Everything that floats shares `--plate-surface` and a
-  `--plate-edge` hairline, with no blur.
-- **Selection card** — a sheet of paper on the plate (bottom-left), with a
-  shadow because it genuinely floats. Its figures read like the rail and a
-  route bullet sits on the ground it was designed for.
-- **Rail** — a document column, not a stack of cards. Sections are separated by
-  rules and space. In simulate mode it is tabbed by task (Map, Network, Service,
-  Analysis, Growth) so reading the network never means scrolling past the fare
-  table to reach the growth forecast. Switching mode or task returns the rail to
-  the top.
+```
+bar     the scenario, search and commands, theme and help
+rail    what you are doing: the mode, then that mode's tools
+stage   the map, edge to edge, with its own four corners
+panel   what is selected, or where to look
+dock    the clock, the service day, six readings, and Reports
+```
+
+- **Bar (44px)** — the brand, the scenario (a popover for saving and loading),
+  one wide search-and-command field, and the two settings nobody reaches for
+  often. It says what you are working on and lets you find anything.
+- **Rail (68px, always labelled)** — the four modes, then the active mode's
+  tools (Build's six), then Measure and Inspect at the foot because they work
+  everywhere. An icon alone is a guess, so every item carries its name.
+- **Stage** — the map has no frame. Its corners:
+  - *top left*: the lens bar (five lenses, More, Layers) with the legend under
+    it, attached to the lens that owns it, and the one setting a lens needs
+  - *top right*: the objectives chip while a brief is active, the
+    Scenario/Baseline switch and Compare once there are edits, and alerts
+  - *bottom right*: the overview map, the view (3D, Plan, Street) and a column
+    of square camera buttons
+  - *bottom left*: events as they happen; *bottom centre*: a tool in use
+- **Panel (340px)** — nothing selected: the lines, what needs attention, fares.
+  Selected: the thing itself, in place of the floating card. A route's
+  inspector carries its service plan, so changing a headway is two clicks.
+  In Build and Disrupt the mode's form keeps the top and the selection follows
+  it under a heavy ink rule; in Plan, where reading is the point, it leads.
+- **Dock (60px)** — transport, the clock, the **service-day strip**, and six
+  readings. Reports opens a wide sheet over the lower map for Network,
+  Analysis, Growth and Compare, with panels flowing into columns.
+
+**The memorable element is the service-day strip.** It draws the operating
+day (04:00 to 24:00) the way a timetable is drawn: peak periods shaded (read
+from the simulation's own definition), disruptions as bars, the day's load as
+a trace, a needle for now. Pointing at the future offers "Run to 09:00"; the
+past cannot be revisited because the day would have to be replayed. Everything
+else is quiet so this can be the one thing that is not.
+
+**Search is also the command line.** One field finds places and runs actions
+(`dark`, `build`, `crowd`, `reports`). Anything the workspace can do is
+reachable by typing, and its shortcut is shown beside it.
+
+### Three shapes, one set of components
+
+| Width | Shape |
+| --- | --- |
+| 1024 and up | rail, map, panel, dock |
+| 700 to 1023 | the panel is a drawer over the map; it opens when something is selected |
+| under 700 | the rail is a bar along the bottom, the panel a sheet above it, the dock keeps the clock and transport |
+
+The files: `shell.css` (grid, bar, rail, dock, popovers), `map.css` (the
+corners), `reports.css`, `panel.css`, `responsive.css`. `App.css` holds the
+shared pieces.
 
 ## Craft layer
 
@@ -189,9 +225,16 @@ across, so the view does not jump and the selection stays.
 
 - Visible focus ring on every interactive element (2px ink, 1px offset).
 - All numerals tabular; state signalled by shape and fill as well as colour.
-- Segmented controls expose `aria-checked`, rail tabs are a real
-  `tablist`/`tab`/`tabpanel`, docks expose `aria-expanded`, the status strip is
-  `aria-live="off"` because it changes every tick.
+- Segmented controls and the mode rail expose `aria-checked`; the reports sheet
+  is a real `tablist`/`tab`/`tabpanel`; docks and popovers expose
+  `aria-expanded`; the readings are a plain list because they change every tick
+  and must not be announced.
+- The command palette is a `combobox` over a `listbox` with an active
+  descendant, and the day strip is a `slider` (arrows choose a later time,
+  Enter runs to it). Popovers and sheets close on Escape before Escape would
+  leave the mode.
+- Landmarks are named: workspace, map, details or the mode panel, clock and
+  readings, reports.
 - Bullet text contrast is computed per line colour rather than assumed.
 - Every interactive target is ≥ 24px tall; most are 28px. Layer chips are the
   target for their checkbox (the label is the hit area).
@@ -203,6 +246,8 @@ across, so the view does not jump and the selection stays.
 - Map labels are canvas sprites. They are drawn in Barlow Semi Condensed and
   redrawn once the face has loaded, but they cannot inherit CSS, so a type
   change must be made in `SceneView.tsx` (`LABEL_FONT`) as well.
-- Build and disrupt rails are still single scrolls; only simulate mode is
-  tabbed. They're short enough today, but the same treatment applies when they
-  grow.
+- The panel in Build, Disrupt and Plan is still one scroll of collapsible
+  sections. They are short enough today; if they grow, give them the Reports
+  sheet's tabs rather than a longer column.
+- The day strip runs forward only. Going back would mean replaying the day from
+  the start, which is a different feature.

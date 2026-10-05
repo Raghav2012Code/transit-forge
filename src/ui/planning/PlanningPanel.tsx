@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import type { CompareRow } from '../../simulation/scenario/compare.ts';
 import type { PlanningScore } from '../../simulation/analytics/impact.ts';
 import type { Objective, ObjectiveResult, PlanConstraint, ConstraintResult } from '../../simulation/planning/objectives.ts';
@@ -88,26 +88,6 @@ function RowTable({ rows }: { rows: CompareRow[] }) {
     </table>
   );
 }
-
-const SHORTCUTS: [string[], string][] = [
-  [['Space'], 'Play or pause'],
-  [['1', '2', '3'], 'Speed 1×, 5×, 20×'],
-  [['B'], 'Build mode'],
-  [['D'], 'Disrupt mode'],
-  [['P'], 'Plan mode'],
-  [['A'], 'Accessibility overlay on or off'],
-  [['I'], 'Quick inspect'],
-  [['T'], 'Switch between light and dark'],
-  [['/'], 'Search the map'],
-  [['F'], 'Focus the selection'],
-  [['0'], 'Reset the view'],
-  [['['], 'Hide the side panel'],
-  [[']'], 'Show the side panel'],
-  [['Esc'], 'Back to simulate'],
-  [['R'], 'Reset the day'],
-  [['Ctrl', 'Z'], 'Undo'],
-  [['Ctrl', 'Shift', 'Z'], 'Redo'],
-];
 
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard', 'expert'];
 const HORIZONS = [0, 1, 5, 10, 20];
@@ -390,17 +370,6 @@ export default function PlanningPanel(p: Props) {
           </div>
         </Dock>
       )}
-
-      <Dock title="Shortcuts" defaultOpen={false}>
-        <dl className="tf-keys">
-          {SHORTCUTS.map(([keys, does]) => (
-            <Fragment key={does}>
-              <dt>{keys.map((k) => <kbd key={k}>{k}</kbd>)}</dt>
-              <dd>{does}</dd>
-            </Fragment>
-          ))}
-        </dl>
-      </Dock>
     </>
   );
 }

@@ -21,7 +21,7 @@ export interface SearchResult extends SearchEntry {
 
 const KIND_RANK: Record<SearchKind, number> = { station: 0, route: 1, district: 2, road: 3 };
 
-function scoreName(name: string, q: string): number {
+export function scoreName(name: string, q: string): number {
   const n = name.toLowerCase();
   const query = q.toLowerCase().trim();
   if (query.length === 0) return 0;

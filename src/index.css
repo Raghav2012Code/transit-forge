@@ -227,10 +227,7 @@ body {
 
 /* ---- every figure is tabular; dense data sets semi-condensed ---- */
 input, select, button, textarea { font-family: inherit; }
-.tf-data,
 .tf-stat-row dd,
-.tf-table td:not(:first-child),
-.tf-table th:not(:first-child),
 .tf-kpi-value,
 .tf-clock strong {
   font-family: var(--font-data);

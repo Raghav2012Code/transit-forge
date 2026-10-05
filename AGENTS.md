@@ -44,8 +44,8 @@ Light and dark ship as one design:
 - Milestones land as one commit each, once `npm run lint`, `npm run test` and
   `npm run build` are all clean.
 - Keyboard shortcuts are handled by `onKey` in `src/App.tsx` and listed for
-  people in `SHORTCUTS` in `src/ui/planning/PlanningPanel.tsx`; change both
-  together.
+  people in `src/ui/shell/shortcuts.ts` (the `?` sheet); change both together.
+  An action that can be done should also be a command in `buildCommands`.
 
 ## Git
 
