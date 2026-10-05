@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 120" width="480" height="120" role="img" aria-label="TransitForge">
+  <rect x="0.5" y="0.5" width="479" height="119" rx="16" fill="#02040a" stroke="#1c2430"/>
+
+  <!-- mark: a small transit interchange, hub + three route spokes -->
+  <rect x="20" y="20" width="80" height="80" rx="18" fill="#03070e" stroke="#008ba5" stroke-width="2.75"/>
+  <g fill="none" stroke-linecap="round">
+    <line x1="60" y1="62.5" x2="75" y2="37.5" stroke="#00b4f0" stroke-width="4.75"/>
+    <line x1="60" y1="62.5" x2="35" y2="50" stroke="#bc88f4" stroke-width="4.75"/>
+    <line x1="60" y1="62.5" x2="50" y2="82.5" stroke="#f8bd40" stroke-width="4.75"/>
+  </g>
+  <circle cx="75" cy="37.5" r="4.5" fill="#00b4f0"/>
+  <circle cx="35" cy="50" r="4.5" fill="#bc88f4"/>
+  <circle cx="50" cy="82.5" r="4.5" fill="#f8bd40"/>
+  <circle cx="60" cy="62.5" r="6.75" fill="#2ad5e5"/>
+
+  <!-- wordmark -->
+  <text x="118" y="71" font-family="'Space Grotesk', 'Segoe UI', system-ui, sans-serif" font-weight="600" font-size="42" letter-spacing="-0.4" fill="#e4e8ed">TransitForge</text>
+  <text x="120" y="92" font-family="'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace" font-weight="500" font-size="11" letter-spacing="2.5" fill="#66707b">COASTAL TRANSIT CONSOLE</text>
+</svg>
