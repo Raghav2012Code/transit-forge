@@ -199,7 +199,7 @@ export default function DisruptPanel(p: Props) {
             </button>
             <span className="tf-hint">{inc.status}</span>
           </div>
-          <div className="tf-hint">{fmt(inc.startMin)}–{fmt(inc.startMin + inc.durationMin)} · severity {(inc.severity01 * 100).toFixed(0)}%</div>
+          <div className="tf-hint">{fmt(inc.startMin)}–{fmt(inc.startMin + inc.durationMin)}, severity {(inc.severity01 * 100).toFixed(0)}%</div>
           {p.selectedIncidentId === inc.id && (
             <IncidentDetail
               sim={p.sim}
@@ -231,7 +231,7 @@ export default function DisruptPanel(p: Props) {
         <ol className="tf-ranked">
           {p.critical.map((c) => (
             <li key={`${c.kind}-${c.id}`}>
-              {c.label} <span className="tf-hint">· {c.score}</span>
+              {c.label} <span className="tf-hint">{c.score}</span>
               <div className="tf-hint">{c.reason}</div>
             </li>
           ))}
@@ -312,7 +312,7 @@ function IncidentDetail({ sim, inc, onResolve, onDeployReplacement, onBoostFrequ
       {(inc.status === 'active' || inc.status === 'scheduled') && (
         <button type="button" className="tf-btn small" onClick={onResolve}>Resolve now</button>
       )}
-      {cap && <div className="tf-hint">Lost: {cap.routeKmLost} route-km · {cap.roadKmLost} road-km</div>}
+      {cap && <div className="tf-hint">Lost {cap.routeKmLost} route-km and {cap.roadKmLost} road-km</div>}
     </div>
   );
 }

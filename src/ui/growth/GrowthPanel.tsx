@@ -88,14 +88,14 @@ export default function GrowthPanel({ year, summary, districts, history, onAdvan
           <h4>Planning warnings</h4>
           <ul className="tf-ranked">
             {advice.warnings.map((w, i) => (
-              <li key={i}>{w.level === 'warn' ? '⚠ ' : '· '}{w.text}</li>
+              <li key={i}>{w.text}</li>
             ))}
           </ul>
           {advice.recommendations.map((r, i) => (
             <div key={i} className="tf-draft">
               <strong>{r.intervention}</strong>
               <div className="tf-hint">{r.reason}</div>
-              <div className="tf-hint">{r.metrics} · {r.area}</div>
+              <div className="tf-hint">{r.metrics}, {r.area}</div>
             </div>
           ))}
         </>

@@ -3,7 +3,7 @@ import Kpi from '../shell/Kpi.tsx';
 
 function Section({ title, rows, tone }: { title: string; rows: [string, string][]; tone?: 'alert' }) {
   return (
-    <div className="tf-stats" style={tone === 'alert' ? { borderColor: 'var(--bad)' } : undefined}>
+    <div className="tf-stats" style={tone === 'alert' ? { borderColor: 'var(--alert)' } : undefined}>
       <h3>{title}</h3>
       <dl>
         {rows.map(([k, val]) => (

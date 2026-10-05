@@ -84,7 +84,7 @@ export default function Minimap({ city, routes, stations, cam, selection, onJump
         aria-label="Minimap. Click or use arrow keys to move the camera, Enter to centre."
         style={{ cursor: 'crosshair', display: 'block' }}
       >
-        <rect x={0} y={0} width={W} height={H} fill="var(--surface-sunken)" />
+        <rect x={0} y={0} width={W} height={H} fill="var(--plate)" />
         {/* river */}
         <polyline
           points={city.river.map((p) => project(frame, p.x, p.z).join(',')).join(' ')}

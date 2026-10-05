@@ -1,8 +1,12 @@
-/* TransitForge shell + component styles. Tokens live in index.css.
-   Layout grammar: HUD bar (fixed) → stage (viewport + status strip) → side
-   panel (scrollable, sectioned). Motion is opacity/transform only. */
+/* TransitForge shell + components. Tokens live in index.css.
 
-/* ===================================================================== *
+   Structure: masthead (paper) → map plate (dark, inset like a figure in a
+   report) → rail (a document column, not a stack of cards) → status strip.
+
+   Two environments, deliberately: the chrome is paper and ink, and anything
+   floating *inside* the map plate is dark, because it sits on the map. */
+
+/* =====================================================================
  * 1. Shell
  * ===================================================================== */
 
@@ -12,72 +16,57 @@
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  background: var(--bg);
+  background: var(--paper);
 }
 
-/* ---- HUD bar ----
-   Three regions (brand | mode switch | transport controls), not a two-group
-   flex with a spacer eating whatever width is left. A spacer reads as a
-   leftover gap on wide viewports; centering the mode switch makes the same
-   space a deliberate layout decision. */
+/* ---- masthead ---- */
 .tf-topbar {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  column-gap: var(--s-5);
+  column-gap: var(--s-6);
   height: var(--hud-h);
   padding: 0 var(--s-5);
   flex: none;
-  background: linear-gradient(180deg, var(--surface-1), var(--surface-0));
-  border-bottom: 1px solid var(--hairline);
-  box-shadow: var(--shadow-hud);
+  background: var(--paper-raised);
+  border-bottom: 1px solid var(--rule);
   position: relative;
   z-index: 20;
-}
-.tf-topbar::after {
-  content: '';
-  position: absolute;
-  inset: auto 0 -1px 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, var(--signal-line) 22%, transparent 78%);
-  opacity: 0.5;
-  pointer-events: none;
 }
 
 .tf-brand {
   display: flex;
   align-items: center;
-  gap: var(--s-3);
+  gap: var(--s-4);
   flex: none;
   justify-self: start;
 }
 .tf-brand-mark {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--signal-line);
-  border-radius: var(--r-sm);
-  background: linear-gradient(160deg, var(--signal-soft), transparent 70%), var(--surface-sunken);
-  color: var(--signal);
+  border-radius: var(--r-bullet);
+  background: var(--ink-strong);
+  color: var(--on-ink);
 }
 .tf-brand-name {
   display: flex;
-  flex-direction: column;
-  line-height: 1.05;
+  align-items: baseline;
+  gap: var(--s-3);
+  line-height: 1;
 }
 .tf-brand-name b {
-  font-size: var(--fs-subtitle);
+  font-size: var(--fs-lead);
   font-weight: 600;
-  letter-spacing: var(--tracking-display);
-  color: var(--text);
+  letter-spacing: -0.01em;
+  color: var(--ink-strong);
 }
 .tf-brand-name span {
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
 }
 
 .tf-hud-right {
@@ -88,20 +77,16 @@
   justify-self: end;
 }
 
-/* ---- segmented control (modes, speeds, overlays, chips) ---- */
+/* ---- segmented controls: the selected cell is solid ink ---- */
 .tf-seg {
   display: inline-flex;
   align-items: stretch;
   padding: 2px;
   gap: 2px;
-  background: var(--surface-sunken);
-  border: 1px solid var(--hairline);
+  background: var(--paper-sunken);
+  border: 1px solid var(--rule);
   border-radius: var(--r-md);
-  box-shadow: inset 0 1px 2px oklch(6% 0.02 258 / 0.35);
 }
-/* Overlay/demand/destination groups: a fixed 3-column grid instead of
-   content-width flex-wrap, so a 5- or 6-item group breaks into even rows
-   (3+3, 3+2) instead of an orphaned single item stranded on its own row. */
 .tf-seg.wrap {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -117,44 +102,40 @@
   padding: 0 10px;
   font-size: var(--fs-small);
   font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--muted);
+  color: var(--ink-soft);
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   border-radius: var(--r-sm);
   cursor: pointer;
   white-space: nowrap;
-  transition: color var(--d-fast) var(--ease), background var(--d-fast) var(--ease),
-    border-color var(--d-fast) var(--ease);
+  transition: color var(--d-fast) var(--ease), background var(--d-fast) var(--ease);
 }
-.tf-seg-item:hover { color: var(--text); background: var(--surface-1); }
+.tf-seg-item:hover { color: var(--ink-strong); background: var(--paper-raised); }
 .tf-seg-item[aria-pressed='true'],
 .tf-seg-item[aria-checked='true'],
 .tf-seg-item.active {
-  color: var(--text);
-  background: var(--surface-2);
-  border-color: var(--hairline-strong);
-  box-shadow: inset 0 1px 0 var(--edge-light), 0 1px 2px oklch(6% 0.02 258 / 0.4);
+  color: var(--on-ink);
+  background: var(--ink-strong);
+  font-weight: 600;
+}
+.tf-seg-item:disabled { opacity: 0.35; cursor: not-allowed; }
+.tf-seg-item.wide { padding: 0 14px; }
+
+/* a line's colour dot, only where the row names a line */
+.tf-seg-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-bullet);
+  background: var(--ink-faint);
+  flex: none;
 }
 .tf-seg-item[aria-pressed='true'] .tf-seg-dot,
 .tf-seg-item[aria-checked='true'] .tf-seg-dot,
-.tf-seg-item.active .tf-seg-dot { background: var(--signal); }
-.tf-seg-item:disabled { opacity: 0.35; cursor: not-allowed; }
-.tf-seg-item.wide { padding: 0 12px; }
-
-.tf-seg-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--faint);
-  flex: none;
-  transition: background var(--d-fast) var(--ease);
-}
+.tf-seg-item.active .tf-seg-dot { background: var(--on-ink); }
 
 .tf-speeds { display: inline-flex; gap: var(--s-2); }
 .tf-speeds.tf-seg { gap: 2px; }
 
-/* ---- transport controls + clock ---- */
 .tf-controls {
   display: flex;
   align-items: center;
@@ -167,67 +148,51 @@
   align-items: flex-end;
   line-height: 1;
   padding-left: var(--s-5);
-  border-left: 1px solid var(--hairline);
+  border-left: 1px solid var(--rule);
 }
 .tf-clock strong {
-  font-size: 20px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--text);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--ink-strong);
+  letter-spacing: -0.01em;
 }
 .tf-clock span {
   margin-top: 3px;
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
 }
-.tf-clock.paused strong { color: var(--muted); }
+.tf-clock.paused strong { color: var(--ink-faint); }
 
-/* ---- stage ---- */
+/* =====================================================================
+ * 2. The map plate — a dark figure set into the paper
+ * ===================================================================== */
+
 .tf-main {
   display: grid;
   grid-template-columns: 1fr var(--panel-w);
   min-height: 0;
   flex: 1;
+  gap: var(--s-5);
+  padding: var(--s-5);
 }
-.tf-root.rail-collapsed .tf-main { grid-template-columns: 1fr 0; }
+.tf-root.rail-collapsed .tf-main { grid-template-columns: 1fr; }
 .tf-root.rail-collapsed .tf-panel { display: none; }
 
 .tf-viewport {
   position: relative;
   min-width: 0;
   min-height: 0;
-  background: var(--bg-deep);
+  background: var(--plate-deep);
+  border: 1px solid var(--ink-strong);
+  border-radius: var(--r-md);
   overflow: hidden;
 }
 .scene-mount { position: absolute; inset: 0; }
 .scene-mount canvas { display: block; width: 100%; height: 100%; }
 
-/* viewport atmosphere: vignette + corner brackets (signature HUD frame) */
-.tf-viewport::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(120% 90% at 50% 45%, transparent 55%, oklch(6% 0.02 258 / 0.55) 100%);
-}
-.tf-bracket {
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  pointer-events: none;
-  opacity: 0.5;
-  z-index: 3;
-}
-.tf-bracket.tl { top: 10px; left: 10px; border-top: 1px solid var(--signal); border-left: 1px solid var(--signal); }
-.tf-bracket.tr { top: 10px; right: 10px; border-top: 1px solid var(--signal); border-right: 1px solid var(--signal); }
-.tf-bracket.bl { bottom: 10px; left: 10px; border-bottom: 1px solid var(--signal); border-left: 1px solid var(--signal); }
-.tf-bracket.br { bottom: 10px; right: 10px; border-bottom: 1px solid var(--signal); border-right: 1px solid var(--signal); }
-
-/* floating HUD chips inside the viewport */
+/* ---- things floating on the plate are dark, because the plate is ---- */
 .tf-hud-tl {
   position: absolute;
   top: var(--s-4);
@@ -242,160 +207,312 @@
 .tf-hud-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--s-2);
-  padding: 3px var(--s-3);
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  background: oklch(10% 0.018 258 / 0.78);
-  border: 1px solid var(--hairline);
-  border-left: 2px solid var(--signal);
+  gap: var(--s-3);
+  padding: 4px var(--s-4);
+  font-size: var(--fs-fine);
+  font-weight: 500;
+  color: var(--on-ink);
+  background: oklch(18% 0.012 250 / 0.88);
   border-radius: var(--r-sm);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
 }
-.tf-hud-chip.mode-build { border-left-color: var(--warn); }
-.tf-hud-chip.mode-disrupt { border-left-color: var(--bad); }
-.tf-hud-chip.mode-plan { border-left-color: var(--good); }
-.tf-hud-chip.alert { border-left-color: var(--bad); color: var(--text); }
+.tf-hud-chip::before {
+  content: '';
+  width: 3px;
+  align-self: stretch;
+  border-radius: 999px;
+  background: var(--on-ink);
+  flex: none;
+}
+.tf-hud-chip.mode-build::before { background: var(--line-amber); }
+.tf-hud-chip.mode-disrupt::before { background: var(--line-red); }
+.tf-hud-chip.mode-plan::before { background: var(--line-green); }
+.tf-hud-chip.alert::before { background: var(--line-red); }
 
 .tf-overlay-hint {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  left: var(--s-4);
+  right: 184px;
   text-align: center;
-  bottom: calc(var(--status-h) + var(--s-4));
-  max-width: 46ch;
-  font-size: var(--fs-caption);
-  color: var(--muted);
-  background: oklch(10% 0.018 258 / 0.72);
-  border: 1px solid var(--hairline-soft);
+  bottom: calc(var(--status-h) + var(--s-3));
+  font-size: var(--fs-fine);
+  color: oklch(78% 0.006 250);
+  background: oklch(18% 0.012 250 / 0.85);
   border-radius: var(--r-sm);
-  padding: 3px var(--s-3);
-  backdrop-filter: blur(6px);
+  padding: 4px var(--s-4);
+  backdrop-filter: blur(8px);
   pointer-events: none;
   z-index: 3;
 }
+.tf-inspect-chip { color: var(--on-ink); }
 
-/* floating selection card (over the scene, not buried in the rail) */
+/* measure readout */
+.tf-measure-bar {
+  position: absolute;
+  top: var(--s-4);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: 5px var(--s-5);
+  font-family: var(--font-data);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--on-ink);
+  background: oklch(18% 0.012 250 / 0.9);
+  border-radius: var(--r-sm);
+  backdrop-filter: blur(8px);
+  z-index: 6;
+}
+.tf-viewport.tf-measuring { cursor: crosshair; }
+
+/* selection card */
 .tf-inspector-card {
   position: absolute;
   left: var(--s-4);
   bottom: calc(var(--status-h) + var(--s-4));
-  width: 268px;
-  max-height: min(46vh, 420px);
+  width: 272px;
+  max-height: min(52vh, 440px);
   overflow-y: auto;
   overscroll-behavior: contain;
   z-index: 6;
-  padding: var(--s-3);
-  background: oklch(13% 0.02 258 / 0.93);
-  border: 1px solid var(--hairline-strong);
+  padding: var(--s-5);
+  color: var(--on-ink);
+  background: oklch(17% 0.012 250 / 0.95);
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-float);
-  backdrop-filter: blur(10px);
+  box-shadow: var(--lift-float);
+  backdrop-filter: blur(12px);
   animation: tf-rise var(--d-slow) var(--ease) both;
 }
+.tf-inspector-card .tf-hint,
+.tf-inspector-card .tf-stat-row dt { color: oklch(72% 0.008 250); }
+.tf-inspector-card .tf-stat-row { border-bottom-color: oklch(100% 0 0 / 0.1); }
+.tf-inspector-card .tf-stat-row dd,
+.tf-inspector-card h3,
+.tf-inspector-card strong { color: var(--on-ink); }
+.tf-inspector-card .tf-btn {
+  color: var(--on-ink);
+  background: oklch(100% 0 0 / 0.08);
+  border-color: oklch(100% 0 0 / 0.2);
+}
+.tf-inspector-card .tf-btn:hover:not(:disabled) { background: oklch(100% 0 0 / 0.16); }
+.tf-inspector-card .tf-link { color: oklch(80% 0.09 235); }
 .tf-inspector-card .tf-inspector {
   border: none;
   padding: 0;
   background: transparent;
-  box-shadow: none;
   animation: none;
 }
-/* ---- legend (overlay key) ---- */
+
+/* legend */
 .tf-legend {
   position: absolute;
   right: var(--s-4);
   bottom: calc(var(--status-h) + var(--s-4));
   width: 168px;
-  padding: var(--s-3);
-  background: oklch(10% 0.018 258 / 0.78);
-  border: 1px solid var(--hairline);
+  padding: var(--s-4);
+  color: var(--on-ink);
+  background: oklch(18% 0.012 250 / 0.88);
   border-radius: var(--r-md);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
   pointer-events: none;
   z-index: 3;
-  animation: tf-rise var(--d-slow) var(--ease) both;
 }
 .tf-legend h4 {
-  margin: 0 0 var(--s-2);
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--muted);
+  margin: 0 0 var(--s-3);
+  font-size: var(--fs-fine);
+  font-weight: 600;
+  color: oklch(75% 0.008 250);
 }
-.tf-ramp {
-  height: 6px;
-  border-radius: 1px;
-  box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 0.06);
-}
+.tf-ramp { height: 5px; border-radius: 999px; }
 .tf-ramp-labels {
   display: flex;
   justify-content: space-between;
-  margin-top: 3px;
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  color: var(--faint);
+  margin-top: 4px;
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  color: oklch(70% 0.008 250);
 }
-.tf-legend-rows {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
+.tf-legend-rows { display: flex; flex-direction: column; gap: 4px; }
 .tf-legend-row {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
-  font-size: var(--fs-caption);
-  color: var(--text-secondary);
+  gap: var(--s-3);
+  font-size: var(--fs-fine);
+  color: oklch(88% 0.004 250);
 }
 .tf-swatch {
-  width: 10px;
-  height: 3px;
-  border-radius: 1px;
+  width: 12px;
+  height: 4px;
+  border-radius: 999px;
   flex: none;
+}
+
+/* ---- map navigation: a real control cluster, top-right of the plate ---- */
+.tf-nav {
+  position: absolute;
+  top: var(--s-4);
+  right: var(--s-4);
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--s-3);
+  width: 168px;
+  padding: var(--s-4);
+  color: var(--on-ink);
+  background: oklch(18% 0.012 250 / 0.9);
+  border-radius: var(--r-md);
+  backdrop-filter: blur(8px);
+}
+/* compass and zoom share the first row; everything else spans the widget */
+.tf-nav > *:not(.tf-compass):not(.tf-nav-zoom) { grid-column: 1 / -1; }
+.tf-nav .tf-seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  background: oklch(100% 0 0 / 0.07);
+  border-color: oklch(100% 0 0 / 0.14);
+}
+.tf-nav .tf-seg-item {
+  height: 22px;
+  padding: 0 4px;
+  font-size: var(--fs-fine);
+  color: oklch(80% 0.006 250);
+}
+.tf-nav .tf-seg-item:hover { color: var(--on-ink); background: oklch(100% 0 0 / 0.1); }
+.tf-nav .tf-seg-item.active { color: var(--plate-deep); background: var(--on-ink); }
+.tf-nav select {
+  background: oklch(100% 0 0 / 0.07);
+  border-color: oklch(100% 0 0 / 0.16);
+  color: var(--on-ink);
+  font-size: var(--fs-fine);
+  padding: 3px 22px 3px 6px;
+  background-image: linear-gradient(45deg, transparent 50%, oklch(80% 0.006 250) 50%),
+    linear-gradient(135deg, oklch(80% 0.006 250) 50%, transparent 50%);
+  background-position: calc(100% - 11px) 50%, calc(100% - 7px) 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+.tf-nav select option { color: var(--ink); background: var(--paper-raised); }
+.tf-nav .tf-namelabel { gap: 3px; }
+.tf-nav .tf-hint { color: oklch(68% 0.008 250); font-size: var(--fs-fine); }
+.tf-nav .tf-draft-actions { gap: var(--s-2); }
+.tf-nav .tf-btn {
+  flex: 1;
+  color: var(--on-ink);
+  background: oklch(100% 0 0 / 0.07);
+  border-color: oklch(100% 0 0 / 0.16);
+}
+.tf-nav .tf-btn:hover:not(:disabled) { background: oklch(100% 0 0 / 0.14); }
+.tf-nav .tf-btn:disabled { opacity: 0.35; }
+
+.tf-compass {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-weight: 600;
+  color: var(--on-ink);
+}
+.tf-compass span { display: inline-block; }
+.tf-nav-zoom {
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
+  color: oklch(72% 0.008 250);
+  text-align: right;
+}
+
+/* ---- minimap: a small plan inset, bottom-right under the legend ---- */
+.tf-minimap {
+  position: absolute;
+  right: var(--s-4);
+  top: calc(var(--s-4) + 150px);
+  width: 168px;
+  z-index: 4;
+  padding: 4px;
+  background: oklch(18% 0.012 250 / 0.9);
+  border-radius: var(--r-md);
+  backdrop-filter: blur(8px);
+  line-height: 0;
+}
+.tf-minimap svg {
+  width: 100%;
+  height: auto;
+  border-radius: var(--r-sm);
+}
+
+/* hover readout */
+.tf-hover-tip {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  max-width: 240px;
+  padding: var(--s-3) var(--s-4);
+  color: var(--on-ink);
+  background: oklch(16% 0.012 250 / 0.95);
+  border-radius: var(--r-sm);
+  box-shadow: var(--lift-float);
+  font-size: var(--fs-small);
+  line-height: 1.35;
+}
+.tf-hover-tip strong { display: block; font-weight: 600; }
+.tf-hover-tip .tf-hint { color: oklch(70% 0.008 250); font-size: var(--fs-fine); }
+.tf-hover-metric {
+  margin-top: 2px;
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  color: oklch(84% 0.006 250);
 }
 
 /* ---- toasts ---- */
 .tf-toasts {
   position: absolute;
   top: var(--s-4);
-  right: var(--s-4);
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
-  width: 262px;
-  z-index: 6;
+  width: 300px;
+  z-index: 7;
   pointer-events: none;
 }
 .tf-toast {
   display: flex;
-  gap: var(--s-3);
+  gap: var(--s-4);
   padding: var(--s-3) var(--s-4);
-  background: oklch(13% 0.02 258 / 0.92);
-  border: 1px solid var(--hairline);
-  border-left: 2px solid var(--signal);
+  color: var(--on-ink);
+  background: oklch(17% 0.012 250 / 0.94);
   border-radius: var(--r-sm);
-  box-shadow: var(--shadow-float);
+  box-shadow: var(--lift-float);
   backdrop-filter: blur(8px);
   animation: tf-toast-in var(--d-slow) var(--ease) both;
 }
-.tf-toast.warn { border-left-color: var(--warn); }
-.tf-toast.good { border-left-color: var(--good); }
+.tf-toast::before {
+  content: '';
+  width: 3px;
+  align-self: stretch;
+  border-radius: 999px;
+  background: var(--on-ink);
+  flex: none;
+}
+.tf-toast.warn::before { background: var(--line-amber); }
+.tf-toast.good::before { background: var(--line-green); }
 .tf-toast-time {
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  color: var(--faint);
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
+  color: oklch(68% 0.008 250);
   flex: none;
   padding-top: 1px;
 }
-.tf-toast-text { font-size: var(--fs-caption); color: var(--text-secondary); }
+.tf-toast-text { font-size: var(--fs-small); color: oklch(92% 0.004 250); }
 
 @keyframes tf-toast-in {
-  from { opacity: 0; transform: translateX(10px); }
+  from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes tf-rise {
@@ -407,122 +524,136 @@
   to { opacity: 1; }
 }
 
-/* ---- status strip ---- */
+/* ---- status strip: the always-on reading, along the bottom edge ---- */
 .tf-statusbar {
   position: absolute;
   inset: auto 0 0 0;
   height: var(--status-h);
   display: flex;
   align-items: center;
-  gap: 0;
   padding: 0 var(--s-4);
-  background: oklch(11% 0.018 258 / 0.9);
-  border-top: 1px solid var(--hairline);
-  backdrop-filter: blur(6px);
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
+  background: oklch(14% 0.012 250 / 0.94);
+  border-top: 1px solid oklch(100% 0 0 / 0.1);
+  backdrop-filter: blur(8px);
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
   z-index: 5;
   overflow: hidden;
 }
 .tf-status-cell {
   display: flex;
   align-items: baseline;
-  gap: var(--s-2);
-  padding: 0 var(--s-4);
-  border-right: 1px solid var(--hairline-soft);
+  gap: var(--s-3);
+  padding: 0 var(--s-5);
+  border-right: 1px solid oklch(100% 0 0 / 0.1);
   white-space: nowrap;
 }
-.tf-status-cell:first-child { padding-left: 0; }
+.tf-status-cell:first-child { padding-left: 0; font-weight: 600; color: var(--on-ink); }
 .tf-status-cell:last-child { border-right: none; }
-.tf-status-cell b {
-  font-weight: 500;
-  color: var(--text);
-  letter-spacing: 0.02em;
-}
-.tf-status-cell span {
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--faint);
-}
-.tf-status-cell.good b { color: var(--good); }
-.tf-status-cell.warn b { color: var(--warn); }
-.tf-status-cell.bad b { color: var(--bad); }
+.tf-status-cell b { font-weight: 600; color: var(--on-ink); }
+.tf-status-cell span { color: oklch(66% 0.008 250); }
+.tf-status-cell.good b { color: oklch(78% 0.14 160); }
+.tf-status-cell.warn b { color: oklch(82% 0.13 75); }
+.tf-status-cell.bad b { color: oklch(72% 0.16 25); }
 
-/* ===================================================================== *
- * 2. Side panel
+/* =====================================================================
+ * 3. Rail — a document column. Sections are separated by rules and
+ *    space, not boxed into cards.
  * ===================================================================== */
 
 .tf-panel {
-  border-left: 1px solid var(--hairline);
-  background: var(--surface-0);
-  padding: var(--s-5);
-  padding-bottom: var(--s-8);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
   overflow-y: auto;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: var(--s-4);
   min-width: 0;
 }
 
-/* section card */
+/* task tabs: which part of the job you are doing */
+.tf-rail-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: var(--paper-raised);
+  border-bottom: 1px solid var(--rule);
+}
+.tf-rail-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: var(--s-4) var(--s-2);
+  font-family: var(--font-data);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease);
+}
+.tf-rail-tab:hover { color: var(--ink-strong); }
+.tf-rail-tab[aria-selected='true'] {
+  color: var(--ink-strong);
+  font-weight: 600;
+  border-bottom-color: var(--ink-strong);
+}
+
+.tf-rail-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--s-5) var(--s-7);
+  min-width: 0;
+}
+
+/* a rail section: ruled, not boxed */
 .tf-build, .tf-compare, .tf-scenario, .tf-debug, .tf-plan,
 .tf-analytics, .tf-charts, .tf-growth, .tf-service, .tf-stats,
 .tf-layers, .tf-inspector {
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--surface-1);
-  box-shadow: inset 0 1px 0 var(--edge-light);
-  padding: var(--s-4);
   display: flex;
   flex-direction: column;
-  gap: var(--s-3);
-  animation: tf-fade var(--d-slow) var(--ease) both;
+  gap: var(--s-4);
+  padding: var(--s-6) 0;
+  border-bottom: 1px solid var(--rule-soft);
+  min-width: 0;
 }
-.tf-inspector { animation: tf-rise var(--d-slow) var(--ease) both; }
+.tf-panel > *:last-child,
+.tf-rail-body > *:last-child { border-bottom: none; }
 
 .tf-panel h3, .tf-plan h3 {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
+  gap: var(--s-3);
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.tf-panel h3::before,
-.tf-plan h3::before {
-  content: '';
-  width: 3px;
-  height: 10px;
-  border-radius: 1px;
-  background: var(--signal);
-  opacity: 0.85;
-  flex: none;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--ink-strong);
 }
 .tf-plan h4, .tf-plan h5,
 .tf-analytics h4, .tf-analytics h5,
 .tf-charts h5, .tf-growth h4, .tf-growth h5, .tf-service h5 {
-  margin: var(--s-3) 0 0;
-  font-size: var(--fs-caption);
+  margin: var(--s-4) 0 0;
+  font-size: var(--fs-small);
   font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--text-secondary);
+  color: var(--ink);
 }
 .tf-plan h4:first-child, .tf-analytics h4:first-child { margin-top: 0; }
-.tf-panel h5 { margin: 0; font-size: var(--fs-micro); color: var(--muted); }
+.tf-panel h5 { margin: 0; font-size: var(--fs-small); color: var(--ink-soft); font-weight: 500; }
 
 .tf-hint {
   margin: 0;
-  color: var(--muted);
-  font-size: var(--fs-caption);
+  color: var(--ink-soft);
+  font-size: var(--fs-small);
   line-height: 1.45;
 }
 
-/* buttons never stretch inside column-flex sections */
 .tf-build > .tf-btn,
 .tf-compare > .tf-btn,
 .tf-plan > .tf-btn,
@@ -531,232 +662,255 @@
 .tf-growth > .tf-btn,
 .tf-service > .tf-btn,
 .tf-dock-body > .tf-btn { align-self: flex-start; }
-/* data rows */
+
+/* =====================================================================
+ * 4. Route bullet — the signature. Every reference to a line, anywhere,
+ *    is the same capsule you would read off a platform sign.
+ * ===================================================================== */
+
+.tf-bullet {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 18px;
+  padding: 0 6px;
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--on-ink);
+  background: var(--ink-faint);
+  border-radius: var(--r-bullet);
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.tf-bullet.metro { background: var(--line-blue); }
+.tf-bullet.rail { background: var(--line-violet); }
+.tf-bullet.bus { background: var(--line-amber); }
+
+.tf-route-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.tf-route-ref > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.tf-route-ref {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+button.tf-route-ref:hover > span { text-decoration: underline; }
+
+/* =====================================================================
+ * 5. Data
+ * ===================================================================== */
+
 .tf-stat-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s-4);
-  padding: 3px 0;
-  border-bottom: 1px solid var(--hairline-soft);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--rule-soft);
 }
 .tf-stat-row:last-child { border-bottom: none; }
 .tf-stat-row dt {
-  color: var(--muted);
-  font-size: var(--fs-caption);
+  color: var(--ink-soft);
+  font-size: var(--fs-small);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .tf-stat-row dd {
   margin: 0;
-  font-size: var(--fs-small);
-  color: var(--text);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--ink-strong);
   text-align: right;
   white-space: nowrap;
 }
 .tf-stats dl, .tf-inspector dl, .tf-debug dl { margin: 0; }
 
-/* KPI tiles */
+/* headline readings */
 .tf-kpis {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-3);
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-sm);
+  overflow: hidden;
 }
 .tf-tile {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: var(--s-3) var(--s-4) var(--s-4);
-  background: var(--surface-sunken);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
+  padding: var(--s-4) var(--s-5) var(--s-5);
+  background: var(--paper-raised);
 }
 .tf-tile-label {
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-size: var(--fs-fine);
+  font-weight: 500;
+  color: var(--ink-soft);
 }
 .tf-kpi-value {
   font-size: var(--fs-metric);
-  font-weight: 500;
-  line-height: 1.1;
-  letter-spacing: var(--tracking-display);
-  color: var(--text);
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--ink-strong);
 }
 .tf-kpi-value small {
   font-size: var(--fs-small);
-  color: var(--muted);
+  font-weight: 500;
+  color: var(--ink-faint);
   margin-left: 2px;
 }
 .tf-tile-sub {
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  color: var(--muted);
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
 }
-.tf-tile.good .tf-kpi-value { color: var(--good); }
-.tf-tile.warn .tf-kpi-value { color: var(--warn); }
-.tf-tile.bad .tf-kpi-value { color: var(--bad); }
+.tf-tile.good .tf-kpi-value { color: var(--ok); }
+.tf-tile.warn .tf-kpi-value { color: var(--watch); }
+.tf-tile.bad .tf-kpi-value { color: var(--alert); }
 
-/* segmented tick meter — the app's signature read-out */
+/* segmented read-out: discrete blocks, like a line diagram */
 .tf-meter {
   display: flex;
   gap: 2px;
-  height: 6px;
+  height: 5px;
   margin-top: var(--s-2);
 }
 .tf-meter i {
   flex: 1;
-  background: var(--surface-2);
+  background: var(--paper-deep);
   border-radius: 1px;
   transition: background var(--d-slow) var(--ease);
 }
-.tf-meter i.on { background: var(--signal-deep); }
-.tf-meter.good i.on { background: var(--good); }
-.tf-meter.warn i.on { background: var(--warn); }
-.tf-meter.bad i.on { background: var(--bad); }
-.tf-meter i.thresh {
-  box-shadow: inset 0 0 0 1px var(--hairline-strong);
-  background: var(--surface-3);
-}
+.tf-meter i.on { background: var(--ink); }
+.tf-meter.good i.on { background: var(--ok); }
+.tf-meter.warn i.on { background: var(--watch); }
+.tf-meter.bad i.on { background: var(--alert); }
+.tf-meter i.thresh { background: var(--rule-strong); box-shadow: inset 0 0 0 1px var(--ink-faint); }
 
 /* tables */
 .tf-compare-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--fs-caption);
+  font-size: var(--fs-small);
 }
 .tf-compare-table th, .tf-compare-table td {
-  padding: 4px var(--s-2);
-  border-bottom: 1px solid var(--hairline-soft);
+  padding: 5px var(--s-2);
+  border-bottom: 1px solid var(--rule-soft);
   text-align: right;
   white-space: nowrap;
 }
 .tf-compare-table th:first-child, .tf-compare-table td:first-child {
   text-align: left;
   white-space: normal;
-  color: var(--muted);
+  color: var(--ink);
 }
 .tf-compare-table thead th {
   position: sticky;
   top: 0;
-  background: var(--surface-1);
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--faint);
+  background: var(--paper-raised);
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-weight: 600;
+  color: var(--ink-soft);
+  border-bottom-color: var(--rule);
 }
 .tf-compare-table tbody tr:last-child td { border-bottom: none; }
-.tf-compare-table tbody tr:hover td { background: var(--surface-2); }
-.tf-good { color: var(--good); }
-.tf-bad { color: var(--bad); }
-.tf-flat { color: var(--faint); }
+.tf-compare-table tbody tr:hover td { background: var(--paper-sunken); }
+.tf-good { color: var(--ok); }
+.tf-bad { color: var(--alert); }
+.tf-flat { color: var(--ink-faint); }
 
-/* chips / lists */
+/* layer toggles */
 .tf-check {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: var(--s-2);
-  padding: 3px var(--s-3);
-  font-size: var(--fs-caption);
-  color: var(--muted);
-  background: var(--surface-sunken);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
+  gap: var(--s-3);
+  padding: 4px var(--s-4) 4px var(--s-3);
+  font-size: var(--fs-small);
+  color: var(--ink-soft);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-bullet);
   cursor: pointer;
-  transition: color var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease);
+  transition: color var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease),
+    background var(--d-fast) var(--ease);
 }
-.tf-check:hover { color: var(--text); border-color: var(--hairline-strong); }
-/* Checked state reads in the chip's own --chip-color when one is set (e.g.
-   per-transport-mode layer toggles), so it actually matches the legend and
-   the 3D scene instead of every layer looking identical once switched on. */
+.tf-check:hover { color: var(--ink-strong); border-color: var(--ink-faint); }
 .tf-check:has(input:checked) {
-  color: var(--text);
-  border-color: color-mix(in oklch, var(--chip-color, var(--signal)) 45%, transparent);
-  background: color-mix(in oklch, var(--chip-color, var(--signal)) 16%, transparent);
+  color: var(--ink-strong);
+  font-weight: 500;
+  border-color: var(--ink-faint);
+  background: var(--paper-sunken);
 }
-.tf-check:has(input:checked) input[type='checkbox'] {
-  background: var(--chip-color, var(--signal));
-  border-color: var(--chip-color, var(--signal));
-}
-.tf-layer-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-}
-/* collapsible rail sections */
+.tf-layer-group { display: flex; flex-direction: column; gap: var(--s-3); }
+.tf-layer-row { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+
+/* collapsible sections inside a task */
 .tf-dock {
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--surface-1);
-  box-shadow: inset 0 1px 0 var(--edge-light);
-  overflow: hidden;
+  border-bottom: 1px solid var(--rule-soft);
 }
-.tf-dock.alert { border-color: oklch(68% 0.19 22 / 0.5); }
+.tf-dock.alert { border-bottom-color: var(--alert); }
 .tf-dock-head {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
+  gap: var(--s-3);
   width: 100%;
-  padding: var(--s-3) var(--s-4);
+  padding: var(--s-5) 0;
   background: transparent;
   border: none;
   cursor: pointer;
   text-align: left;
-  transition: background var(--d-fast) var(--ease);
 }
-.tf-dock-head:hover { background: var(--surface-2); }
+.tf-dock-head:hover .tf-dock-title { color: var(--ink-strong); }
 .tf-dock-caret {
   flex: none;
-  color: var(--faint);
+  color: var(--ink-faint);
   transition: transform var(--d-base) var(--ease);
 }
 .tf-dock.open .tf-dock-caret { transform: rotate(0deg); }
 .tf-dock:not(.open) .tf-dock-caret { transform: rotate(-90deg); }
 .tf-dock-title {
   flex: 1;
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  font-weight: 500;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--muted);
-  position: relative;
-  padding-left: 11px;
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--ink);
+  transition: color var(--d-fast) var(--ease);
 }
-.tf-dock-title::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 3px;
-  height: 10px;
-  margin-top: -5px;
-  border-radius: 1px;
-  background: var(--signal);
-  opacity: 0.85;
-}
-.tf-dock.alert .tf-dock-title { color: var(--text); }
-.tf-dock.alert .tf-dock-title::before { background: var(--bad); }
+.tf-dock.alert .tf-dock-title { color: var(--alert); }
 .tf-dock-meta {
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  color: var(--text-secondary);
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
   white-space: nowrap;
 }
 .tf-dock-body {
   display: flex;
   flex-direction: column;
-  gap: var(--s-3);
-  padding: 0 var(--s-4) var(--s-4);
+  gap: var(--s-4);
+  padding: 0 0 var(--s-5);
   animation: tf-fade var(--d-base) var(--ease) both;
 }
-/* nested sections inside an open dock lose their own frame */
 .tf-dock-body > .tf-stats,
 .tf-dock-body > .tf-layers,
 .tf-dock-body > .tf-plan,
@@ -766,27 +920,21 @@
 .tf-dock-body > .tf-inspector,
 .tf-dock-body > .tf-chart,
 .tf-dock-body > .tf-draft {
-  border-color: var(--hairline-soft);
-  background: var(--surface-sunken);
-  box-shadow: none;
+  padding: 0;
+  border-bottom: none;
   animation: none;
 }
 
-.tf-layers { gap: var(--s-3); }
+.tf-layers { gap: var(--s-5); }
 
-.tf-overlay-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-}
+.tf-overlay-group { display: flex; flex-direction: column; gap: var(--s-3); }
 .tf-overlay-group-label {
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--faint);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  color: var(--ink-soft);
 }
 
+/* ranked lists: numbered only because rank is the content */
 .tf-ranked {
   margin: 0;
   padding: 0;
@@ -794,147 +942,144 @@
   counter-reset: tf-rank;
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
+  gap: var(--s-3);
   font-size: var(--fs-small);
 }
 .tf-ranked > li {
   counter-increment: tf-rank;
   position: relative;
-  padding-left: 22px;
+  padding-left: 24px;
 }
 .tf-ranked > li::before {
   content: counter(tf-rank);
   position: absolute;
   left: 0;
   top: 1px;
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
   display: grid;
   place-items: center;
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  color: var(--faint);
-  background: var(--surface-sunken);
-  border: 1px solid var(--hairline-soft);
-  border-radius: 2px;
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--paper-sunken);
+  border-radius: var(--r-bullet);
 }
-.tf-ranked > li.done { color: var(--faint); }
-.tf-ranked > li.done::before {
-  content: '';
-  background: var(--good-soft);
-  border-color: oklch(78% 0.16 155 / 0.35);
-}
+.tf-ranked > li.done { color: var(--ink-faint); }
+.tf-ranked > li.done::before { color: var(--ok); background: var(--ok-wash); }
 .tf-score-parts {
   margin: 0;
-  padding-left: var(--s-5);
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
-  color: var(--muted);
+  padding-left: var(--s-6);
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  color: var(--ink-soft);
 }
 
-/* bars (existing analytics charts) */
-.tf-bars { display: flex; flex-direction: column; gap: var(--s-2); }
+/* bars */
+.tf-bars { display: flex; flex-direction: column; gap: var(--s-3); }
 .tf-bar-row {
   display: grid;
   grid-template-columns: 92px 1fr 46px;
-  gap: var(--s-3);
+  gap: var(--s-4);
   align-items: center;
-  font-size: var(--fs-caption);
+  font-size: var(--fs-small);
 }
 .tf-bar-row > span:first-child {
-  color: var(--muted);
+  color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .tf-bar-row > span:last-child {
-  font-family: var(--font-mono);
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
   text-align: right;
-  color: var(--text-secondary);
+  color: var(--ink);
 }
 .tf-bar-track {
-  height: 6px;
-  background: var(--surface-sunken);
-  border-radius: 1px;
+  height: 5px;
+  background: var(--paper-deep);
+  border-radius: 999px;
   overflow: hidden;
 }
 .tf-bar-fill {
   height: 100%;
-  background: var(--signal-deep);
-  border-radius: 1px;
+  background: var(--ink);
+  border-radius: 999px;
   transition: width var(--d-slow) var(--ease);
 }
 .tf-chart {
-  background: var(--surface-sunken);
-  border: 1px solid var(--hairline-soft);
+  background: var(--paper-sunken);
   border-radius: var(--r-sm);
 }
 
-/* drafts / callouts */
+/* callouts */
 .tf-draft {
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
-  padding: var(--s-3) var(--s-4);
-  background: var(--surface-sunken);
-  border: 1px solid var(--hairline);
-  border-left: 2px solid var(--signal);
-  border-radius: var(--r-sm);
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
+  background: var(--paper-sunken);
+  border-left: 3px solid var(--ink);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   font-size: var(--fs-small);
 }
-.tf-draft > strong { color: var(--text); font-weight: 600; }
+.tf-draft > strong { color: var(--ink-strong); font-weight: 600; }
 .tf-drill {
-  margin: var(--s-3) 0 0;
-  padding: var(--s-3) 0 0 var(--s-4);
-  border-top: 1px solid var(--hairline-soft);
+  margin: var(--s-4) 0 0;
+  padding: var(--s-4) 0 0 var(--s-5);
+  border-top: 1px solid var(--rule-soft);
   display: flex;
   flex-direction: column;
-  gap: var(--s-2);
+  gap: var(--s-3);
   animation: tf-rise var(--d-base) var(--ease) both;
 }
-.tf-objective, .tf-overview {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-}
-.tf-overview {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
-}
-.tf-objective { padding-bottom: var(--s-2); }
+.tf-objective, .tf-overview { display: flex; flex-direction: column; gap: var(--s-3); }
+.tf-overview { display: grid; grid-template-columns: 1fr; gap: 0; }
+.tf-objective { padding-bottom: var(--s-3); }
 .tf-draft-actions {
   display: flex;
   align-items: center;
-  gap: var(--s-2);
+  gap: var(--s-3);
   flex-wrap: wrap;
 }
 .tf-namelabel {
   display: flex;
   flex-direction: column;
   gap: var(--s-2);
-  font-size: var(--fs-caption);
-  color: var(--muted);
+  font-size: var(--fs-small);
+  color: var(--ink-soft);
 }
 
 /* build tools */
 .tf-tool-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--s-2);
 }
-.tf-tool-grid .tf-btn { height: 30px; padding: 0 4px; font-size: var(--fs-micro); }
+/* tool labels are words, not icons — let them wrap rather than clip */
+.tf-tool-grid .tf-btn {
+  height: auto;
+  min-height: 32px;
+  padding: 5px 6px;
+  font-size: var(--fs-fine);
+  line-height: 1.15;
+  white-space: normal;
+  text-align: center;
+}
 .tf-stepper { display: flex; align-items: center; gap: var(--s-2); }
 .tf-stepper .tf-btn.icon { width: 24px; height: 24px; }
 .tf-stepper output {
-  min-width: 46px;
+  min-width: 52px;
   text-align: center;
-  font-family: var(--font-mono);
+  font-family: var(--font-data);
   font-size: var(--fs-small);
-  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-strong);
 }
 
-/* scenario list */
+/* saved scenarios */
 .tf-scenario-list {
   list-style: none;
   margin: 0;
@@ -947,53 +1092,223 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s-2);
-  padding: var(--s-2) var(--s-3);
-  background: var(--surface-sunken);
-  border: 1px solid var(--hairline);
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  background: var(--paper-sunken);
   border-radius: var(--r-sm);
 }
 .tf-scenario-row b {
-  font-size: var(--fs-caption);
-  font-weight: 500;
-  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 600;
+  color: var(--ink-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .tf-scenario-ops { display: flex; gap: var(--s-1); flex: none; }
 
-/* inspector */
+/* route stop list */
+.tf-stops {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--s-4);
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid currentColor;
+  color: var(--ink-faint);
+}
+.tf-stops > li {
+  position: relative;
+  padding: 2px 0;
+}
+.tf-stops > li::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--s-4) * -1 - 5px);
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -3.5px;
+  border-radius: var(--r-bullet);
+  background: currentColor;
+}
+.tf-inspector-card .tf-stops { color: oklch(62% 0.008 250); }
+
+/* inspector heading */
 .tf-inspector-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s-3);
+  gap: var(--s-4);
 }
 .tf-inspector-head h3 {
-  font-family: var(--font-ui);
-  font-size: var(--fs-subtitle);
+  font-size: var(--fs-head);
   font-weight: 600;
-  letter-spacing: var(--tracking-display);
-  text-transform: none;
-  color: var(--text);
+  letter-spacing: -0.015em;
 }
-.tf-inspector-head h3::before { display: none; }
 
-/* misc */
+/* =====================================================================
+ * 6. Overlays: search, context menu
+ * ===================================================================== */
+
+.tf-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: oklch(20% 0.01 250 / 0.3);
+  backdrop-filter: blur(2px);
+}
+.tf-palette-scrim {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+.tf-menu-scrim { background: transparent; backdrop-filter: none; }
+
+.tf-palette {
+  width: min(560px, calc(100% - var(--s-8)));
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift-float);
+  overflow: hidden;
+  animation: tf-rise var(--d-base) var(--ease) both;
+}
+.tf-palette input {
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  padding: var(--s-5) var(--s-6);
+  font-size: var(--fs-lead);
+  background: var(--paper-raised);
+}
+.tf-palette input:focus { border-color: var(--rule); }
+.tf-palette-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--s-2);
+  overflow-y: auto;
+}
+.tf-palette-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  width: 100%;
+  padding: var(--s-3) var(--s-4);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-body);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.tf-palette-item .tf-hint {
+  flex: none;
+  width: 64px;
+  font-size: var(--fs-fine);
+}
+.tf-palette-item > span:nth-child(2) {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tf-palette-item kbd {
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+.tf-palette-item.cursor {
+  background: var(--ink-strong);
+  color: var(--on-ink);
+}
+.tf-palette-item.cursor .tf-hint,
+.tf-palette-item.cursor kbd { color: oklch(78% 0.006 250); }
+.tf-palette-empty {
+  padding: var(--s-5) var(--s-6);
+  color: var(--ink-faint);
+  font-size: var(--fs-small);
+}
+
+.tf-context-menu {
+  position: fixed;
+  min-width: 210px;
+  padding: var(--s-2);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift-float);
+  display: flex;
+  flex-direction: column;
+}
+.tf-context-title {
+  padding: var(--s-3) var(--s-4);
+  font-size: var(--fs-fine);
+  font-weight: 600;
+  color: var(--ink-faint);
+  border-bottom: 1px solid var(--rule-soft);
+  margin-bottom: var(--s-2);
+}
+.tf-context-item {
+  padding: var(--s-3) var(--s-4);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-small);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.tf-context-item:hover { background: var(--paper-sunken); }
+.tf-context-item.danger { color: var(--alert); }
+.tf-context-item.danger:hover { background: var(--alert-wash); }
+
+/* =====================================================================
+ * 7. Split comparison
+ * ===================================================================== */
+
+.tf-split { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--ink-strong); }
+.tf-split-pane { position: relative; overflow: hidden; }
+.tf-split-label {
+  position: absolute;
+  top: var(--s-4);
+  left: var(--s-4);
+  z-index: 4;
+  padding: 3px var(--s-4);
+  font-size: var(--fs-fine);
+  font-weight: 600;
+  color: var(--on-ink);
+  background: oklch(18% 0.012 250 / 0.9);
+  border-radius: var(--r-sm);
+}
+.tf-split-close { position: absolute; top: var(--s-4); right: var(--s-4); z-index: 5; }
+
+/* =====================================================================
+ * 8. Utilities
+ * ===================================================================== */
+
 .tf-link {
   background: none;
   border: none;
   padding: 0;
-  color: var(--signal);
+  color: var(--ink-strong);
   font: inherit;
   font-size: var(--fs-small);
+  font-weight: 500;
   cursor: pointer;
   text-align: left;
-  border-bottom: 1px solid transparent;
-  transition: color var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease);
+  text-decoration: underline;
+  text-decoration-color: var(--rule-strong);
+  text-underline-offset: 2px;
+  transition: text-decoration-color var(--d-fast) var(--ease);
 }
-.tf-link:hover { color: var(--signal-bright); border-bottom-color: var(--signal-line); }
+.tf-link:hover { text-decoration-color: var(--ink-strong); }
 
 .tf-debug .tf-btn { align-self: flex-start; }
 
@@ -1001,27 +1316,49 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--s-2);
-  padding: var(--s-5);
-  color: var(--faint);
-  font-size: var(--fs-caption);
-  border: 1px dashed var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--surface-sunken);
+  gap: var(--s-3);
+  padding: var(--s-6);
+  color: var(--ink-soft);
+  font-size: var(--fs-small);
+  background: var(--paper-sunken);
+  border-radius: var(--r-sm);
 }
 
-/* the status strip degrades gracefully rather than clipping mid-word */
+.tf-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tf-mobile-note { display: none; }
+
+/* =====================================================================
+ * 9. Narrower windows
+ * ===================================================================== */
+
 @media (max-width: 1200px) {
   .tf-status-cell:nth-of-type(n + 9) { display: none; }
 }
 @media (max-width: 980px) {
   .tf-status-cell:nth-of-type(n + 7) { display: none; }
+  .tf-minimap { display: none; }
 }
 
 @media (max-width: 900px) {
-  .tf-main { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
-  .tf-panel { border-left: none; border-top: 1px solid var(--hairline); max-height: 46vh; }
-  .tf-legend, .tf-toasts { display: none; }
+  .tf-main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+    padding: var(--s-4);
+    gap: var(--s-4);
+  }
+  .tf-panel { max-height: 46vh; }
+  .tf-legend, .tf-nav { display: none; }
   .tf-topbar {
     display: flex;
     flex-wrap: wrap;
@@ -1029,10 +1366,18 @@
     padding: var(--s-3) var(--s-4);
     gap: var(--s-3);
   }
-  /* keep the selection card inside a short viewport instead of overflowing it */
   .tf-inspector-card {
-    width: min(268px, calc(100% - var(--s-6)));
+    width: min(272px, calc(100% - var(--s-6)));
     max-height: calc(100% - var(--status-h) - var(--s-7));
   }
   .tf-overlay-hint { display: none; }
+  .tf-mobile-note {
+    display: block;
+    padding: var(--s-3) var(--s-4);
+    font-size: var(--fs-fine);
+    color: var(--ink-soft);
+    background: var(--paper-sunken);
+    border-top: 1px solid var(--rule);
+    text-align: center;
+  }
 }

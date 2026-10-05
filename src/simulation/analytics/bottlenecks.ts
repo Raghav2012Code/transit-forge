@@ -32,7 +32,7 @@ export function findBottlenecks(input: BottleneckInput): { stations: Bottleneck[
         label: st.name,
         metric: 'peak utilization',
         value: Math.round((st.peakWaiting / Math.max(1, st.capacityPerHr * 0.25)) * 1000) / 10,
-        detail: `${Math.round(st.waiting)} waiting · ${Math.round(st.boardedDay)} boarded`,
+        detail: `${Math.round(st.waiting)} waiting, ${Math.round(st.boardedDay)} boarded`,
       },
       sort: st.peakWaiting / Math.max(1, st.capacityPerHr * 0.25),
     }))
@@ -45,7 +45,7 @@ export function findBottlenecks(input: BottleneckInput): { stations: Bottleneck[
       const peak = (counters.routePeakOcc[r.id] ?? 0) * 100;
       const boarded = counters.routeBoardings[r.id] ?? 0;
       const slow = busRouteCongestion[r.id] ?? 1;
-      const delay = r.mode === 'bus' ? ` · +${Math.round((slow - 1) * 1000) / 10}% delay` : '';
+      const delay = r.mode === 'bus' ? `, +${Math.round((slow - 1) * 1000) / 10}% delay` : '';
       return {
         item: {
           kind: 'route' as const,

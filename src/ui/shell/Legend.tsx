@@ -82,7 +82,7 @@ const LEGENDS: Partial<Record<Overlay, Entry>> = {
     kind: 'keys', title: 'Network status', rows: [
       { color: '#ef4444', label: 'Suspended / closed' },
       { color: '#fb923c', label: 'Reduced service' },
-      { color: 'var(--signal)', label: 'Normal' },
+      { color: 'var(--line-green)', label: 'Normal' },
     ],
   },
 };
@@ -118,7 +118,7 @@ export default function Legend({ overlay, demandLayer, extras }: {
       { color: '#6ea8fe', label: 'Service / fare change' },
     );
   }
-  if (extras?.split) extraRows.push({ color: 'var(--signal)', label: 'Left: baseline · right: scenario' });
+  if (extras?.split) extraRows.push({ color: 'var(--on-ink)', label: 'Left baseline, right scenario' });
   if (!entry && extraRows.length === 0) return null;
   const title =
     overlay === 'demand' ? `Demand — ${demandLayer}` : (entry?.title ?? 'Map');

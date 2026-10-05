@@ -21,7 +21,7 @@ export default function StatusBar({ stats, viewing, incidents, opCost }: Props) 
   return (
     <div className="tf-statusbar" role="status" aria-live="off">
       <div className="tf-status-cell">
-        <b>{viewing === 'base' ? 'BASELINE' : 'SCENARIO'}</b>
+        <b>{viewing === 'base' ? 'Baseline' : 'Scenario'}</b>
       </div>
       <div className="tf-status-cell">
         <span>transit</span><b>{stats.transitShare}%</b>

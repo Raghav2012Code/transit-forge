@@ -126,7 +126,7 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
           <h3>{problem.title}</h3>
           <button type="button" className="tf-btn small" onClick={onClose}>×</button>
         </div>
-        <p className="tf-hint">Planning problem · severity {Math.round(problem.severity)}/100</p>
+        <p className="tf-hint">Planning problem, severity {Math.round(problem.severity)}/100</p>
         <dl>
           {problem.metrics.map(([k, v]) => (
             <div className="tf-stat-row" key={k}><dt>{k}</dt><dd>{v}</dd></div>
@@ -163,7 +163,7 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
           <h3>{route?.name ?? vv.routeId}</h3>
           <button type="button" className="tf-btn small" onClick={onClose}>×</button>
         </div>
-        <p className="tf-hint">Vehicle · {vv.dwellLeft > 0 ? 'dwelling at station' : 'moving'}</p>
+        <p className="tf-hint">Vehicle, {vv.dwellLeft > 0 ? 'dwelling at station' : 'moving'}</p>
         <dl>
           <div className="tf-stat-row"><dt>Load</dt><dd>{vv.load} / {vv.capacity} ({pct}%)</dd></div>
           <div className="tf-stat-row"><dt>Completed trips</dt><dd>{vv.trips}</dd></div>

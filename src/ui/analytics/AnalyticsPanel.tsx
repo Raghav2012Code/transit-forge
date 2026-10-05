@@ -9,6 +9,7 @@ import type { UtilizationRows } from '../../simulation/analytics/utilization.ts'
 import { classifyNetwork } from '../../simulation/service/classify.ts';
 import type { SimulationState } from '../../simulation/index.ts';
 import Dock from '../shell/Dock.tsx';
+import { RouteRef } from '../shell/RouteBullet.tsx';
 
 interface Props {
   access: AccessibilitySet;
@@ -30,7 +31,7 @@ function BottleneckList({ items, onSelect }: { items: Bottleneck[]; onSelect: (s
           <button type="button" className="tf-link" onClick={() => onSelect({ kind: b.kind, id: b.id })}>
             {b.label}
           </button>
-          <span className="tf-hint"> · {b.value} {b.metric}</span>
+          <span className="tf-hint"> {b.value} {b.metric}</span>
           <div className="tf-hint">{b.detail}</div>
         </li>
       ))}
@@ -53,6 +54,7 @@ export default function AnalyticsPanel({ access, coverage, score, bottlenecks, g
     }),
     [sim],
   );
+  const routeById = useMemo(() => new Map(sim.routes.map((r) => [r.id, r])), [sim.routes]);
   const badRoutes = sim.routes.filter((r) => problems.routes[r.id] && problems.routes[r.id] !== 'balanced');
   const badStations = sim.stations.filter((s) => problems.stations[s.id] && problems.stations[s.id] !== 'balanced');
   return (
@@ -82,7 +84,7 @@ export default function AnalyticsPanel({ access, coverage, score, bottlenecks, g
         <>
           {badRoutes.map((r) => (
             <div className="tf-stat-row" key={r.id}>
-              <dt><button type="button" className="tf-link" onClick={() => onSelect({ kind: 'route', id: r.id })}>{r.name}</button></dt>
+              <dt><RouteRef route={r} onClick={() => onSelect({ kind: 'route', id: r.id })} /></dt>
               <dd>{problems.routes[r.id]}</dd>
             </div>
           ))}
@@ -104,9 +106,9 @@ export default function AnalyticsPanel({ access, coverage, score, bottlenecks, g
             <li key={`${g.x}-${g.z}-${i}`}>
               {g.zoneName} <span className="tf-hint">({g.x}, {g.z})</span>
               <div className="tf-hint">
-                pop ~{g.population} · {g.nearestStationM}m to station · CBD {g.cbdMin === null ? 'unreachable' : `${Math.round(g.cbdMin)} min`}
+                {g.population.toLocaleString()} residents, {g.nearestStationM}m to a station, CBD {g.cbdMin === null ? 'unreachable' : `${Math.round(g.cbdMin)} min away`}
               </div>
-              <div className="tf-hint">{g.reasons.join(' · ')}</div>
+              <div className="tf-hint">{g.reasons.join(', ')}</div>
             </li>
           ))}
         </ol>
@@ -123,7 +125,12 @@ export default function AnalyticsPanel({ access, coverage, score, bottlenecks, g
         <tbody>
           {routes.map((r) => (
             <tr key={r.id}>
-              <td><button type="button" className="tf-link" onClick={() => onSelect({ kind: 'route', id: r.id })}>{r.name}</button></td>
+              <td>
+                <RouteRef
+                  route={routeById.get(r.id) ?? { id: r.id, name: r.name, color: '#6b7280' }}
+                  onClick={() => onSelect({ kind: 'route', id: r.id })}
+                />
+              </td>
               <td>{r.boardings.toLocaleString()}</td>
               <td>{r.peakOcc}%</td>
               <td>{r.delayPct}%</td>

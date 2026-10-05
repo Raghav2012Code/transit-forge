@@ -50,32 +50,32 @@ interface RouteSpec {
 
 const ROUTE_SPECS: RouteSpec[] = [
   {
-    id: 'rt-m1', name: 'M1 Metro Blue', mode: 'metro', color: '#38bdf8',
+    id: 'rt-m1', name: 'M1 Metro Blue', mode: 'metro', color: '#1b6fc4',
     stationIds: ['st-north-res', 'st-mid-north', 'st-central', 'st-park-east', 'st-university'],
     headwayMin: 5, speedKph: 32, vehicleCapacity: 800,
   },
   {
-    id: 'rt-m2', name: 'M2 Metro Green', mode: 'metro', color: '#34d399',
+    id: 'rt-m2', name: 'M2 Metro Green', mode: 'metro', color: '#0e7a52',
     stationIds: ['st-west-res', 'st-west-mid', 'st-central', 'st-old-town', 'st-harbor'],
     headwayMin: 5, speedKph: 32, vehicleCapacity: 800,
   },
   {
-    id: 'rt-r1', name: 'R1 Suburban Rail', mode: 'rail', color: '#f87171',
+    id: 'rt-r1', name: 'R1 Suburban Rail', mode: 'rail', color: '#c0392f',
     stationIds: ['st-ne-suburb', 'st-east-res', 'st-airport', 'st-industrial', 'st-south-sub', 'st-central'],
     headwayMin: 10, speedKph: 55, vehicleCapacity: 900,
   },
   {
-    id: 'rt-b1', name: 'B1 Harbor Bus', mode: 'bus', color: '#fbbf24',
+    id: 'rt-b1', name: 'B1 Harbor Bus', mode: 'bus', color: '#e0a21a',
     stationIds: ['st-central', 'st-old-town', 'st-harbor', 'st-south-sub'],
     headwayMin: 12, speedKph: 18, vehicleCapacity: 70,
   },
   {
-    id: 'rt-b2', name: 'B2 Campus Bus', mode: 'bus', color: '#c084fc',
+    id: 'rt-b2', name: 'B2 Campus Bus', mode: 'bus', color: '#6d4bb8',
     stationIds: ['st-central', 'st-park-east', 'st-university', 'st-east-res'],
     headwayMin: 12, speedKph: 18, vehicleCapacity: 70,
   },
   {
-    id: 'rt-b3', name: 'B3 Crosstown Bus', mode: 'bus', color: '#fb7185',
+    id: 'rt-b3', name: 'B3 Crosstown Bus', mode: 'bus', color: '#c14b78',
     stationIds: ['st-west-res', 'st-west-mid', 'st-central', 'st-east-res', 'st-industrial'],
     headwayMin: 15, speedKph: 18, vehicleCapacity: 70,
   },

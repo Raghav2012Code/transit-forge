@@ -246,8 +246,8 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const labelDpr = dpr;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b1020);
-    scene.fog = new THREE.Fog(0x0b1020, 700, 1600);
+    scene.background = new THREE.Color(0x0e1217);
+    scene.fog = new THREE.Fog(0x0e1217, 700, 1600);
 
     const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.5, 4000);
     camera.position.set(330, 290, 330);
@@ -373,7 +373,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         if (!st) return null;
         const edge = sim.city.roadEdges.find((e) => e.id === id);
         const label = edge ? `${edge.isBridge ? 'Bridge' : edge.isArterial ? 'Arterial' : 'Local'} ${edge.a.replace(/^rn-/, '').toUpperCase()}–${edge.b.replace(/^rn-/, '').toUpperCase()}` : id;
-        return { kind, id, name: label, type: st.closed ? 'Road · closed' : `Road · ${st.level}`, metric: `V/C ${Math.round(st.vc * 100) / 100}`, x, y };
+        return { kind, id, name: label, type: st.closed ? 'Closed road' : `Road, ${st.level} congestion`, metric: `V/C ${Math.round(st.vc * 100) / 100}`, x, y };
       }
       if (kind === 'zone') {
         const z = sim.city.zones.find((zz) => zz.id === id);
@@ -390,7 +390,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         const inc = sim.incidents.find((i) => i.id === id);
         if (!inc) return null;
         const left = Math.max(0, Math.round(inc.startMin + inc.durationMin - sim.timeMinutes));
-        return { kind, id, name: inc.label, type: `Disruption · ${inc.status}`, metric: inc.status === 'active' ? `~${left} min left` : inc.kind, x, y };
+        return { kind, id, name: inc.label, type: `Disruption, ${inc.status}`, metric: inc.status === 'active' ? `~${left} min left` : inc.kind, x, y };
       }
       if (kind === 'problem') {
         const label = problemLabelById.current.get(id) ?? id;

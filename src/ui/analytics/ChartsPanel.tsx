@@ -32,9 +32,9 @@ export default function ChartsPanel({ history, topStations }: Props) {
   const range = `${formatClock(first.t)}–${formatClock(last.t)}`;
   return (
     <Dock title="Charts" meta={range}>
-      <h5>Trips / 5 min · transit</h5>
+      <h5>Transit trips per 5 min</h5>
       <Line values={transitRate} color="#38bdf8" />
-      <h5>Trips / 5 min · car</h5>
+      <h5>Car trips per 5 min</h5>
       <Line values={carRate} color="#fbbf24" />
       <h5>Avg travel / window (min)</h5>
       <Line values={travelWin.map((v) => Math.round(v * 10) / 10)} color="#4ade80" />
