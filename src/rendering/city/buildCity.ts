@@ -1,15 +1,7 @@
 import * as THREE from 'three';
-import type { CityData, DistrictKind } from '../../types/index.ts';
+import type { CityData } from '../../types/index.ts';
+import { DISTRICT_COLORS, MARK, SCENE } from '../palette.ts';
 
-const DISTRICT_COLORS: Record<DistrictKind, number> = {
-  cbd: 0x5b7fc4,
-  residential: 0x3d4a6b,
-  industrial: 0x7a6a55,
-  university: 0x5f8f7b,
-  airport: 0x6b7280,
-  harbor: 0x4f7fa3,
-  suburban: 0x35405a,
-};
 
 export interface CityMeshes {
   group: THREE.Group;
@@ -27,7 +19,7 @@ export function buildCityMeshes(city: CityData): CityMeshes {
   // Land base.
   const land = new THREE.Mesh(
     new THREE.PlaneGeometry(1300, 1300),
-    new THREE.MeshStandardMaterial({ color: 0x141c33 }),
+    new THREE.MeshStandardMaterial({ color: SCENE.land }),
   );
   land.rotation.x = -Math.PI / 2;
   land.position.y = -0.5;
@@ -36,7 +28,7 @@ export function buildCityMeshes(city: CityData): CityMeshes {
   // Sea (west) + harbor bay tint.
   const sea = new THREE.Mesh(
     new THREE.PlaneGeometry(300, 1300),
-    new THREE.MeshStandardMaterial({ color: 0x0e2a44 }),
+    new THREE.MeshStandardMaterial({ color: SCENE.sea }),
   );
   sea.rotation.x = -Math.PI / 2;
   sea.position.set(-470, -0.2, 0);
@@ -48,7 +40,7 @@ export function buildCityMeshes(city: CityData): CityMeshes {
   const riverGeo = new THREE.TubeGeometry(riverCurve, 40, 13, 6, false);
   const river = new THREE.Mesh(
     riverGeo,
-    new THREE.MeshStandardMaterial({ color: 0x11405e }),
+    new THREE.MeshStandardMaterial({ color: SCENE.river }),
   );
   river.scale.y = 0.08;
   river.position.y = 0.4;
@@ -61,8 +53,8 @@ export function buildCityMeshes(city: CityData): CityMeshes {
   roads.name = 'roads';
   const roadMeshById = new Map<string, THREE.Mesh>();
   const nodeById = new Map(city.roadNodes.map((n) => [n.id, n.pos]));
-  const roadMat = new THREE.MeshStandardMaterial({ color: 0x2a3552 });
-  const arterialMat = new THREE.MeshStandardMaterial({ color: 0x39496e });
+  const roadMat = new THREE.MeshStandardMaterial({ color: SCENE.roadLocal });
+  const arterialMat = new THREE.MeshStandardMaterial({ color: SCENE.roadArterial });
   for (const e of city.roadEdges) {
     const a = nodeById.get(e.a);
     const b = nodeById.get(e.b);
@@ -74,12 +66,12 @@ export function buildCityMeshes(city: CityData): CityMeshes {
     );
     mesh.position.set((a.x + b.x) / 2, 0.4, (a.z + b.z) / 2);
     mesh.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
-    mesh.userData = { kind: 'road', id: e.id, baseColor: e.isArterial ? 0x39496e : 0x2a3552 };
+    mesh.userData = { kind: 'road', id: e.id, baseColor: e.isArterial ? SCENE.roadArterial : SCENE.roadLocal };
     roads.add(mesh);
     roadMeshById.set(e.id, mesh);
   }
   // Bridges across the river (deck + rails hint).
-  const bridgeMat = new THREE.MeshStandardMaterial({ color: 0x8b9cc7 });
+  const bridgeMat = new THREE.MeshStandardMaterial({ color: SCENE.bridge });
   for (const br of city.bridges) {
     const len = Math.hypot(br.b.x - br.a.x, br.b.z - br.a.z);
     const deck = new THREE.Mesh(new THREE.BoxGeometry(len, 1.2, 11), bridgeMat);
@@ -103,7 +95,7 @@ export function buildCityMeshes(city: CityData): CityMeshes {
     dummy.rotation.y = 0;
     dummy.updateMatrix();
     inst.setMatrixAt(i, dummy.matrix);
-    color.setHex(DISTRICT_COLORS[b.district]).offsetHSL(0, 0, ((i * 37) % 10) / 200);
+    color.setHex(DISTRICT_COLORS[b.district]).offsetHSL(0, 0, (((i * 37) % 10) - 5) / 200);
     inst.setColorAt(i, color);
   });
   inst.instanceMatrix.needsUpdate = true;
@@ -116,7 +108,7 @@ export function buildCityMeshes(city: CityData): CityMeshes {
   for (const z of city.zones) {
     const disc = new THREE.Mesh(
       new THREE.CircleGeometry(z.radius, 40),
-      new THREE.MeshBasicMaterial({ color: 0x6ea8fe, transparent: true, opacity: 0.05 }),
+      new THREE.MeshBasicMaterial({ color: MARK.blue, transparent: true, opacity: 0.05 }),
     );
     disc.rotation.x = -Math.PI / 2;
     disc.position.set(z.center.x, 0.15, z.center.z);

@@ -1,6 +1,6 @@
 /* TransitForge design system — tokens + global primitives.
    Direction: "transit authority". Signage-grade light chrome wrapped around
-   a recessed dark map plate, the way a planning report sets a figure.
+   a light map plate, the way a planning report sets a figure.
 
    The governing rule: colour only ever means a line or a condition. The
    selected state is solid ink, never a coloured glow — so a blue chip is
@@ -15,11 +15,11 @@
   --paper-sunken: oklch(92.4% 0.005 250);
   --paper-deep: oklch(88.5% 0.006 250);
 
-  /* ---- plate: the map window, the only dark region ---- */
-  --plate: oklch(18% 0.012 250);
-  --plate-deep: oklch(14.5% 0.012 250);
-  --plate-surface: oklch(18% 0.012 250 / 0.92);
-  --plate-edge: oklch(100% 0 0 / 0.12);
+  /* ---- plate: the map window, set into the page like a figure in a report ---- */
+  --plate: oklch(93% 0.005 250);
+  --plate-deep: oklch(90% 0.006 250);
+  --plate-surface: oklch(100% 0 0 / 0.95);
+  --plate-edge: oklch(80% 0.008 250);
 
   /* ---- ink: text, rules, and the selected state ---- */
   --ink: oklch(21% 0.008 250);
@@ -36,7 +36,7 @@
   /* ---- line colours: these mean a route, nothing else.
      Shared verbatim with the 3D scene (see transport/network.ts) so a
      bullet in the rail is the same colour as its line on the map. Mid-tone
-     on purpose: legible on the dark plate, and dark enough to carry white
+     on purpose: legible on the pale plate, and dark enough to carry white
      bullet text on paper — except amber, which takes ink text the way a
      yellow line's bullet does on a real platform sign. ---- */
   --line-blue: #1b6fc4;

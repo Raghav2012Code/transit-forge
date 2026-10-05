@@ -10,6 +10,7 @@ import { buildCarRig, updateCarRig } from './traffic/carRig.ts';
 import type { CameraCmd } from './map/camera.ts';
 import { resolveClick, type CycleCandidate, type CycleState } from './map/selectionCycle.ts';
 import type { MapMarker } from './map/markers.ts';
+import { MARK, RAMP, SCENE, STATION } from './palette.ts';
 
 export interface Layers {
   metro: boolean;
@@ -246,8 +247,8 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const labelDpr = dpr;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0e1217);
-    scene.fog = new THREE.Fog(0x0e1217, 700, 1600);
+    scene.background = new THREE.Color(SCENE.background);
+    scene.fog = new THREE.Fog(SCENE.background, 900, 1900);
 
     const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.5, 4000);
     camera.position.set(330, 290, 330);
@@ -260,8 +261,8 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     controls.maxDistance = 1000;
     controls.maxPolarAngle = Math.PI * 0.47;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.4);
+    scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.5);
     sun.position.set(200, 320, 120);
     scene.add(sun);
 
@@ -457,7 +458,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
 
     const selRing = new THREE.Mesh(
       new THREE.TorusGeometry(7, 0.8, 8, 32),
-      new THREE.MeshBasicMaterial({ color: 0xfacc15 }),
+      new THREE.MeshBasicMaterial({ color: MARK.amber }),
     );
     selRing.rotation.x = -Math.PI / 2;
     selRing.visible = false;
@@ -556,10 +557,10 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     draftGroup.name = 'draft';
     scene.add(draftGroup);
     let lastDraftKey = '';
-    const draftMat = new THREE.LineBasicMaterial({ color: 0xfacc15 });
+    const draftMat = new THREE.LineBasicMaterial({ color: MARK.amber });
     const draftDotGeo = new THREE.SphereGeometry(2.2, 12, 12);
-    const draftDotMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
-    const hoverDotMat = new THREE.MeshBasicMaterial({ color: 0x4ade80, transparent: true, opacity: 0.8 });
+    const draftDotMat = new THREE.MeshBasicMaterial({ color: MARK.amber });
+    const hoverDotMat = new THREE.MeshBasicMaterial({ color: MARK.green, transparent: true, opacity: 0.8 });
     const rebuildDraft = () => {
       const d = draftRef.current;
       const key = d ? JSON.stringify(d) : '';
@@ -585,7 +586,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         draftGroup.add(dot);
       }
       if (d.hover) {
-        hoverDotMat.color.setHex(d.hoverValid ? 0x4ade80 : 0xef4444);
+        hoverDotMat.color.setHex(d.hoverValid ? MARK.green : 0xef4444);
         const hov = new THREE.Mesh(draftDotGeo, hoverDotMat);
         hov.position.set(d.hover.x, y, d.hover.z);
         draftGroup.add(hov);
@@ -593,7 +594,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     };
 
     const TONE_COLORS: Record<string, number> = {
-      warn: 0xfacc15, bad: 0xef4444, info: 0x6ea8fe, good: 0x34d399,
+      warn: MARK.amber, bad: 0xef4444, info: MARK.blue, good: 0x34d399,
     };
     // Problem + change markers: pooled rings, rebuilt when marker identity changes.
     const problemGroup = new THREE.Group();
@@ -642,14 +643,14 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       for (const r of c.radii) {
         const ring = new THREE.Mesh(
           new THREE.RingGeometry(Math.max(1, r - 2), r, 72),
-          new THREE.MeshBasicMaterial({ color: 0x6ea8fe, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
+          new THREE.MeshBasicMaterial({ color: MARK.blue, transparent: true, opacity: 0.55, side: THREE.DoubleSide }),
         );
         ring.rotation.x = -Math.PI / 2;
         ring.position.set(c.x, 4.5, c.z);
         catchmentGroup.add(ring);
         const fill = new THREE.Mesh(
           new THREE.CircleGeometry(r, 48),
-          new THREE.MeshBasicMaterial({ color: 0x6ea8fe, transparent: true, opacity: 0.05, side: THREE.DoubleSide }),
+          new THREE.MeshBasicMaterial({ color: MARK.blue, transparent: true, opacity: 0.05, side: THREE.DoubleSide }),
         );
         fill.rotation.x = -Math.PI / 2;
         fill.position.set(c.x, 4.4, c.z);
@@ -681,14 +682,14 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       ctx.clearRect(0, 0, 512, 96);
       ctx.font = '600 40px system-ui, sans-serif';
       const w = Math.min(500, ctx.measureText(text).width + 48);
-      ctx.fillStyle = 'rgba(11,16,32,0.92)';
-      ctx.strokeStyle = '#6ea8fe';
+      ctx.fillStyle = 'rgba(255,255,255,0.96)';
+      ctx.strokeStyle = '#1b6fc4';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.roundRect((512 - w) / 2, 8, w, 80, 10);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = '#dbe4ff';
+      ctx.fillStyle = '#1b2026';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, 256, 50);
@@ -720,15 +721,15 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         mesh.position.set(p.x, 8, p.z);
         measureGroup.add(mesh);
       };
-      dot(m.a, 0x6ea8fe);
+      dot(m.a, MARK.blue);
       if (end) {
-        dot(end, m.b ? 0x34d399 : 0xfacc15);
+        dot(end, m.b ? MARK.green : MARK.amber);
         const line = new THREE.Line(
           new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(m.a.x, 8, m.a.z),
             new THREE.Vector3(end.x, 8, end.z),
           ]),
-          new THREE.LineBasicMaterial({ color: 0x6ea8fe }),
+          new THREE.LineBasicMaterial({ color: MARK.blue }),
         );
         measureGroup.add(line);
         drawMeasureLabel(m.label, (m.a.x + end.x) / 2, (m.a.z + end.z) / 2);
@@ -769,14 +770,14 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         const w = Math.min(248, ctx.measureText(text).width + 36);
         // Share of the sprite the pill actually covers, for collision culling.
         sprite.userData.fill = w / 256;
-        ctx.fillStyle = 'rgba(11,16,32,0.88)';
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.roundRect((256 - w) / 2, 6, w, 52, 8);
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = '#e8eefc';
+        ctx.fillStyle = '#1b2026';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(text, 128, 33, 232);
@@ -799,18 +800,18 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           if (m) labelItems.push({ text: r.name.split(' ')[0], accent: r.color, x: m.position.x, y: 20, z: m.position.z, tier: 0, prio: 2 });
         }
         for (const z of sim0.city.zones) {
-          labelItems.push({ text: z.name, accent: '#33436e', x: z.center.x, y: 5, z: z.center.z, tier: 0, prio: 1 });
+          labelItems.push({ text: z.name, accent: '#aab3c4', x: z.center.x, y: 5, z: z.center.z, tier: 0, prio: 1 });
         }
         for (const st of sim0.stations) {
           if (st.routeIds.length > 1) {
-            labelItems.push({ text: st.name, accent: '#facc15', x: st.pos.x, y: 15, z: st.pos.z, tier: 1, prio: 0 });
+            labelItems.push({ text: st.name, accent: '#d48806', x: st.pos.x, y: 15, z: st.pos.z, tier: 1, prio: 0 });
           }
         }
         // Interchanges already carry their own label from the mid tier up, so
         // the every-station tier skips them rather than stacking a second copy.
         for (const st of sim0.stations) {
           if (st.routeIds.length > 1) continue;
-          labelItems.push({ text: st.name, accent: '#5f6f95', x: st.pos.x, y: 12, z: st.pos.z, tier: 2, prio: 3 });
+          labelItems.push({ text: st.name, accent: '#97a1b3', x: st.pos.x, y: 12, z: st.pos.z, tier: 2, prio: 3 });
         }
         labelItems.sort((p, q) => p.prio - q.prio);
       }
@@ -865,10 +866,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     };
 
     const loadColor = new THREE.Color();
-    const baseColor = new THREE.Color(0xcbd5e1);
+    const baseColor = new THREE.Color(STATION.regular);
     const hotColor = new THREE.Color(0xef4444);
     const routeBase = new THREE.Color();
-    const routeHot = new THREE.Color(0xffffff);
+    const routeHot = new THREE.Color(0x111827);
+    const groundTone = new THREE.Color(SCENE.land);
+    const rampNavy = new THREE.Color(RAMP.navy);
+    const rampDeepGreen = new THREE.Color(RAMP.deepGreen);
     let raf = 0;
     let elapsed = 0;
     let lastFrame = performance.now();
@@ -933,13 +937,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             const level = cur.edgeState[id]?.level ?? 'free';
             mat.color.setHex(CONGESTION_COLORS[level]);
             mat.emissive.setHex(CONGESTION_COLORS[level]);
-            mat.emissiveIntensity = 0.45;
+            mat.emissiveIntensity = 0.25;
           } else if (ov === 'status') {
             const st = cur.edgeState[id];
             if (st?.closed) {
               mat.color.setHex(0xef4444);
               mat.emissive.setHex(0xef4444);
-              mat.emissiveIntensity = 0.8 + 0.4 * Math.sin(elapsed * 5);
+              mat.emissiveIntensity = 0.4 + 0.2 * Math.sin(elapsed * 5);
             } else if (st && st.capMult < 1) {
               mat.color.setHex(0xfb923c);
               mat.emissive.setHex(0xfb923c);
@@ -986,31 +990,31 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             routeBase.set(mesh.userData.baseColor as string);
             mat.color.copy(routeBase).lerp(routeHot, 0.35 + 0.3 * Math.sin(elapsed * 4));
             mat.emissive.copy(routeBase);
-            mat.emissiveIntensity = 1.6 + 0.8 * Math.sin(elapsed * 4);
+            mat.emissiveIntensity = 0.6 + 0.3 * Math.sin(elapsed * 4);
           } else if (ov === 'flow') {
             routeBase.set(mesh.userData.baseColor as string);
-            mat.color.copy(routeBase).lerp(routeHot, u * 0.45);
+            mat.color.copy(routeBase).lerp(routeHot, u * 0.6);
             mat.emissive.copy(routeBase);
-            mat.emissiveIntensity = 0.15 + 2.4 * u;
+            mat.emissiveIntensity = 0.2 + 0.3 * u;
           } else if (ov === 'frequency') {
             // Scheduled peak headway: intense = frequent service.
             const h = cur.service[id]?.peakHeadwayMin ?? 15;
             const f = Math.min(1, Math.max(0, 1 - (h - 3) / 27));
             routeBase.set(mesh.userData.baseColor as string);
-            mat.color.copy(routeBase).lerp(routeHot, f * 0.3);
+            mat.color.copy(routeBase).lerp(routeHot, f * 0.55);
             mat.emissive.copy(routeBase);
-            mat.emissiveIntensity = 0.15 + 2.2 * f;
+            mat.emissiveIntensity = 0.2 + 0.25 * f;
           } else if (ov === 'crowding') {            // Live occupancy: frequent-but-empty looks different from packed.
             const occ = occN[id] ? occSum[id] / occN[id] : 0;
             routeBase.set(mesh.userData.baseColor as string);
             if (occ >= 0.9) {
               mat.color.setHex(0xef4444);
               mat.emissive.setHex(0xef4444);
-              mat.emissiveIntensity = 1.4 + 0.8 * Math.sin(elapsed * 5);
+              mat.emissiveIntensity = 0.6 + 0.3 * Math.sin(elapsed * 5);
             } else if (occ >= 0.7) {
               mat.color.copy(routeBase).lerp(routeHot, 0.35);
               mat.emissive.setHex(0xfb923c);
-              mat.emissiveIntensity = 1.1;
+              mat.emissiveIntensity = 0.5;
             } else {
               mat.color.copy(routeBase);
               mat.emissive.copy(routeBase);
@@ -1023,12 +1027,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             if (suspended) {
               mat.color.setHex(0xef4444);
               mat.emissive.setHex(0xef4444);
-              mat.emissiveIntensity = 1.2 + 0.6 * Math.sin(elapsed * 5);
+              mat.emissiveIntensity = 0.6 + 0.3 * Math.sin(elapsed * 5);
             } else if (reduced) {
               routeBase.set(mesh.userData.baseColor as string);
               mat.color.copy(routeBase).lerp(routeHot, 0.3);
               mat.emissive.setHex(0xfb923c);
-              mat.emissiveIntensity = 0.9;
+              mat.emissiveIntensity = 0.5;
             } else {
               routeBase.set(mesh.userData.baseColor as string);
               mat.color.copy(routeBase);
@@ -1066,7 +1070,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
               mat.color.setHex(GRADE_COLORS[av.grades[id] ?? 'poor']);
             } else if (ov === 'traveltime') {
               const t = av.travel[id];
-              if (t === null || t === undefined) mat.color.setHex(0x475569);
+              if (t === null || t === undefined) mat.color.setHex(RAMP.none);
               else {
                 const f = Math.min(1, t / Math.max(1, av.travelMax));
                 loadColor.setHex(0x34d399).lerp(hotColor, f);
@@ -1074,22 +1078,22 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
               }
             } else if (ov === 'coverage') {
               const f = Math.min(1, Math.max(0, (av.coverage[id] ?? 0) / 100));
-              loadColor.setHex(0x1e3a8a).lerp(routeHot, f * 0.85);
+              loadColor.setHex(RAMP.paleBlue).lerp(rampNavy, f);
               mat.color.copy(loadColor);
             } else if (ov === 'popdensity' || ov === 'jobdensity') {
               const max = ov === 'popdensity' ? av.popMax : av.jobMax;
               const v = ov === 'popdensity' ? (av.popD[id] ?? 0) : (av.jobD[id] ?? 0);
               const f = max > 0 ? Math.min(1, v / max) : 0;
-              loadColor.setHex(0x1e3a8a).lerp(routeHot, 0.15 + f * 0.85);
+              loadColor.setHex(RAMP.paleBlue).lerp(rampNavy, 0.1 + f * 0.9);
               mat.color.copy(loadColor);
             } else if (ov === 'development') {
               const d = av.dev[id] ?? 0;
               mat.color.setHex(
-                d >= 0.85 ? 0xef4444 : d >= 0.65 ? 0xfb923c : d >= 0.4 ? 0xfacc15 : d >= 0.15 ? 0x34d399 : 0x475569,
+                d >= 0.85 ? 0xef4444 : d >= 0.65 ? 0xfb923c : d >= 0.4 ? 0xfacc15 : d >= 0.15 ? 0x34d399 : RAMP.none,
               );
             } else if (ov === 'growth') {
               const f = av.growthMax > 0 ? Math.min(1, Math.max(0, (av.growth[id] ?? 0) / av.growthMax)) : 0;
-              loadColor.setHex(0x14532d).lerp(routeHot, 0.2 + f * 0.8);
+              loadColor.setHex(RAMP.paleGreen).lerp(rampDeepGreen, 0.1 + f * 0.9);
               mat.color.copy(loadColor);
             } else {
               // demand
@@ -1099,7 +1103,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             }
           } else {
             mat.opacity = 0.05;
-            mat.color.setHex(0x6ea8fe);
+            mat.color.setHex(MARK.blue);
           }
         }
         // Bottleneck pulse on flagged stations.
@@ -1113,17 +1117,17 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const boosted = ov === 'load' ? Math.pow(load, 0.6) : load;
           loadColor.copy(baseColor).lerp(hotColor, boosted);
           mat.color.copy(loadColor);
-          mat.emissiveIntensity = ov === 'load' ? 0.3 + 1.8 * load : 0.4;
+          mat.emissiveIntensity = ov === 'load' ? 0.1 + 0.6 * load : 0.1;
           let sc = ov === 'load' ? 1 + load * 0.6 : 1;
           if (bottleneckSet?.has(id)) {
             mat.emissive.setHex(0xef4444);
-            mat.emissiveIntensity = 1.2 + 0.8 * Math.sin(elapsed * 5);
+            mat.emissiveIntensity = 0.6 + 0.4 * Math.sin(elapsed * 5);
             sc = Math.max(sc, 1.35);
           }
           if (ov === 'status' && cur.closures.closedStations.has(id)) {
             mat.color.setHex(0xef4444);
             mat.emissive.setHex(0xef4444);
-            mat.emissiveIntensity = 1.2 + 0.6 * Math.sin(elapsed * 5);
+            mat.emissiveIntensity = 0.6 + 0.3 * Math.sin(elapsed * 5);
             sc = Math.max(sc, 1.3);
           }
           if (ov === 'critical' && av) {
@@ -1139,7 +1143,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const selStation = selectionRef.current;
           if (selStation?.kind === 'station' && id === selStation.id) {
             sc = Math.max(sc, 1.5);
-            mat.emissive.setHex(0xfacc15);
+            mat.emissive.setHex(MARK.amber);
             mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 0.9);
           }
           mesh.scale.set(sc, 1, sc);
@@ -1151,9 +1155,9 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           for (const [id, mesh] of net.routeMeshById) {
             const mat = mesh.material as THREE.MeshStandardMaterial;
             if (id === sel.id) {
-              mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 1.6);
+              mat.emissiveIntensity = Math.max(mat.emissiveIntensity, 0.8);
             } else {
-              mat.color.multiplyScalar(0.5);
+              mat.color.lerp(groundTone, 0.6);
             }
           }
         }
@@ -1161,7 +1165,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const mesh = city.roadMeshById.get(sel.id);
           if (mesh) {
             const mat = mesh.material as THREE.MeshStandardMaterial;
-            mat.emissive.setHex(0xfacc15);
+            mat.emissive.setHex(MARK.amber);
             mat.emissiveIntensity = 0.9;
           }
         }

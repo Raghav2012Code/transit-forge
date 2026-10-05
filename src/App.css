@@ -1,10 +1,10 @@
 /* TransitForge shell + components. Tokens live in index.css.
 
-   Structure: masthead (paper) → map plate (dark, inset like a figure in a
+   Structure: masthead (paper) → map plate (light, inset like a figure in a
    report) → rail (a document column, not a stack of cards) → status strip.
 
-   Two environments, deliberately: the chrome is paper and ink, and anything
-   floating *inside* the map plate is dark, because it sits on the map. */
+   One environment: the chrome is paper and ink, and anything
+   floating *inside* the map plate is paper too, so the map and page agree. */
 
 /* =====================================================================
  * 1. Shell
@@ -175,7 +175,7 @@
 .tf-clock.paused strong { color: var(--ink-faint); }
 
 /* =====================================================================
- * 2. The map plate — a dark figure set into the paper
+ * 2. The map plate — a light figure set into the paper
  * ===================================================================== */
 
 .tf-main {
@@ -193,15 +193,15 @@
   position: relative;
   min-width: 0;
   min-height: 0;
-  background: var(--plate-deep);
-  border: 1px solid var(--ink-strong);
+  background: var(--plate);
+  border: 1px solid var(--rule-strong);
   border-radius: var(--r-md);
   overflow: hidden;
 }
 .scene-mount { position: absolute; inset: 0; }
 .scene-mount canvas { display: block; width: 100%; height: 100%; }
 
-/* ---- things floating on the plate are dark, because the plate is ---- */
+/* ---- things floating on the plate are paper, like the page around it ---- */
 .tf-hud-tl {
   position: absolute;
   top: var(--s-4);
@@ -220,7 +220,7 @@
   padding: 4px var(--s-4);
   font-size: var(--fs-fine);
   font-weight: 500;
-  color: var(--on-ink);
+  color: var(--ink-strong);
   background: var(--plate-surface);
   border-radius: var(--r-sm);
 }
@@ -239,7 +239,7 @@
   width: 3px;
   align-self: stretch;
   border-radius: 999px;
-  background: var(--on-ink);
+  background: var(--ink-strong);
   flex: none;
 }
 .tf-hud-chip.mode-build::before { background: var(--line-amber); }
@@ -254,14 +254,14 @@
   text-align: center;
   bottom: calc(var(--status-h) + var(--s-3));
   font-size: var(--fs-fine);
-  color: oklch(78% 0.006 250);
+  color: var(--ink-soft);
   background: var(--plate-surface);
   border-radius: var(--r-sm);
   padding: 4px var(--s-4);
   pointer-events: none;
   z-index: 3;
 }
-.tf-inspect-chip { color: var(--on-ink); }
+.tf-inspect-chip { color: var(--ink-strong); }
 
 /* measure readout */
 .tf-measure-bar {
@@ -276,7 +276,7 @@
   font-family: var(--font-data);
   font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
-  color: var(--on-ink);
+  color: var(--ink-strong);
   background: var(--plate-surface);
   border-radius: var(--r-sm);
   z-index: 6;
@@ -330,7 +330,7 @@
   bottom: calc(var(--status-h) + var(--s-4));
   width: 168px;
   padding: var(--s-4);
-  color: var(--on-ink);
+  color: var(--ink);
   background: var(--plate-surface);
   border-radius: var(--r-md);
   pointer-events: none;
@@ -340,7 +340,7 @@
   margin: 0 0 var(--s-3);
   font-size: var(--fs-fine);
   font-weight: 600;
-  color: oklch(75% 0.008 250);
+  color: var(--ink-soft);
 }
 .tf-ramp { height: 5px; border-radius: 999px; }
 .tf-ramp-labels {
@@ -349,26 +349,26 @@
   margin-top: 4px;
   font-family: var(--font-data);
   font-size: var(--fs-fine);
-  color: oklch(70% 0.008 250);
+  color: var(--ink-soft);
 }
 .tf-legend-rows { display: flex; flex-direction: column; gap: 4px; }
 .tf-legend-group {
   margin-top: var(--s-4);
   padding-top: var(--s-3);
-  border-top: 1px solid oklch(100% 0 0 / 0.12);
+  border-top: 1px solid var(--rule);
 }
 .tf-legend .tf-legend-group h5 {
   margin: 0 0 var(--s-3);
   font-size: var(--fs-fine);
   font-weight: 600;
-  color: oklch(75% 0.008 250);
+  color: var(--ink-soft);
 }
 .tf-legend-row {
   display: flex;
   align-items: center;
   gap: var(--s-3);
   font-size: var(--fs-fine);
-  color: oklch(88% 0.004 250);
+  color: var(--ink);
 }
 .tf-swatch {
   width: 12px;
@@ -398,7 +398,7 @@
   gap: var(--s-3);
   width: 168px;
   padding: var(--s-4);
-  color: var(--on-ink);
+  color: var(--ink);
   background: var(--plate-surface);
   border-radius: var(--r-md);
 }
@@ -407,42 +407,22 @@
 .tf-nav .tf-seg {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  background: oklch(100% 0 0 / 0.07);
-  border-color: oklch(100% 0 0 / 0.14);
 }
 .tf-nav .tf-seg-item {
   height: 24px;
   padding: 0 4px;
   font-size: var(--fs-fine);
-  color: oklch(80% 0.006 250);
 }
-.tf-nav .tf-seg-item:hover { color: var(--on-ink); background: oklch(100% 0 0 / 0.1); }
-.tf-nav .tf-seg-item.active { color: var(--plate-deep); background: var(--on-ink); }
 .tf-nav select {
-  background: oklch(100% 0 0 / 0.07);
-  border-color: oklch(100% 0 0 / 0.16);
-  color: var(--on-ink);
   font-size: var(--fs-fine);
   height: 26px;
   padding: 3px 22px 3px 6px;
-  background-image: linear-gradient(45deg, transparent 50%, oklch(80% 0.006 250) 50%),
-    linear-gradient(135deg, oklch(80% 0.006 250) 50%, transparent 50%);
   background-position: calc(100% - 11px) 50%, calc(100% - 7px) 50%;
-  background-size: 4px 4px, 4px 4px;
-  background-repeat: no-repeat;
 }
-.tf-nav select option { color: var(--ink); background: var(--paper-raised); }
 .tf-nav .tf-namelabel { gap: 3px; }
-.tf-nav .tf-hint { color: oklch(68% 0.008 250); font-size: var(--fs-fine); }
+.tf-nav .tf-hint { color: var(--ink-soft); font-size: var(--fs-fine); }
 .tf-nav .tf-draft-actions { gap: var(--s-2); }
-.tf-nav .tf-btn {
-  flex: 1;
-  color: var(--on-ink);
-  background: oklch(100% 0 0 / 0.07);
-  border-color: oklch(100% 0 0 / 0.16);
-}
-.tf-nav .tf-btn:hover:not(:disabled) { background: oklch(100% 0 0 / 0.14); }
-.tf-nav .tf-btn:disabled { opacity: 0.35; }
+.tf-nav .tf-btn { flex: 1; }
 
 .tf-compass {
   display: flex;
@@ -451,14 +431,14 @@
   font-family: var(--font-data);
   font-size: var(--fs-fine);
   font-weight: 600;
-  color: var(--on-ink);
+  color: var(--ink-strong);
 }
 .tf-compass span { display: inline-block; }
 .tf-nav-zoom {
   font-family: var(--font-data);
   font-size: var(--fs-fine);
   font-variant-numeric: tabular-nums;
-  color: oklch(72% 0.008 250);
+  color: var(--ink-soft);
   text-align: right;
 }
 
@@ -484,20 +464,21 @@
   pointer-events: none;
   max-width: 240px;
   padding: var(--s-3) var(--s-4);
-  color: var(--on-ink);
-  background: var(--plate-surface);
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
   border-radius: var(--r-sm);
   box-shadow: var(--lift-float);
   font-size: var(--fs-small);
   line-height: 1.35;
 }
 .tf-hover-tip strong { display: block; font-weight: 600; }
-.tf-hover-tip .tf-hint { color: oklch(70% 0.008 250); font-size: var(--fs-fine); }
+.tf-hover-tip .tf-hint { color: var(--ink-soft); font-size: var(--fs-fine); }
 .tf-hover-metric {
   margin-top: 2px;
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
-  color: oklch(84% 0.006 250);
+  color: var(--ink-strong);
 }
 
 /* ---- toasts ---- */
@@ -517,8 +498,9 @@
   display: flex;
   gap: var(--s-4);
   padding: var(--s-3) var(--s-4);
-  color: var(--on-ink);
-  background: var(--plate-surface);
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
   border-radius: var(--r-sm);
   box-shadow: var(--lift-float);
   animation: tf-toast-in var(--d-slow) var(--ease) both;
@@ -528,7 +510,7 @@
   width: 3px;
   align-self: stretch;
   border-radius: 999px;
-  background: var(--on-ink);
+  background: var(--ink-strong);
   flex: none;
 }
 .tf-toast.warn::before { background: var(--line-amber); }
@@ -537,11 +519,11 @@
   font-family: var(--font-data);
   font-size: var(--fs-fine);
   font-variant-numeric: tabular-nums;
-  color: oklch(68% 0.008 250);
+  color: var(--ink-soft);
   flex: none;
   padding-top: 1px;
 }
-.tf-toast-text { font-size: var(--fs-small); color: oklch(92% 0.004 250); }
+.tf-toast-text { font-size: var(--fs-small); color: var(--ink); }
 
 @keyframes tf-toast-in {
   from { opacity: 0; transform: translateY(-6px); }
@@ -564,8 +546,8 @@
   display: flex;
   align-items: center;
   padding: 0 var(--s-4);
-  background: oklch(14% 0.012 250 / 0.94);
-  border-top: 1px solid oklch(100% 0 0 / 0.1);
+  background: var(--paper-raised);
+  border-top: 1px solid var(--rule);
   font-family: var(--font-data);
   font-size: var(--fs-fine);
   font-variant-numeric: tabular-nums;
@@ -577,18 +559,18 @@
   align-items: baseline;
   gap: var(--s-3);
   padding: 0 var(--s-5);
-  border-right: 1px solid oklch(100% 0 0 / 0.1);
+  border-right: 1px solid var(--rule-soft);
   white-space: nowrap;
 }
-.tf-status-cell:first-child { padding-left: 0; font-weight: 600; color: var(--on-ink); }
+.tf-status-cell:first-child { padding-left: 0; font-weight: 600; color: var(--ink-strong); }
 .tf-status-cell:last-child { border-right: none; }
-.tf-status-cell b { font-weight: 600; color: var(--on-ink); }
-.tf-status-cell span { color: oklch(66% 0.008 250); }
+.tf-status-cell b { font-weight: 600; color: var(--ink-strong); }
+.tf-status-cell span { color: var(--ink-soft); }
 .tf-status-more { display: none; margin-left: auto; }
 .tf-status-more span { font-style: normal; }
-.tf-status-cell.good b { color: oklch(78% 0.14 160); }
-.tf-status-cell.warn b { color: oklch(82% 0.13 75); }
-.tf-status-cell.bad b { color: oklch(72% 0.16 25); }
+.tf-status-cell.good b { color: var(--ok); }
+.tf-status-cell.warn b { color: var(--watch-ink); }
+.tf-status-cell.bad b { color: var(--alert); }
 
 /* =====================================================================
  * 3. Rail — a document column. Sections are separated by rules and
@@ -1371,7 +1353,7 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   padding: 3px var(--s-4);
   font-size: var(--fs-fine);
   font-weight: 600;
-  color: var(--on-ink);
+  color: var(--ink-strong);
   background: var(--plate-surface);
   border-radius: var(--r-sm);
 }

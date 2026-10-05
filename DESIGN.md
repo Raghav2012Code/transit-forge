@@ -16,15 +16,16 @@ component styles in `src/App.css`. When the two ever disagree, this file wins.
 
 ## Aesthetic commitment
 
-Signage-grade light chrome wrapped around a recessed dark map plate, the way a
-planning report sets a figure into a page. Paper and ink carry the interface;
-the map is the only dark region, bordered and inset so it reads as a deliberate
-plate rather than a hole.
+Signage-grade light chrome around a light map plate, the way a planning report
+sets a survey figure into a page. Paper and ink carry the interface and the
+map alike: the city is drawn on pale ground in muted district tones, so the
+only saturated things on screen are lines and conditions. The plate is bordered
+and inset so it reads as a figure, not a hole.
 
 The vernacular is transit wayfinding: route bullets, line colours, tabular
 timetable figures, plain institutional language.
 
-Explicitly avoided: a dark dashboard with one neon accent, glassmorphism on
+Explicitly avoided: a dark map in a light page (the two must agree), a dark dashboard with one neon accent, glassmorphism on
 chrome, gradient decoration, all-caps tracked eyebrow labels, meta strings
 joined with middle dots, monospace used as a texture for data, arrow glyphs
 stapled to buttons.
@@ -68,14 +69,15 @@ One family, two widths — a signage system, not a font pairing.
 | Chrome | `--paper` | `oklch(95.2% 0.004 250)` |
 | Raised | `--paper-raised` | `#fff` |
 | Sunken | `--paper-sunken` | `oklch(92.4% 0.005 250)` |
-| Map plate | `--plate` / `--plate-deep` | `oklch(18% 0.012 250)` / `oklch(14.5% 0.012 250)` |
+| Map plate | `--plate` / `--plate-deep` | `oklch(93% 0.005 250)` / `oklch(90% 0.006 250)` |
+| Floating on the map | `--plate-surface` / `--plate-edge` | `oklch(100% 0 0 / 0.95)` / `oklch(80% 0.008 250)` |
 | Text / selected | `--ink` / `--ink-strong` | `oklch(21% 0.008 250)` / `oklch(14% 0.008 250)` |
 | Secondary text | `--ink-soft` / `--ink-faint` | `oklch(40% 0.009 250)` / `oklch(49% 0.008 250)` |
 | Rules | `--rule` | `oklch(86% 0.006 250)` |
 
 Line colours — shared verbatim with the 3D scene (`transport/network.ts`) so a
 bullet in the rail is the same colour as its line on the map. Mid-tone on
-purpose: legible on the dark plate, dark enough to carry white bullet text on
+purpose: legible on the pale plate, dark enough to carry white bullet text on
 paper.
 
 `--line-blue #1b6fc4` · `--line-green #0e7a52` · `--line-red #c0392f` ·
@@ -89,6 +91,27 @@ Every text token is held to 4.5:1 on paper, raised and sunken surfaces.
 same subject is told apart by dash and a caption, not by hue; a reading that is
 good or bad takes `--ok` or `--alert`. Palettes borrowed from a charting kit are
 the fastest way to break the rule (`ui/analytics/seriesColors.ts`).
+
+## The map
+
+The 3D scene is painted from `src/rendering/palette.ts`, whose hex values are the
+sRGB of the CSS tokens above, so the canvas edge and the page agree.
+
+- **Ground and fabric** — land, roads, water and buildings are pale and
+  desaturated. Districts differ by tint (blue CBD, green university, warm
+  industrial), never by saturation, so a line colour is always the loudest
+  thing in view.
+- **Stations** are ink-toned: dark slate, with interchanges darker still.
+- **Overlay ramps run pale to deep.** Little is a pale tint and a lot is a deep
+  one (navy, deep green), because a ramp that ends in white vanishes on pale
+  ground. Condition ramps (green, amber, red) are unchanged. Legends in
+  `ui/shell/Legend.tsx` mirror these exactly.
+- **Emphasis darkens; it does not glow.** A busier route shifts toward ink and
+  a deselected route fades toward the ground. Emissive boosts that read well on
+  a dark scene wash a pale one out.
+- **Markers** use the deepened amber and the line blue (`MARK`), which hold
+  contrast on pale ground where the old yellow and light blue did not.
+- **Labels** are white pills with ink text and a thin accent edge.
 
 ## Spacing, radius, elevation
 
@@ -106,13 +129,13 @@ the fastest way to break the rule (`ui/analytics/seriesColors.ts`).
   and map tools right. The tools (search, measure, inspect, side panel) sit in
   one group set apart by a rule, the way the clock is. Paper, with a single
   bottom rule.
-- **Map plate** — the dark figure. Floating on it: mode chips (top-left), the
+- **Map plate** — the light figure. Floating on it: mode chips (top-left), the
   navigation cluster and minimap as one flex column (top-right, so they cannot
   overlap), the legend (bottom-right), the control hint and the status strip
   along the bottom. Everything that floats shares `--plate-surface` and a
   `--plate-edge` hairline, with no blur.
-- **Selection card** — the one exception: a sheet of paper laid on the plate
-  (bottom-left). It is a document, so its figures read like the rail and a
+- **Selection card** — a sheet of paper on the plate (bottom-left), with a
+  shadow because it genuinely floats. Its figures read like the rail and a
   route bullet sits on the ground it was designed for.
 - **Rail** — a document column, not a stack of cards. Sections are separated by
   rules and space. In simulate mode it is tabbed by task (Map, Network, Service,
@@ -134,7 +157,8 @@ the fastest way to break the rule (`ui/analytics/seriesColors.ts`).
   stroke, round caps, `currentColor`. No icon library.
 - **Copy** — plain sentences. Hints read "Drag to orbit, right-drag to pan," not
   dot-joined fragments. Empty states say what is true and what to do next.
-- **Light only** — designed for a lit room; the map carries the darkness.
+- **Light only** — designed for a lit room. Nothing in the interface or the map
+  is dark except ink.
 
 ## Accessibility
 

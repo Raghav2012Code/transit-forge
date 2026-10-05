@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Station, TransportMode, TransportRoute } from '../../types/index.ts';
+import { STATION } from '../palette.ts';
 
 export const MODE_Y: Record<TransportMode, number> = {
   metro: 7,
@@ -64,9 +65,9 @@ export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]
     const mesh = new THREE.Mesh(
       interchange ? interchangeGeo : stationGeo,
       new THREE.MeshStandardMaterial({
-        color: interchange ? 0xf8fafc : 0xcbd5e1,
-        emissive: 0x334155,
-        emissiveIntensity: 0.4,
+        color: interchange ? STATION.interchange : STATION.regular,
+        emissive: STATION.glow,
+        emissiveIntensity: 0.1,
       }),
     );
     const topMode = st.modes.includes('metro') ? 'metro' : st.modes.includes('rail') ? 'rail' : 'bus';

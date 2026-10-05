@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { CarTrip, CityData } from '../../types/index.ts';
+import { MARK } from '../palette.ts';
 
 /** Representative subset of cars as one InstancedMesh (never one object per car). */
 export const MAX_VISIBLE_CARS = 60;
@@ -15,7 +16,7 @@ export function buildCarRig(city: CityData): CarRig {
   group.name = 'cars';
   const geo = new THREE.BoxGeometry(4, 1.6, 2);
   geo.translate(0, 1.2, 0);
-  const mat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0xfbbf24, emissiveIntensity: 0.35 });
+  const mat = new THREE.MeshStandardMaterial({ color: MARK.car, emissive: MARK.car, emissiveIntensity: 0.1 });
   const mesh = new THREE.InstancedMesh(geo, mat, MAX_VISIBLE_CARS);
   mesh.frustumCulled = false;
   group.add(mesh);
