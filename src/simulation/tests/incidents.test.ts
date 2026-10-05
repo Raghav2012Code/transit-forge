@@ -34,6 +34,7 @@ function mkIncident(over: Partial<IncidentConfig> & { kind: IncidentConfig['kind
     activeTicks: 0,
     baselineWaiting: 0,
     recovered90: false,
+    strandedPeakDuringIncident: 0,
     ...over,
   };
 }

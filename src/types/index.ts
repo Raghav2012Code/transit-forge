@@ -381,6 +381,8 @@ export interface Incident {
   /** Waiting-passenger baseline sampled at activation (recovery detection). */
   baselineWaiting: number;
   recovered90: boolean;
+  /** Peak concurrently-STRANDED passengers since this incident activated (not the city-wide all-time peak). */
+  strandedPeakDuringIncident: number;
   /** Temp replacement route id while deployed. */
   replacementRouteId?: string;
   /** Counter snapshot at activation (for resolved-incident deltas). */

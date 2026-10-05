@@ -928,6 +928,7 @@ export default function App() {
       activeTicks: 0,
       baselineWaiting: 0,
       recovered90: false,
+      strandedPeakDuringIncident: 0,
     });
     sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
     setSelectedIncidentId(id);
@@ -1190,7 +1191,7 @@ export default function App() {
     const cfg = p.build(Math.round(sim.timeMinutes + 5));
     const id = `inc-${sim.nextIncidentId}`;
     sim.nextIncidentId++;
-    sim.incidents.push({ ...cfg, id, status: 'scheduled', activeTicks: 0, baselineWaiting: 0, recovered90: false });
+    sim.incidents.push({ ...cfg, id, status: 'scheduled', activeTicks: 0, baselineWaiting: 0, recovered90: false, strandedPeakDuringIncident: 0 });
     sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
     setSelectedIncidentId(id);
     setSnapshot({ ...sim });

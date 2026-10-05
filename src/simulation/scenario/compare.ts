@@ -64,6 +64,7 @@ export function compareResilience(
       activeTicks: 0,
       baselineWaiting: 0,
       recovered90: false,
+      strandedPeakDuringIncident: 0,
     });
     for (let i = 0; i < ticks; i++) sim = stepSimulation(sim, 1);
     const stats = computeStats(sim);
