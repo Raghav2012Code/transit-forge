@@ -219,14 +219,17 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seenEvents = useRef<Set<string>>(new Set());
   const toastSeq = useRef(1);
+  const toastTimers = useRef<Set<number>>(new Set());
   const [railOpen, setRailOpen] = useState(true);
 
   function pushToast(level: Toast['level'], text: string) {
     const id = toastSeq.current++;
     setToasts((t) => [{ id, level, text, time: formatClock(simRef.current.timeMinutes) }, ...t].slice(0, MAX_TOASTS));
-    window.setTimeout(() => {
+    const timerId = window.setTimeout(() => {
+      toastTimers.current.delete(timerId);
       setToasts((t) => t.filter((x) => x.id !== id));
     }, TOAST_TTL_MS);
+    toastTimers.current.add(timerId);
   }
 
   // ---- interactive map state (§3–§30) ----
@@ -393,11 +396,23 @@ export default function App() {
     }));
     setToasts((t) => [...batch, ...t].slice(0, MAX_TOASTS));
     const ids = batch.map((b) => b.id);
-    const timer = window.setTimeout(() => {
+    // Each batch gets its own independent dismiss timer. This effect reruns
+    // on every snapshot (every ~500ms while playing) — returning a cleanup
+    // here would cancel the PREVIOUS batch's still-pending timer on every
+    // subsequent run, so toasts would only ever disappear once pushed out
+    // by the MAX_TOASTS cap rather than after TOAST_TTL_MS.
+    const timerId = window.setTimeout(() => {
+      toastTimers.current.delete(timerId);
       setToasts((t) => t.filter((x) => !ids.includes(x.id)));
     }, TOAST_TTL_MS);
-    return () => window.clearTimeout(timer);
+    toastTimers.current.add(timerId);
   }, [snapshot]);
+
+  // Unmount-only: clear any still-pending toast timers.
+  useEffect(() => () => {
+    for (const id of toastTimers.current) window.clearTimeout(id);
+    toastTimers.current.clear();
+  }, []);
 
   const stats = computeStats(snapshot);
 
