@@ -3,6 +3,7 @@
 // harbor bay south-west, airport far east on flat land.
 import type { CityData, DistrictKind, Vec3, Zone } from '../../types/index.ts';
 import { mulberry32 } from './seededRng.ts';
+import { distM as dist2D } from '../transport/network.ts';
 import { initGrowthState } from '../growth/landUse.ts';
 
 interface ZoneSpec {
@@ -28,10 +29,6 @@ const ZONE_SPECS: ZoneSpec[] = [
   { id: 'z-sub-s', name: 'South Suburbs', kind: 'suburban', x: 40, z: 300, radius: 160, population: 60000, jobs: 8000 },
   { id: 'z-sub-ne', name: 'North-East Suburbs', kind: 'suburban', x: 330, z: -300, radius: 150, population: 52000, jobs: 6000 },
 ];
-
-function dist2D(a: Vec3, b: Vec3): number {
-  return Math.hypot(a.x - b.x, a.z - b.z);
-}
 
 export function generateCity(seed: number): CityData {
   const zones: Zone[] = ZONE_SPECS.map((s) => ({

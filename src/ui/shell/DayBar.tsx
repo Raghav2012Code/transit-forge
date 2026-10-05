@@ -3,11 +3,10 @@ import type { Incident, SimStats } from '../../types/index.ts';
 import SimControls, { type Speed } from '../controls/SimControls.tsx';
 import DayStrip from './DayStrip.tsx';
 import { IconChevron, IconReports } from './icons.tsx';
+import { congTone, occTone } from './tones.ts';
 
 type Tone = '' | 'good' | 'warn' | 'bad';
 
-const congestionTone = (v: number): Tone => (v >= 0.85 ? 'bad' : v >= 0.7 ? 'warn' : 'good');
-const loadTone = (v: number): Tone => (v >= 95 ? 'bad' : v >= 85 ? 'warn' : 'good');
 const recoveryTone = (v: number): Tone => (v >= 60 ? 'good' : v >= 30 ? 'warn' : 'bad');
 
 interface Props {
@@ -38,8 +37,8 @@ export default function DayBar(p: Props) {
   const s = p.stats;
   const readings: { key: string; label: string; value: string; tone: Tone }[] = [
     { key: 'transit', label: 'Transit share', value: `${s.transitShare}%`, tone: '' },
-    { key: 'congestion', label: 'Congestion', value: s.avgCongestion.toFixed(2), tone: congestionTone(s.avgCongestion) },
-    { key: 'load', label: 'Peak load', value: `${s.maxOccupancy}%`, tone: loadTone(s.maxOccupancy) },
+    { key: 'congestion', label: 'Congestion', value: s.avgCongestion.toFixed(2), tone: congTone(s.avgCongestion) },
+    { key: 'load', label: 'Peak load', value: `${s.maxOccupancy}%`, tone: occTone(s.maxOccupancy) },
     { key: 'wait', label: 'Average wait', value: `${s.avgWaitMin} min`, tone: '' },
     { key: 'recovery', label: 'Cost recovery', value: `${s.costRecovery}%`, tone: recoveryTone(s.costRecovery) },
     { key: 'incidents', label: 'Disruptions', value: String(s.activeIncidents), tone: s.activeIncidents > 0 ? 'bad' : '' },

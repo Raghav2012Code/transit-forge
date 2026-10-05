@@ -1,5 +1,6 @@
 import type { SimStats } from '../../types/index.ts';
 import Kpi from '../shell/Kpi.tsx';
+import { congTone, occTone } from '../shell/tones.ts';
 
 /** A named leader with its count, or a plain "None yet" before there is any activity. */
 const ranked = (name: string, count: number) => (count > 0 ? `${name} (${count.toLocaleString()})` : 'None yet');
@@ -21,8 +22,8 @@ function Section({ title, rows, tone }: { title: string; rows: [string, string][
 }
 
 export default function StatsPanel({ stats }: { stats: SimStats }) {
-  const congTone = stats.avgCongestion >= 0.85 ? 'bad' : stats.avgCongestion >= 0.7 ? 'warn' : 'good';
-  const occTone = stats.maxOccupancy >= 95 ? 'bad' : stats.maxOccupancy >= 85 ? 'warn' : 'good';
+  const cTone = congTone(stats.avgCongestion);
+  const oTone = occTone(stats.maxOccupancy);
   return (
     <>
       <div className="tf-stats">
@@ -60,7 +61,7 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
             value={stats.avgCongestion.toFixed(2)}
             meter={Math.min(1, stats.avgCongestion)}
             threshold={0.85}
-            tone={congTone}
+            tone={cTone}
             sub={`worst ${stats.worstVC}`}
           />
         </div>
@@ -138,7 +139,7 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
       )}
       <div className="tf-hint">
         Peak occupancy {stats.maxOccupancy >= 95 ? 'is above' : 'is below'} the 95% critical line
-        {occTone === 'good' ? ' — capacity is holding.' : ' — boardings are being turned away.'}
+        {oTone === 'good' ? ' — capacity is holding.' : ' — boardings are being turned away.'}
       </div>
     </>
   );

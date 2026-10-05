@@ -10,6 +10,7 @@ import { classifyNetwork } from '../../simulation/service/classify.ts';
 import type { SimulationState } from '../../simulation/index.ts';
 import Dock from '../shell/Dock.tsx';
 import { RouteRef } from '../shell/RouteBullet.tsx';
+import { ScoreParts } from '../build/ComparePanel.tsx';
 
 interface Props {
   access: AccessibilitySet;
@@ -72,11 +73,7 @@ export default function AnalyticsPanel({ access, coverage, score, bottlenecks, g
           <div className="tf-stat-row"><dt>Metro, rail, bus reach</dt><dd>{coverage.metroPop.toLocaleString()} / {coverage.railPop.toLocaleString()} / {coverage.busPop.toLocaleString()}</dd></div>
           <div className="tf-stat-row"><dt>Planning score</dt><dd>{score.total}</dd></div>
         </dl>
-        <ul className="tf-score-parts">
-          {score.parts.map((p) => (
-            <li key={p.label}>{p.label} {p.value} × {Math.round(p.weight * 100)}%</li>
-          ))}
-        </ul>
+        <ScoreParts score={score} />
       </Dock>
 
       <Dock title="Bottlenecks">

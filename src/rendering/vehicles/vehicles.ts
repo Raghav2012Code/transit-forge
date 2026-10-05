@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Station, TransportRoute, VehicleState } from '../../types/index.ts';
-import { MODE_Y } from '../transport/buildNetwork.ts';
+import { routePoints } from '../transport/buildNetwork.ts';
 
 export interface RoutePath {
   pts: THREE.Vector3[];
@@ -20,17 +20,9 @@ export interface VehicleRig {
   segmentsByRoute: Map<string, RoutePath>;
 }
 
-function routePolyline(route: TransportRoute, byId: Map<string, Station>): THREE.Vector3[] {
-  const y = MODE_Y[route.mode] + 1.6;
-  return route.stationIds
-    .map((id) => byId.get(id))
-    .filter((s): s is Station => Boolean(s))
-    .map((s) => new THREE.Vector3(s.pos.x, y, s.pos.z));
-}
-
 /** Path entry for one route; shared by the initial build and live sync. */
 export function buildRoutePath(route: TransportRoute, byId: Map<string, Station>): RoutePath {
-  const pts = routePolyline(route, byId);
+  const pts = routePoints(route, byId, 1.6);
   const cum: number[] = [0];
   for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]));
   return {

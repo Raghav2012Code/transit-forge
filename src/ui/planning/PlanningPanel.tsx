@@ -11,6 +11,9 @@ import type { SavedPlan } from '../../simulation/planning/planStore.ts';
 import Dock from '../shell/Dock.tsx';
 import Kpi from '../shell/Kpi.tsx';
 import Meter from '../shell/Meter.tsx';
+import { congTone } from '../shell/tones.ts';
+import { compareTone } from '../build/compareTone.ts';
+import { ScoreParts } from '../build/ComparePanel.tsx';
 import { IconDownload, IconSave, IconTrash } from '../shell/icons.tsx';
 
 export interface SubmittedEvaluation {
@@ -72,15 +75,12 @@ function RowTable({ rows }: { rows: CompareRow[] }) {
       </thead>
       <tbody>
         {rows.map((r) => {
-          const good = r.better && r.pct !== null && r.pct !== 0 &&
-            ((r.better === 'down' && r.pct < 0) || (r.better === 'up' && r.pct > 0));
-          const bad = r.better && r.pct !== null && r.pct !== 0 && !good;
           return (
             <tr key={r.label}>
               <td>{r.label}</td>
               <td>{r.base}</td>
               <td>{r.mod}</td>
-              <td className={good ? 'tf-good' : bad ? 'tf-bad' : ''}>{r.delta}</td>
+              <td className={compareTone(r)}>{r.delta}</td>
             </tr>
           );
         })}
@@ -125,7 +125,7 @@ export default function PlanningPanel(p: Props) {
               value={p.overview.congestion.toFixed(2)}
               meter={Math.min(1, p.overview.congestion)}
               threshold={0.85}
-              tone={p.overview.congestion >= 0.85 ? 'bad' : p.overview.congestion >= 0.7 ? 'warn' : 'good'}
+              tone={congTone(p.overview.congestion)}
               sub={`travel ${p.overview.travelMin.toFixed(1)} min`}
             />
             <Kpi
@@ -285,11 +285,7 @@ export default function PlanningPanel(p: Props) {
             </>
           )}
           <h5>Score parts</h5>
-          <ul className="tf-score-parts">
-            {p.evaluation.score.parts.map((s) => (
-              <li key={s.label}>{s.label} {s.value} × {Math.round(s.weight * 100)}%</li>
-            ))}
-          </ul>
+          <ScoreParts score={p.evaluation.score} />
           <h5>Intervention</h5>
           <ul className="tf-ranked">
             {[...p.evaluation.report.intervention.infra, ...p.evaluation.report.intervention.service, ...p.evaluation.report.intervention.roads].map((l, i) => (

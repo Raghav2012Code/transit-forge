@@ -17,8 +17,8 @@ export interface NetworkMeshes {
   routeMeshById: Map<string, THREE.Mesh>;
 }
 
-function routePoints(route: TransportRoute, byId: Map<string, Station>): THREE.Vector3[] {
-  const y = MODE_Y[route.mode];
+export function routePoints(route: TransportRoute, byId: Map<string, Station>, yOffset = 0): THREE.Vector3[] {
+  const y = MODE_Y[route.mode] + yOffset;
   return route.stationIds
     .map((id) => byId.get(id))
     .filter((s): s is Station => Boolean(s))
