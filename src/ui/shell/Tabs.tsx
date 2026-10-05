@@ -1,43 +1,47 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * The rail is one column doing several jobs at once. Tabs scope it to the
- * job in hand, so reading the network never means scrolling past the fare
- * table to reach the growth forecast.
+ * A tablist that scopes one surface to the job in hand.
  *
- * Follows the standard tablist keyboard pattern: arrows move between tabs,
- * Home/End jump to the ends, and only the selected tab sits in the Tab
- * sequence so the strip costs one stop on the way to the panel. Only the
- * open panel is mounted, so only the selected tab carries aria-controls —
- * the others would otherwise point at an id that isn't in the document.
+ * Follows the standard keyboard pattern: arrows move between tabs, Home and
+ * End jump to the ends, and only the selected tab sits in the Tab sequence so
+ * the strip costs one stop on the way to its panel. Only the open panel is
+ * mounted, so only the selected tab carries aria-controls; the others would
+ * point at an id that is not in the document.
+ *
+ * `idPrefix` names the ids (`${idPrefix}tab-x`, `${idPrefix}panel-x`) so two
+ * tablists can live on one page.
  */
-export interface RailTab<T extends string> {
+export interface TabItem<T extends string> {
   id: T;
   label: string;
 }
 
-export default function RailTabs<T extends string>({
+export default function Tabs<T extends string>({
   tabs,
   active,
   onChange,
   label,
+  idPrefix,
+  className = 'tf-tabs',
 }: {
-  tabs: readonly RailTab<T>[];
+  tabs: readonly TabItem<T>[];
   active: T;
   onChange: (id: T) => void;
   label: string;
+  idPrefix: string;
+  className?: string;
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
   // Focus after the render that actually selects the tab, so we never reach
-  // for a node from the previous render — or one that has since unmounted
-  // because the mode changed out from under the rail.
+  // for a node from the previous render.
   const focusWanted = useRef(false);
 
   useEffect(() => {
     if (!focusWanted.current) return;
     focusWanted.current = false;
-    stripRef.current?.querySelector<HTMLButtonElement>(`#railtab-${active}`)?.focus();
-  }, [active]);
+    stripRef.current?.querySelector<HTMLButtonElement>(`#${idPrefix}tab-${active}`)?.focus();
+  }, [active, idPrefix]);
 
   const go = (index: number) => {
     focusWanted.current = true;
@@ -58,23 +62,17 @@ export default function RailTabs<T extends string>({
   };
 
   return (
-    <div
-      className="tf-rail-tabs"
-      role="tablist"
-      aria-label={label}
-      ref={stripRef}
-      onKeyDown={onKeyDown}
-    >
+    <div className={className} role="tablist" aria-label={label} ref={stripRef} onKeyDown={onKeyDown}>
       {tabs.map((t) => (
         <button
           key={t.id}
           type="button"
           role="tab"
-          id={`railtab-${t.id}`}
+          id={`${idPrefix}tab-${t.id}`}
           aria-selected={active === t.id}
-          aria-controls={active === t.id ? `railpanel-${t.id}` : undefined}
+          aria-controls={active === t.id ? `${idPrefix}panel-${t.id}` : undefined}
           tabIndex={active === t.id ? 0 : -1}
-          className="tf-rail-tab"
+          className="tf-tab"
           onClick={() => onChange(t.id)}
         >
           {t.label}

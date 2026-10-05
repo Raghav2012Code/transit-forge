@@ -173,3 +173,4 @@
   border: 1px solid var(--plate-edge);
   border-radius: var(--r-sm);
 }
+.tf-map-scenario { display: flex; align-items: center; gap: var(--s-3); }

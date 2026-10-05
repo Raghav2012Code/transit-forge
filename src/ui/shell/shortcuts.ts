@@ -36,6 +36,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
   {
     title: 'The workspace',
     items: [
+      [['S'], 'Open or close reports'],
       [['['], 'Hide the side panel'],
       [[']'], 'Show the side panel'],
       [['T'], 'Switch between light and dark'],

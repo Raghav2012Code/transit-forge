@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import './shell.css';
 import './map.css';
+import './reports.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
 import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
@@ -94,6 +95,7 @@ import TopBar from './ui/shell/TopBar.tsx';
 import Workbench from './ui/shell/Workbench.tsx';
 import DayBar from './ui/shell/DayBar.tsx';
 import HelpSheet from './ui/shell/HelpSheet.tsx';
+import { IconCompare } from './ui/shell/icons.tsx';
 import Legend from './ui/shell/Legend.tsx';
 import { APP_VERSION } from './version.ts';
 import { cameraPreset, poseFor, zoomPose, type PresetId, type TiltName, type CameraCmd } from './rendering/map/camera.ts';
@@ -110,7 +112,8 @@ import SearchPalette from './ui/map/SearchPalette.tsx';
 import CompareSplit from './ui/map/CompareSplit.tsx';
 import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './rendering/SceneView.tsx';
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
-import RailTabs, { type RailTab } from './ui/shell/RailTabs.tsx';
+import ReportsSheet from './ui/shell/ReportsSheet.tsx';
+import { type ReportTab } from './ui/shell/reportTabs.ts';
 import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme.ts';
 import type { Theme } from './rendering/palette.ts';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
@@ -123,14 +126,6 @@ const ROAD_SNAP_M = 45;
 const TOAST_TTL_MS = 7000;
 const MAX_TOASTS = 4;
 
-/** Simulate mode's rail, scoped by the job you're doing rather than one scroll. */
-type SimTab = 'network' | 'service' | 'analysis' | 'growth';
-const SIM_TABS: readonly RailTab<SimTab>[] = [
-  { id: 'network', label: 'Network' },
-  { id: 'service', label: 'Service' },
-  { id: 'analysis', label: 'Analysis' },
-  { id: 'growth', label: 'Growth' },
-];
 
 
 interface PendingDelete {
@@ -280,7 +275,8 @@ export default function App() {
     saveTheme(next);
     setTheme(next);
   }
-  const [railTab, setRailTab] = useState<SimTab>('network');
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsTab, setReportsTab] = useState<ReportTab>('network');
   const railRef = useRef<HTMLElement>(null);
 
   function pushToast(level: Toast['level'], text: string) {
@@ -308,6 +304,11 @@ export default function App() {
   const [inspectMode, setInspectMode] = useState(false);
   const [splitView, setSplitView] = useState(false);
   const [announcement, setAnnouncement] = useState('');
+
+  function openReports(tab: ReportTab) {
+    setReportsTab(tab);
+    setReportsOpen(true);
+  }
 
   function toggleMeasure() {
     if (measureTool) {
@@ -464,6 +465,7 @@ export default function App() {
       } else if (e.key === 'Escape') {
         if (contextMenu) setContextMenu(null);
         else if (searchOpen) setSearchOpen(false);
+        else if (reportsOpen) setReportsOpen(false);
         else if (measureTool) {
           setMeasureTool(false);
           setMeasure(null);
@@ -472,6 +474,8 @@ export default function App() {
         else enterSimulate();
       } else if ((e.key === 't' || e.key === 'T') && !mod && !e.altKey) {
         toggleTheme();
+      } else if ((e.key === 's' || e.key === 'S') && !mod && !e.altKey) {
+        setReportsOpen((v) => !v);
       } else if ((e.key === 'm' || e.key === 'M') && !mod && !e.altKey) {
         toggleMeasure();
       } else if (e.key === '?') {
@@ -511,7 +515,7 @@ export default function App() {
     toastTimers.current.add(timerId);
   }, [snapshot]);
 
-  // Changing mode or task swaps the rail's contents wholesale, so start the
+  // Changing mode swaps the side panel's contents wholesale, so start the
   // new reading at the top rather than wherever the last one was scrolled to.
   // If the control that had focus went with the old contents (switching mode
   // by hotkey while a rail tab was focused), catch focus on the rail itself
@@ -521,7 +525,7 @@ export default function App() {
     if (!rail) return;
     rail.scrollTo({ top: 0 });
     if (document.activeElement === document.body) rail.focus({ preventScroll: true });
-  }, [mode, railTab]);
+  }, [mode]);
 
   // Unmount-only: clear any still-pending toast timers.
   useEffect(() => () => {
@@ -2191,7 +2195,7 @@ export default function App() {
         inspectOn={inspectMode}
         onInspect={() => setInspectMode((v) => !v)}
       />
-      <main className="tf-stage">
+      <main className="tf-stage" data-reports={reportsOpen ? 'open' : undefined}>
         <section className="tf-viewport">
           {splitView ? (
             <CompareSplit
@@ -2277,6 +2281,7 @@ export default function App() {
             </LensBar>
             <div className="tf-map-tr">
               {ops.length > 0 && (
+                <div className="tf-map-scenario">
                 <div className="tf-seg" role="radiogroup" aria-label="Which network the map shows">
                   <button type="button" role="radio" aria-checked={viewing === 'scenario'} className="tf-seg-item" onClick={() => onView('scenario')}>
                     Scenario
@@ -2284,6 +2289,11 @@ export default function App() {
                   <button type="button" role="radio" aria-checked={viewing === 'base'} className="tf-seg-item" onClick={() => onView('base')}>
                     Baseline
                   </button>
+                </div>
+                <button type="button" className="tf-lens-btn" onClick={() => openReports('compare')}>
+                  <IconCompare />
+                  <span>Compare</span>
+                </button>
                 </div>
               )}
               {snapshot.incidents.filter((i) => i.status === 'active').map((i) => (
@@ -2363,60 +2373,69 @@ export default function App() {
             </div>
           )}
         </section>
+        {reportsOpen && (
+          <ReportsSheet tab={reportsTab} onTab={setReportsTab} onClose={() => setReportsOpen(false)}>
+            {reportsTab === 'network' && <StatsPanel stats={stats} />}
+            {reportsTab === 'analysis' && (
+              <>
+                <AnalyticsPanel
+                  access={access}
+                  coverage={coverage}
+                  score={score}
+                  bottlenecks={bottlenecks}
+                  gaps={gaps}
+                  utilization={utilization}
+                  sim={snapshot}
+                  onSelect={setSelection}
+                />
+                <ChartsPanel history={history} topStations={topStations} />
+              </>
+            )}
+            {reportsTab === 'growth' && (
+              <>
+                <GrowthPanel
+                  year={BASE_YEAR + yearsApplied}
+                  summary={growthSummary}
+                  districts={districtBars}
+                  history={growthHistory}
+                  onAdvance={onAdvanceYears}
+                  advancing={growing}
+                  forecast={forecast}
+                  onForecast={onForecast}
+                  advice={advice}
+                />
+                <DebugPanel sim={snapshot} />
+              </>
+            )}
+            {reportsTab === 'compare' && (
+              <ComparePanel
+                result={compareResult}
+                running={compareRunning}
+                progress={compareProgress}
+                onRun={onRunCompare}
+                viewing={viewing}
+                onView={onView}
+                hasEdits={ops.length > 0}
+                horizonYears={compareHorizon}
+                onHorizon={setCompareHorizon}
+                splitView={splitView}
+                onSplitView={setSplitView}
+              />
+            )}
+          </ReportsSheet>
+        )}
       </main>
       <aside className="tf-panel" ref={railRef} tabIndex={-1}>
           {mode === 'simulate' ? (
-            <>
-              <RailTabs tabs={SIM_TABS} active={railTab} onChange={setRailTab} label="Rail sections" />
-              <div
-                className="tf-rail-body"
-                role="tabpanel"
-                id={`railpanel-${railTab}`}
-                aria-labelledby={`railtab-${railTab}`}
-              >
-                {railTab === 'network' && <StatsPanel stats={stats} />}
-                {railTab === 'service' && (
-                  <ServicePanel
-                    sim={snapshot}
-                    selectedRouteId={serviceRouteId}
-                    onSelectRoute={setServiceRouteId}
-                    onPatch={onServicePatch}
-                    onFares={onFarePolicy}
-                  />
-                )}
-                {railTab === 'analysis' && (
-                  <>
-                    <AnalyticsPanel
-                      access={access}
-                      coverage={coverage}
-                      score={score}
-                      bottlenecks={bottlenecks}
-                      gaps={gaps}
-                      utilization={utilization}
-                      sim={snapshot}
-                      onSelect={setSelection}
-                    />
-                    <ChartsPanel history={history} topStations={topStations} />
-                  </>
-                )}
-                {railTab === 'growth' && (
-                  <>
-                    <GrowthPanel
-                      year={BASE_YEAR + yearsApplied}
-                      summary={growthSummary}
-                      districts={districtBars}
-                      history={growthHistory}
-                      onAdvance={onAdvanceYears}
-                      advancing={growing}
-                      forecast={forecast}
-                      onForecast={onForecast}
-                      advice={advice}
-                    />
-                    <DebugPanel sim={snapshot} />
-                  </>
-                )}
-              </div>
-            </>
+            <div className="tf-rail-body">
+              <ServicePanel
+                sim={snapshot}
+                selectedRouteId={serviceRouteId}
+                onSelectRoute={setServiceRouteId}
+                onPatch={onServicePatch}
+                onFares={onFarePolicy}
+              />
+            </div>
           ) : mode === 'disrupt' ? (
             <div className="tf-rail-body">
               <DisruptPanel
@@ -2510,19 +2529,6 @@ export default function App() {
                 opCount={ops.length}
                 scenarioCost={formatCost(mod.cost)}
               />
-              <ComparePanel
-                result={compareResult}
-                running={compareRunning}
-                progress={compareProgress}
-                onRun={onRunCompare}
-                viewing={viewing}
-                onView={onView}
-                hasEdits={ops.length > 0}
-                horizonYears={compareHorizon}
-                onHorizon={setCompareHorizon}
-                splitView={splitView}
-                onSplitView={setSplitView}
-              />
             </div>
           )}
       </aside>
@@ -2544,6 +2550,8 @@ export default function App() {
         incidents={snapshot.incidents}
         runTarget={runTarget}
         onRunTo={runTo}
+        reportsOpen={reportsOpen}
+        onReports={() => setReportsOpen((v) => !v)}
       />
       {helpOpen && <HelpSheet version={APP_VERSION} seed={SEED} onClose={() => setHelpOpen(false)} />}
     </div>
