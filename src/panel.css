@@ -1,0 +1,65 @@
+/* The side panel: a document column that answers "what is this?".
+
+   Nothing selected: where to look (the lines, what needs attention, the
+   network-wide fares). Something selected: that thing, with the controls that
+   change it. In Build, Disrupt and Plan the mode's own panel stays put and the
+   selection rides above it, marked by a heavy ink rule, so picking a station
+   never costs you the form you were filling in. */
+
+.tf-app > .tf-panel {
+  border: 0;
+  border-left: 1px solid var(--rule);
+  border-radius: 0;
+}
+
+.tf-home { display: flex; flex-direction: column; padding: 0 var(--s-5) var(--s-7); }
+.tf-home-intro { padding: var(--s-6) 0 var(--s-5); border-bottom: 1px solid var(--rule-soft); }
+.tf-home-intro h3 { margin: 0 0 var(--s-3); font-size: var(--fs-lead); font-weight: 600; color: var(--ink-strong); }
+.tf-home-intro .tf-hint { margin: 0; }
+
+.tf-line-list { margin: 0; padding: 0; list-style: none; }
+.tf-line-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding: 4px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.tf-line-row:last-child { border-bottom: 0; }
+.tf-line-meta {
+  flex: none;
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.tf-problem-list { margin: 0; padding: 0; list-style: none; }
+.tf-problem {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-4);
+  width: 100%;
+  padding: 6px 0;
+  font: inherit;
+  font-size: var(--fs-small);
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.tf-problem:hover > span:last-child { text-decoration: underline; text-underline-offset: 2px; }
+.tf-problem-sev { flex: none; width: 8px; height: 8px; border-radius: var(--r-bullet); background: var(--watch); transform: translateY(-1px); }
+.tf-problem-sev.high { background: var(--alert); }
+
+/* a selection that rides above a mode's own panel */
+.tf-selected {
+  padding: 0 var(--s-5);
+  background: var(--paper-raised);
+}
+.tf-selected[data-place='top'] { border-bottom: 2px solid var(--ink-strong); }
+.tf-selected[data-place='bottom'] { border-top: 2px solid var(--ink-strong); }
+.tf-selected .tf-dock:last-child { border-bottom: 0; }

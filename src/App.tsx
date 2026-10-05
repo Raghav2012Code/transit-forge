@@ -3,6 +3,7 @@ import './App.css';
 import './shell.css';
 import './map.css';
 import './reports.css';
+import './panel.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
 import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
@@ -90,7 +91,9 @@ import GrowthPanel, { type ForecastView } from './ui/growth/GrowthPanel.tsx';
 import type { Zone } from './types/index.ts';
 import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
 import ServicePanel from './ui/service/ServicePanel.tsx';
-import { type AppMode as Mode } from './ui/shell/modes.ts';
+import FaresPanel from './ui/service/FaresPanel.tsx';
+import SimulateHome from './ui/panel/SimulateHome.tsx';
+import { MODE_LABEL, type AppMode as Mode } from './ui/shell/modes.ts';
 import TopBar from './ui/shell/TopBar.tsx';
 import Workbench from './ui/shell/Workbench.tsx';
 import DayBar from './ui/shell/DayBar.tsx';
@@ -157,7 +160,6 @@ export default function App() {
   const [coverageThreshold, setCoverageThreshold] = useState(500);
   const [history, setHistory] = useState<SeriesPoint[]>([]);
   const lastHistTick = useRef(0);
-  const [serviceRouteId, setServiceRouteId] = useState<string | null>(null);
   const fleetNonce = useRef(0);
 
   // Scenario + build state. Base city/seed never mutate; ops replay into mod.
@@ -471,6 +473,7 @@ export default function App() {
           setMeasure(null);
           setMeasureHover(null);
         } else if (inspectMode) setInspectMode(false);
+        else if (mode === 'simulate' && selection) setSelection(null);
         else enterSimulate();
       } else if ((e.key === 't' || e.key === 'T') && !mod && !e.altKey) {
         toggleTheme();
@@ -1651,8 +1654,9 @@ export default function App() {
         {
           label: 'Modify service',
           run: () => {
-            setServiceRouteId(sel.id);
-            pushToast('info', 'Service panel now edits this route.');
+            setSelection(sel);
+            setRailOpen(true);
+            announceSelection(sel);
           },
         },
         {
@@ -2108,7 +2112,6 @@ export default function App() {
             pickKinds: ['station', 'route', 'road'] as Selection['kind'][],
             onPick: (sel: Selection) => {
               setSelection(sel);
-              if (sel.kind === 'route') setServiceRouteId(sel.id);
               setIncidentDraft((prev) => {
                 const d = { ...prev };
                 if (sel.kind === 'station') {
@@ -2147,6 +2150,32 @@ export default function App() {
                 ? `Delete ${pendingDelete.label}? Confirm below.`
                 : 'Delete: click a route, station, or road. Used infrastructure asks for confirmation.';
 
+  // What is selected, shown beside the mode's own panel. Simulate and Plan are
+  // about reading it, so it leads; Build and Disrupt are about filling in a form,
+  // so the form keeps the top and the selection follows it.
+  const selectionBlock = selection ? (
+            <div className={mode === 'simulate' ? 'tf-rail-body' : 'tf-selected'} data-place={mode === 'plan' ? 'top' : 'bottom'}>
+              <Inspector
+                selection={selection}
+                sim={snapshot}
+                onClose={() => setSelection(null)}
+                problems={problems}
+                onFocusStation={focusStation}
+                onInvestigate={investigateProblem}
+                onOverlay={setOverlay}
+                onOpenDisrupt={enterDisrupt}
+                catchmentRadius={catchmentRadius}
+                onCatchmentRadius={setCatchmentRadius}
+                zoneCoverage={selection.kind === 'zone' ? coverage.perZone.find((z) => z.zoneId === selection.id)?.pct : undefined}
+                zoneTravel={selection.kind === 'zone' ? (access.zones.find((z) => z.zoneId === selection.id)?.toCBD ?? null) : undefined}
+              >
+                {selection.kind === 'route' ? (
+                  <ServicePanel sim={snapshot} routeId={selection.id} onPatch={onServicePatch} />
+                ) : null}
+              </Inspector>
+            </div>
+  ) : null;
+
   return (
     <div className={`tf-app${railOpen ? '' : ' panel-closed'}`} data-mode={mode}>
       <TopBar
@@ -2184,6 +2213,8 @@ export default function App() {
         theme={theme}
         onTheme={toggleTheme}
         onHelp={() => setHelpOpen(true)}
+        panelOpen={railOpen}
+        onPanel={() => setRailOpen((r) => !r)}
       />
       <Workbench
         mode={mode}
@@ -2206,7 +2237,6 @@ export default function App() {
               selection={selection}
               onSelect={mode === 'build' ? () => {} : (sel) => {
                 setSelection(sel);
-                if (sel?.kind === 'route') setServiceRouteId(sel.id);
                 announceSelection(sel);
               }}
               networkKey={networkKey}
@@ -2232,7 +2262,6 @@ export default function App() {
             selection={selection}
             onSelect={mode === 'build' && !inspectMode ? () => {} : (sel) => {
               setSelection(sel);
-              if (sel?.kind === 'route') setServiceRouteId(sel.id);
               announceSelection(sel);
             }}
             networkKey={networkKey}
@@ -2354,24 +2383,6 @@ export default function App() {
           )}
           <div className="tf-mobile-note">TransitForge works best on desktop — the full map needs room.</div>
           <div className="tf-sr-only" aria-live="polite">{announcement}</div>
-          {selection && (
-            <div className="tf-inspector-card">
-              <Inspector
-                selection={selection}
-                sim={snapshot}
-                onClose={() => setSelection(null)}
-                problems={problems}
-                onFocusStation={focusStation}
-                onInvestigate={investigateProblem}
-                onOverlay={setOverlay}
-                onOpenDisrupt={enterDisrupt}
-                catchmentRadius={catchmentRadius}
-                onCatchmentRadius={setCatchmentRadius}
-                zoneCoverage={selection.kind === 'zone' ? coverage.perZone.find((z) => z.zoneId === selection.id)?.pct : undefined}
-                zoneTravel={selection.kind === 'zone' ? (access.zones.find((z) => z.zoneId === selection.id)?.toCBD ?? null) : undefined}
-              />
-            </div>
-          )}
         </section>
         {reportsOpen && (
           <ReportsSheet tab={reportsTab} onTab={setReportsTab} onClose={() => setReportsOpen(false)}>
@@ -2425,17 +2436,22 @@ export default function App() {
           </ReportsSheet>
         )}
       </main>
-      <aside className="tf-panel" ref={railRef} tabIndex={-1}>
+      <aside className="tf-panel" ref={railRef} tabIndex={-1} aria-label={selection ? 'Details' : `${MODE_LABEL[mode]} panel`}>
+          {(mode === 'simulate' || mode === 'plan') && selectionBlock}
           {mode === 'simulate' ? (
-            <div className="tf-rail-body">
-              <ServicePanel
-                sim={snapshot}
-                selectedRouteId={serviceRouteId}
-                onSelectRoute={setServiceRouteId}
-                onPatch={onServicePatch}
-                onFares={onFarePolicy}
-              />
-            </div>
+            selection ? null : (
+              <div className="tf-rail-body">
+                <SimulateHome
+                  routes={snapshot.routes}
+                  peakHeadway={Object.fromEntries(snapshot.routes.map((r) => [r.id, snapshot.service[r.id]?.peakHeadwayMin ?? r.headwayMin]))}
+                  boardings={snapshot.counters.routeBoardings}
+                  problems={problems}
+                  onSelectRoute={(id) => { setSelection({ kind: 'route', id }); announceSelection({ kind: 'route', id }); }}
+                  onLocateProblem={onLocateProblem}
+                  fares={<FaresPanel fares={snapshot.fares} onFares={onFarePolicy} />}
+                />
+              </div>
+            )
           ) : mode === 'disrupt' ? (
             <div className="tf-rail-body">
               <DisruptPanel
@@ -2531,6 +2547,7 @@ export default function App() {
               />
             </div>
           )}
+          {(mode === 'build' || mode === 'disrupt') && selectionBlock}
       </aside>
       <DayBar
         playing={playing}

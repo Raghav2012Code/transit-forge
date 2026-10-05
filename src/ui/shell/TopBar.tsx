@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Theme } from '../../rendering/palette.ts';
-import { IconChevron, IconHelp, IconMoon, IconPlan, IconScenario, IconSearch, IconSun } from './icons.tsx';
+import { IconChevron, IconHelp, IconMoon, IconPanel, IconPlan, IconScenario, IconSearch, IconSun } from './icons.tsx';
 import Popover from './Popover.tsx';
 
 interface Props {
@@ -12,13 +12,15 @@ interface Props {
   theme: Theme;
   onTheme: () => void;
   onHelp: () => void;
+  panelOpen: boolean;
+  onPanel: () => void;
 }
 
 /**
  * The masthead does three jobs and no more: say what you are working on,
  * find anything, and hold the two settings nobody reaches for often.
  */
-export default function TopBar({ scenarioName, edits, scenarioMenu, onSearch, theme, onTheme, onHelp }: Props) {
+export default function TopBar({ scenarioName, edits, scenarioMenu, onSearch, theme, onTheme, onHelp, panelOpen, onPanel }: Props) {
   return (
     <header className="tf-bar">
       <div className="tf-bar-left">
@@ -59,6 +61,16 @@ export default function TopBar({ scenarioName, edits, scenarioMenu, onSearch, th
           aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
         >
           {theme === 'dark' ? <IconSun /> : <IconMoon />}
+        </button>
+        <button
+          type="button"
+          className="tf-btn icon ghost"
+          aria-pressed={panelOpen}
+          onClick={onPanel}
+          title={panelOpen ? 'Hide the side panel ([)' : 'Show the side panel (])'}
+          aria-label="Side panel"
+        >
+          <IconPanel />
         </button>
         <button type="button" className="tf-btn icon ghost" onClick={onHelp} title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
           <IconHelp />

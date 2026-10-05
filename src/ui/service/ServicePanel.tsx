@@ -2,20 +2,18 @@
 // consequences derived from live simulation state (no hard-coded estimates).
 import type { SimulationState } from '../../simulation/index.ts';
 import type { ServicePatch } from '../../simulation/scenario/scenario.ts';
-import { MAX_FARE, type FarePolicy } from '../../simulation/economics/fares.ts';
 import { clampHeadway } from '../../simulation/service/servicePlan.ts';
 import { effectiveHeadway, fleetRequired } from '../../simulation/service/timetable.ts';
 import { routeServiceMath } from '../../simulation/service/routeService.ts';
 import { formatClock } from '../../simulation/index.ts';
 import Dock from '../shell/Dock.tsx';
-import { IconMinus, IconPlus } from '../shell/icons.tsx';
+import Stepper from '../shell/Stepper.tsx';
 
 interface Props {
   sim: SimulationState;
-  selectedRouteId: string | null;
-  onSelectRoute: (id: string) => void;
+  /** The route being edited: the one selected on the map. */
+  routeId: string;
   onPatch: (routeId: string, patch: ServicePatch) => void;
-  onFares: (fares: FarePolicy) => void;
 }
 
 const QUICK_HEADWAYS: Record<string, number[]> = {
@@ -33,45 +31,7 @@ const CAPACITY_OPTIONS: Record<string, number[]> = {
 const TIME_STEPS: number[] = [];
 for (let t = 240; t <= 1440; t += 30) TIME_STEPS.push(t);
 
-function Stepper({ label, value, display, onChange, min, max, step = 1 }: {
-  label: string;
-  value: number;
-  display: string;
-  onChange: (v: number) => void;
-  min: number;
-  max: number;
-  step?: number;
-}) {
-  return (
-    <div className="tf-stat-row">
-      <dt>{label}</dt>
-      <dd className="tf-stepper">
-        <button
-          type="button"
-          className="tf-btn icon"
-          aria-label={`Decrease ${label.toLowerCase()}`}
-          disabled={value <= min}
-          onClick={() => onChange(Math.max(min, value - step))}
-        >
-          <IconMinus />
-        </button>
-        <output aria-label={label}>{display}</output>
-        <button
-          type="button"
-          className="tf-btn icon"
-          aria-label={`Increase ${label.toLowerCase()}`}
-          disabled={value >= max}
-          onClick={() => onChange(Math.min(max, value + step))}
-        >
-          <IconPlus />
-        </button>
-      </dd>
-    </div>
-  );
-}
-
-export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPatch, onFares }: Props) {
-  const routeId = selectedRouteId ?? sim.routes[0]?.id ?? '';
+export default function ServicePanel({ sim, routeId, onPatch }: Props) {
   const math = routeId ? routeServiceMath(sim, routeId) : null;
   const route = sim.routes.find((r) => r.id === routeId);
   const plan = sim.service[routeId];
@@ -89,16 +49,7 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
   };
 
   return (
-    <Dock title="Service planning" meta={`${plan.peakHeadwayMin}m peak`}>
-      <label className="tf-namelabel">
-        Route
-        <select value={route.id} onChange={(e) => onSelectRoute(e.target.value)}>
-          {sim.routes.map((r) => (
-            <option key={r.id} value={r.id}>{r.name}</option>
-          ))}
-        </select>
-      </label>
-
+    <Dock title="Service plan" meta={`${plan.peakHeadwayMin} min at peak`}>
       <h5>Time between vehicles</h5>
       <dl>
         <Stepper label="Peak" value={plan.peakHeadwayMin} display={`${plan.peakHeadwayMin} min`}
@@ -169,20 +120,6 @@ export default function ServicePanel({ sim, selectedRouteId, onSelectRoute, onPa
         <input type="checkbox" checked={plan.syncEnabled} aria-label="Synchronize transfers" onChange={(e) => patch({ syncEnabled: e.target.checked })} />
         Synchronize transfers
       </label>
-
-      <h5>Fares per trip, all routes (OCU)</h5>
-      <dl>
-        <Stepper label="Metro fare" value={sim.fares.metro} display={`${sim.fares.metro} OCU`}
-          min={0} max={MAX_FARE} onChange={(v) => onFares({ ...sim.fares, metro: v })} />
-        <Stepper label="Rail fare" value={sim.fares.rail} display={`${sim.fares.rail} OCU`}
-          min={0} max={MAX_FARE} onChange={(v) => onFares({ ...sim.fares, rail: v })} />
-        <Stepper label="Bus fare" value={sim.fares.bus} display={`${sim.fares.bus} OCU`}
-          min={0} max={MAX_FARE} onChange={(v) => onFares({ ...sim.fares, bus: v })} />
-      </dl>
-      <p className="tf-hint">
-        One ticket at the entry mode; transfers are free. Higher fares push riders
-        to cars, and denied or unfinished trips earn nothing.
-      </p>
 
       <h5>Reliability</h5>
       <dl>
