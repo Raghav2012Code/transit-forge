@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import SceneView, {
   type AnalyticsView,
   type BuildInteractions,
@@ -44,7 +44,9 @@ export interface SplitViewProps {
  */
 export default function CompareSplit(p: SplitViewProps) {
   const baseRef = useRef<SimulationState>(p.baseSim);
-  baseRef.current = p.baseSim;
+  useEffect(() => {
+    baseRef.current = p.baseSim;
+  }, [p.baseSim]);
   const noopDraft = null;
   return (
     <div className="tf-split">
