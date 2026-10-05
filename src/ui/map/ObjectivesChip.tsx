@@ -18,8 +18,6 @@ interface Props {
  * without a trip to Plan; the list opens right here.
  */
 export default function ObjectivesChip({ briefTitle, objectives, results, constraints, constraintResults, onOpenPlan }: Props) {
-  const byId = new Map(results.map((r) => [r.objectiveId, r]));
-  const constraintById = new Map(constraintResults.map((r) => [r.constraintId, r]));
   const met = results.filter((r) => r.passed).length;
   const broken = constraintResults.filter((r) => !r.passed).length;
   const allMet = objectives.length > 0 && met === objectives.length && broken === 0;
@@ -42,7 +40,7 @@ export default function ObjectivesChip({ briefTitle, objectives, results, constr
           <h3>{briefTitle}</h3>
           <ul>
             {objectives.map((o) => {
-              const r = byId.get(o.id);
+              const r = results.find((x) => x.objectiveId === o.id);
               const unit = metricUnit(o.metric);
               return (
                 <li key={o.id}>
@@ -63,7 +61,7 @@ export default function ObjectivesChip({ briefTitle, objectives, results, constr
               <h4>Limits</h4>
               <ul>
                 {constraints.map((c) => {
-                  const r = constraintById.get(c.id);
+                  const r = constraintResults.find((x) => x.constraintId === c.id);
                   return (
                     <li key={c.id}>
                       <div className="tf-objectives-row">
