@@ -1,13 +1,7 @@
-# TransitForge agent skills
+# TransitForge
 
-TransitForge — browser-based 3D public transportation planning and simulation
-sandbox.
-
-## Stack
-
-- TypeScript + React + Vite
-- Three.js (no game engine)
-- HTML/CSS, Web Workers when needed for simulation performance
+Browser-based 3D public transportation planning and simulation sandbox:
+TypeScript, React, Vite and Three.js (no game engine).
 
 ## Architecture
 
@@ -21,46 +15,44 @@ Three separated layers:
 
 Supporting folders: `src/types/`, `src/data/`, `src/workers/`.
 
-Interface: design tokens and primitives live in `src/index.css`, shell and
-component styles in `src/App.css`, and the committed design direction (palette,
-type, motion, slop audit) is recorded in [`DESIGN.md`](DESIGN.md).
+## Interface
 
-## Run
+Read [`DESIGN.md`](DESIGN.md) before changing any UI, colour, type or motion; it
+wins over the code when they disagree. Tokens and primitives live in
+`src/index.css`, shell and component styles in `src/App.css`.
 
-```sh
-npm install
-npm run dev
-```
+Check every change against one rule: **colour only ever means a line or a
+condition; selection is ink.**
 
-Build and verify:
+Light and dark ship as one design:
 
-```sh
-npm run lint    # oxlint
-npm run test    # vitest run
-npm run build   # tsc -b && vite build
-```
+- Components read tokens and stay theme-blind. Colours come from `src/index.css`
+  (a token, or a custom property where a token cannot reach, such as SVG and
+  gradients), so a value changes in one place for both themes.
+- The 3D scene takes its colours from `src/rendering/palette.ts`, one palette per
+  theme. Switching theme rebuilds the scene from the other palette, so a new scene
+  colour goes in both.
+- Check a UI change in both themes (`T` switches) and at 390px before it lands.
 
 ## Working agreements
 
 - The simulation is deterministic: seed `1337`, no `Math.random()` in
   `src/simulation/`. A change that alters results must be able to explain why.
-- Never weaken a type to `any`; extend the type instead.
+- Extend a type instead of weakening it to `any`.
 - Keep analytics out of the frame loop: compute per tick-band or on demand, never
   per passenger or per frame.
-- Milestones land as one commit each, after lint + test + build are clean.
+- Milestones land as one commit each, once `npm run lint`, `npm run test` and
+  `npm run build` are all clean.
+- Keyboard shortcuts are handled by `onKey` in `src/App.tsx` and listed for
+  people in `SHORTCUTS` in `src/ui/planning/PlanningPanel.tsx`; change both
+  together.
 
-## Controls
+## Git
 
-| Key | Action |
-| --- | --- |
-| `Space` | play / pause (leaves build · disrupt · plan) |
-| `1` `2` `3` | speed 1× / 5× / 20× |
-| `B` `D` `P` | build · disrupt · plan mode |
-| `A` | cycle the analytics overlay |
-| `T` | switch light / dark theme |
-| `[` `]` | hide / show the side panel |
-| `Esc` | back to simulate |
-| `R` | reset the simulated day |
+`origin` is the fork (`abivan100-stack/transit-forge`). `upstream` is the parent
+(`Raghav2012Code/transit-forge`), where the fork has read access only. Work lands
+on the fork's `main` through a pull request, and reaches the parent as a pull
+request from the fork's `main`.
 
 ## Agent skills
 
