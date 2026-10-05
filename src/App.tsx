@@ -109,6 +109,7 @@ import { loadLayers, saveLayers } from './rendering/map/layerPrefs.ts';
 import { findShortestPath } from './simulation/transport/graph.ts';
 import LensBar from './ui/map/LensBar.tsx';
 import MapControls from './ui/map/MapControls.tsx';
+import ObjectivesChip from './ui/map/ObjectivesChip.tsx';
 import Minimap from './ui/map/Minimap.tsx';
 import { ContextMenu, HoverTooltip, type ContextAction } from './ui/map/MapChrome.tsx';
 import SearchPalette from './ui/map/SearchPalette.tsx';
@@ -2375,6 +2376,16 @@ export default function App() {
               />
             </LensBar>
             <div className="tf-map-tr">
+              {activeBrief && (
+                <ObjectivesChip
+                  briefTitle={activeBrief.title}
+                  objectives={activeBrief.objectives}
+                  results={liveObjectiveResults}
+                  constraints={activeBrief.constraints}
+                  constraintResults={liveConstraintResults}
+                  onOpenPlan={() => selectMode('plan')}
+                />
+              )}
               {ops.length > 0 && (
                 <div className="tf-map-scenario">
                 <div className="tf-seg" role="radiogroup" aria-label="Which network the map shows">

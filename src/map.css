@@ -174,3 +174,40 @@
   border-radius: var(--r-sm);
 }
 .tf-map-scenario { display: flex; align-items: center; gap: var(--s-3); }
+
+/* ---- objectives: your goals, in every mode ---- */
+
+.tf-objectives {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--s-3);
+  height: 34px;
+  align-items: center;
+  padding: 0 var(--s-4);
+  font: inherit;
+  font-size: var(--fs-small);
+  color: var(--ink);
+  background: var(--plate-surface);
+  border: 1px solid var(--plate-edge);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease);
+}
+.tf-objectives strong { font-family: var(--font-data); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink-strong); }
+.tf-objectives:hover,
+.tf-objectives.open { background: var(--paper-raised); border-color: var(--rule-strong); }
+.tf-objectives.good { border-color: var(--ok); }
+.tf-objectives.good strong { color: var(--ok); }
+.tf-objectives.bad { border-color: var(--alert); }
+.tf-objectives-flag { font-weight: 600; color: var(--alert); }
+
+.tf-objectives-list { display: flex; flex-direction: column; gap: var(--s-4); width: 320px; max-width: 100%; }
+.tf-objectives-list h3 { margin: 0; font-size: var(--fs-lead); font-weight: 600; color: var(--ink-strong); }
+.tf-objectives-list h4 { margin: var(--s-3) 0 0; font-size: var(--fs-small); font-weight: 600; color: var(--ink-strong); }
+.tf-objectives-list ul { display: flex; flex-direction: column; gap: var(--s-4); margin: 0; padding: 0; list-style: none; }
+.tf-objectives-list li { display: flex; flex-direction: column; gap: var(--s-2); }
+.tf-objectives-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-4); font-size: var(--fs-small); }
+.tf-objectives-state { flex: none; font-weight: 600; color: var(--ink-soft); }
+.tf-objectives-state.met { color: var(--ok); }
+.tf-objectives-state.broken { color: var(--alert); }
+.tf-objectives-list .tf-btn { align-self: flex-start; }
