@@ -739,6 +739,11 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     labelGroup.name = 'labels';
     scene.add(labelGroup);
     const labelCache = new Map<string, THREE.Sprite>();
+    // Map labels are set in the interface face, so they read as part of the
+    // same signage system. Canvas text can only use a face once it has loaded,
+    // so every label is drawn once now and redrawn when the face arrives.
+    const LABEL_FONT = '600 30px "Barlow Semi Condensed", Barlow, "Segoe UI", system-ui, sans-serif';
+    const labelRedraws: (() => void)[] = [];
     const getLabel = (text: string, accent: string): THREE.Sprite => {
       const key = `${accent}|${text}`;
       const hit = labelCache.get(key);
@@ -746,11 +751,24 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       const canvas = document.createElement('canvas');
       canvas.width = 256 * labelDpr;
       canvas.height = 64 * labelDpr;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.scale(labelDpr, labelDpr);
-        ctx.font = '600 30px system-ui, sans-serif';
+      const tex = new THREE.CanvasTexture(canvas);
+      // Mipmapping blurs a billboard that's frequently small/distant even
+      // further; a flat bilinear sample off the full-resolution canvas
+      // stays crisp at any camera distance.
+      tex.generateMipmaps = false;
+      tex.minFilter = THREE.LinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+      sprite.scale.set(34, 8.5, 1);
+      const draw = () => {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.setTransform(labelDpr, 0, 0, labelDpr, 0, 0);
+        ctx.clearRect(0, 0, 256, 64);
+        ctx.font = LABEL_FONT;
         const w = Math.min(248, ctx.measureText(text).width + 36);
+        // Share of the sprite the pill actually covers, for collision culling.
+        sprite.userData.fill = w / 256;
         ctx.fillStyle = 'rgba(11,16,32,0.88)';
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2.5;
@@ -761,21 +779,16 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         ctx.fillStyle = '#e8eefc';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(text, 128, 33);
-      }
-      const tex = new THREE.CanvasTexture(canvas);
-      // Mipmapping blurs a billboard that's frequently small/distant even
-      // further; a flat bilinear sample off the full-resolution canvas
-      // stays crisp at any camera distance.
-      tex.generateMipmaps = false;
-      tex.minFilter = THREE.LinearFilter;
-      tex.magFilter = THREE.LinearFilter;
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-      sprite.scale.set(34, 8.5, 1);
+        ctx.fillText(text, 128, 33, 232);
+        tex.needsUpdate = true;
+      };
+      draw();
+      labelRedraws.push(draw);
       labelCache.set(key, sprite);
       return sprite;
     };
-    interface LabelItem { text: string; accent: string; x: number; y: number; z: number; tier: 0 | 1 | 2; }
+    // prio: lower wins a contested spot on screen.
+    interface LabelItem { text: string; accent: string; x: number; y: number; z: number; tier: 0 | 1 | 2; prio: number; }
     const labelItems: LabelItem[] = [];
     {
       const sim0 = simRef.current;
@@ -783,19 +796,23 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         for (const r of sim0.routes) {
           const mid = r.stationIds[Math.floor(r.stationIds.length / 2)];
           const m = net.stationMeshById.get(mid);
-          if (m) labelItems.push({ text: r.name.split(' ')[0], accent: r.color, x: m.position.x, y: 20, z: m.position.z, tier: 0 });
+          if (m) labelItems.push({ text: r.name.split(' ')[0], accent: r.color, x: m.position.x, y: 20, z: m.position.z, tier: 0, prio: 2 });
         }
         for (const z of sim0.city.zones) {
-          labelItems.push({ text: z.name, accent: '#33436e', x: z.center.x, y: 5, z: z.center.z, tier: 0 });
+          labelItems.push({ text: z.name, accent: '#33436e', x: z.center.x, y: 5, z: z.center.z, tier: 0, prio: 1 });
         }
         for (const st of sim0.stations) {
           if (st.routeIds.length > 1) {
-            labelItems.push({ text: st.name, accent: '#facc15', x: st.pos.x, y: 15, z: st.pos.z, tier: 1 });
+            labelItems.push({ text: st.name, accent: '#facc15', x: st.pos.x, y: 15, z: st.pos.z, tier: 1, prio: 0 });
           }
         }
+        // Interchanges already carry their own label from the mid tier up, so
+        // the every-station tier skips them rather than stacking a second copy.
         for (const st of sim0.stations) {
-          labelItems.push({ text: st.name, accent: '#5f6f95', x: st.pos.x, y: 12, z: st.pos.z, tier: 2 });
+          if (st.routeIds.length > 1) continue;
+          labelItems.push({ text: st.name, accent: '#5f6f95', x: st.pos.x, y: 12, z: st.pos.z, tier: 2, prio: 3 });
         }
+        labelItems.sort((p, q) => p.prio - q.prio);
       }
     }
     const labelSprites: { sprite: THREE.Sprite; tier: 0 | 1 | 2 }[] = labelItems.map((it) => {
@@ -804,6 +821,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       labelGroup.add(sprite);
       return { sprite, tier: it.tier };
     });
+    if (typeof document !== 'undefined' && document.fonts?.load) {
+      void document.fonts.load(LABEL_FONT).then(() => {
+        for (const redraw of labelRedraws) redraw();
+      });
+    }
+    const labelNdc = new THREE.Vector3();
+    const labelRects: { x0: number; x1: number; y0: number; y1: number }[] = [];
     // Direction cones along routes (selected route, or all in flow overlay).
     const dirGroup = new THREE.Group();
     dirGroup.name = 'directions';
@@ -1183,8 +1207,38 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         {
           const dist = camera.position.distanceTo(controls.target);
           const tier = dist > 650 ? 0 : dist > 300 ? 1 : 2;
-          for (const l of labelSprites) l.sprite.visible = l.tier <= tier;
           labelGroup.visible = layersRef.current.labels;
+          if (labelGroup.visible) {
+            // Greedy placement in priority order: a label that would sit on
+            // top of one already placed stays hidden until the camera moves.
+            const vw = renderer.domElement.clientWidth;
+            const vh = renderer.domElement.clientHeight;
+            const pxPerUnit = vh / (2 * Math.tan((camera.fov * Math.PI) / 360));
+            labelRects.length = 0;
+            for (const l of labelSprites) {
+              const sp = l.sprite;
+              sp.visible = false;
+              if (l.tier > tier) continue;
+              labelNdc.copy(sp.position).project(camera);
+              if (labelNdc.z > 1 || Math.abs(labelNdc.x) > 1.15 || Math.abs(labelNdc.y) > 1.15) continue;
+              const scale = pxPerUnit / Math.max(1, camera.position.distanceTo(sp.position));
+              const halfW = (sp.scale.x * (sp.userData.fill ?? 1) * scale) / 2 + 3;
+              const halfH = (sp.scale.y * 0.82 * scale) / 2 + 2;
+              const cx = ((labelNdc.x + 1) / 2) * vw;
+              const cy = ((1 - labelNdc.y) / 2) * vh;
+              const rect = { x0: cx - halfW, x1: cx + halfW, y0: cy - halfH, y1: cy + halfH };
+              let clear = true;
+              for (const r of labelRects) {
+                if (rect.x0 < r.x1 && rect.x1 > r.x0 && rect.y0 < r.y1 && rect.y1 > r.y0) {
+                  clear = false;
+                  break;
+                }
+              }
+              if (!clear) continue;
+              labelRects.push(rect);
+              sp.visible = true;
+            }
+          }
         }
         problemGroup.visible = layersRef.current.problems;
         rig.group.visible = layersRef.current.vehicles;

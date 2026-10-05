@@ -98,7 +98,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--s-2);
-  height: 26px;
+  height: 28px;
   padding: 0 10px;
   font-size: var(--fs-small);
   font-weight: 500;
@@ -267,42 +267,44 @@
 }
 .tf-viewport.tf-measuring { cursor: crosshair; }
 
-/* selection card */
+/* selection card: a sheet of paper laid on the plate, so the figures in it
+   read like the rail beside it and line bullets sit on their own ground */
 .tf-inspector-card {
   position: absolute;
   left: var(--s-4);
   bottom: calc(var(--status-h) + var(--s-4));
-  width: 272px;
-  max-height: min(52vh, 440px);
+  width: 296px;
+  max-height: min(60vh, 480px);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   z-index: 6;
   padding: var(--s-5);
-  color: var(--on-ink);
-  background: oklch(17% 0.012 250 / 0.95);
+  color: var(--ink);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
   border-radius: var(--r-md);
   box-shadow: var(--lift-float);
-  backdrop-filter: blur(12px);
   animation: tf-rise var(--d-slow) var(--ease) both;
 }
-.tf-inspector-card .tf-hint,
-.tf-inspector-card .tf-stat-row dt { color: oklch(72% 0.008 250); }
-.tf-inspector-card .tf-stat-row { border-bottom-color: oklch(100% 0 0 / 0.1); }
-.tf-inspector-card .tf-stat-row dd,
-.tf-inspector-card h3,
-.tf-inspector-card strong { color: var(--on-ink); }
-.tf-inspector-card .tf-btn {
-  color: var(--on-ink);
-  background: oklch(100% 0 0 / 0.08);
-  border-color: oklch(100% 0 0 / 0.2);
-}
-.tf-inspector-card .tf-btn:hover:not(:disabled) { background: oklch(100% 0 0 / 0.16); }
-.tf-inspector-card .tf-link { color: oklch(80% 0.09 235); }
 .tf-inspector-card .tf-inspector {
   border: none;
   padding: 0;
   background: transparent;
   animation: none;
+}
+/* long labels wrap inside the card instead of pushing it sideways */
+.tf-inspector-card .tf-stat-row dt { white-space: normal; flex: 1 1 auto; min-width: 0; }
+.tf-inspector-card .tf-stat-row dd { flex: none; max-width: 60%; }
+.tf-stat-row.stacked { flex-direction: column; align-items: flex-start; gap: var(--s-2); padding: var(--s-3) 0; }
+.tf-stat-row.stacked dd { max-width: none; text-align: left; }
+.tf-route-list { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); }
+.tf-hint.tf-warn { color: var(--alert); font-weight: 500; }
+
+/* keep the control hint clear of the selection card */
+.tf-viewport:has(.tf-inspector-card) .tf-overlay-hint { left: calc(296px + 2 * var(--s-4)); }
+@media (max-width: 1200px) {
+  .tf-viewport:has(.tf-inspector-card) .tf-overlay-hint:not(.tf-inspect-chip) { display: none; }
 }
 
 /* legend */
@@ -386,7 +388,7 @@
   border-color: oklch(100% 0 0 / 0.14);
 }
 .tf-nav .tf-seg-item {
-  height: 22px;
+  height: 24px;
   padding: 0 4px;
   font-size: var(--fs-fine);
   color: oklch(80% 0.006 250);
@@ -398,6 +400,7 @@
   border-color: oklch(100% 0 0 / 0.16);
   color: var(--on-ink);
   font-size: var(--fs-fine);
+  height: 26px;
   padding: 3px 22px 3px 6px;
   background-image: linear-gradient(45deg, transparent 50%, oklch(80% 0.006 250) 50%),
     linear-gradient(135deg, oklch(80% 0.006 250) 50%, transparent 50%);
@@ -757,7 +760,9 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   text-align: right;
   overflow-wrap: anywhere;
 }
-.tf-stat-row dd:has(> select, > .tf-stepper) { overflow-wrap: normal; white-space: nowrap; }
+.tf-stat-row dd:has(> select),
+.tf-stat-row dd.tf-stepper { overflow-wrap: normal; white-space: nowrap; }
+.tf-stat-row:has(> dd > select, > dd.tf-stepper) { align-items: center; }
 .tf-stats dl, .tf-inspector dl, .tf-debug dl { margin: 0; }
 
 /* headline readings */
@@ -860,6 +865,7 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 /* layer toggles */
 .tf-check {
   align-self: flex-start;
+  min-height: 28px;
   display: inline-flex;
   align-items: center;
   gap: var(--s-3);
@@ -1097,9 +1103,9 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   text-align: center;
 }
 .tf-stepper { display: flex; align-items: center; gap: var(--s-2); }
-.tf-stepper .tf-btn.icon { width: 24px; height: 24px; }
+.tf-stepper .tf-btn.icon { width: 28px; height: 28px; }
 .tf-stepper output {
-  min-width: 52px;
+  min-width: 64px;
   text-align: center;
   font-family: var(--font-data);
   font-size: var(--fs-small);
@@ -1160,7 +1166,6 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   border-radius: var(--r-bullet);
   background: currentColor;
 }
-.tf-inspector-card .tf-stops { color: oklch(62% 0.008 250); }
 
 /* inspector heading */
 .tf-inspector-head {
@@ -1170,6 +1175,8 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   gap: var(--s-4);
 }
 .tf-inspector-head h3 {
+  margin: 0;
+  min-width: 0;
   font-size: var(--fs-head);
   font-weight: 600;
   letter-spacing: -0.015em;
