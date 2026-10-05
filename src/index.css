@@ -18,12 +18,14 @@
   /* ---- plate: the map window, the only dark region ---- */
   --plate: oklch(18% 0.012 250);
   --plate-deep: oklch(14.5% 0.012 250);
+  --plate-surface: oklch(18% 0.012 250 / 0.92);
+  --plate-edge: oklch(100% 0 0 / 0.12);
 
   /* ---- ink: text, rules, and the selected state ---- */
   --ink: oklch(21% 0.008 250);
   --ink-strong: oklch(14% 0.008 250);
-  --ink-soft: oklch(44% 0.009 250);
-  --ink-faint: oklch(58% 0.008 250);
+  --ink-soft: oklch(40% 0.009 250);
+  --ink-faint: oklch(49% 0.008 250);
   --on-ink: oklch(97% 0.002 250);
 
   /* ---- rules: hairlines, by weight ---- */
@@ -52,9 +54,11 @@
   --mode-walk: var(--line-green);
 
   /* ---- status: these mean a condition, nothing else ---- */
-  --ok: oklch(48% 0.11 160);
+  --ok: oklch(46% 0.11 160);
   --watch: oklch(58% 0.13 70);
-  --alert: oklch(51% 0.18 27);
+  --alert: oklch(49% 0.18 27);
+  /* amber as a fill is fine; amber as text needs a darker ink to stay readable */
+  --watch-ink: oklch(46% 0.1 70);
   --ok-wash: oklch(48% 0.11 160 / 0.1);
   --watch-wash: oklch(58% 0.13 70 / 0.12);
   --alert-wash: oklch(51% 0.18 27 / 0.1);
@@ -112,6 +116,7 @@
 }
 
 * { box-sizing: border-box; }
+dl { margin: 0; }
 
 html, body, #root {
   margin: 0;
@@ -229,7 +234,7 @@ button.tf-btn {
 .tf-btn.active:hover:not(:disabled) { background: var(--ink); border-color: var(--ink); }
 
 /* ---- inputs ---- */
-input[type='text'], input:not([type]), select, textarea {
+input[type='text'], input[type='number'], input:not([type]), select, textarea {
   background: var(--paper-raised);
   color: var(--ink);
   border: 1px solid var(--rule-strong);
@@ -239,6 +244,7 @@ input[type='text'], input:not([type]), select, textarea {
   width: 100%;
   transition: border-color var(--d-fast) var(--ease);
 }
+input:not([type='checkbox']):not([type='range']), select { min-height: 28px; }
 select {
   appearance: none;
   padding-right: 22px;

@@ -115,3 +115,6 @@ export const IconInspect = (p: IconProps) => (
 export const IconCheck = (p: IconProps) => (
   <Svg {...p}><path d="M3 8.4 6.4 11.8 13 4.6" /></Svg>
 );
+export const IconPanel = (p: IconProps) => (
+  <Svg {...p}><rect x="2" y="2.8" width="12" height="10.4" rx="1.4" /><path d="M10 2.8v10.4" /></Svg>
+);

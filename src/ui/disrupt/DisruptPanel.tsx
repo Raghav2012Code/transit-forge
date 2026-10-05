@@ -83,7 +83,7 @@ export default function DisruptPanel(p: Props) {
         </label>
       )}
       {d.kind === 'segment-closure' && route && (
-        <div className="tf-draft-actions">
+        <div className="tf-fields two">
           <label className="tf-namelabel">
             From
             <select value={d.segFrom} onChange={(e) => set({ segFrom: e.target.value })}>
@@ -142,13 +142,13 @@ export default function DisruptPanel(p: Props) {
           </select>
         </label>
       )}
-      <div className="tf-draft-actions">
+      <div className="tf-fields">
         <label className="tf-namelabel">
           Starts in (min)
           <input type="number" min={0} max={600} value={d.startInMin} onChange={(e) => set({ startInMin: Math.max(0, Number(e.target.value) || 0) })} />
         </label>
         <label className="tf-namelabel">
-          Duration (min)
+          Lasts (min)
           <input type="number" min={5} max={600} value={d.durationMin} onChange={(e) => set({ durationMin: Math.max(5, Number(e.target.value) || 45) })} />
         </label>
         <label className="tf-namelabel">
@@ -167,13 +167,13 @@ export default function DisruptPanel(p: Props) {
         </label>
       )}
       {d.withReplacement && (
-        <div className="tf-draft-actions">
+        <div className="tf-fields two">
           <label className="tf-namelabel">
             Buses
             <input type="number" min={1} max={12} value={d.repBuses} onChange={(e) => set({ repBuses: Math.max(1, Math.min(12, Number(e.target.value) || 4)) })} />
           </label>
           <label className="tf-namelabel">
-            Headway
+            Headway (min)
             <input type="number" min={3} max={30} value={d.repHeadwayMin} onChange={(e) => set({ repHeadwayMin: Math.max(3, Number(e.target.value) || 6) })} />
           </label>
         </div>

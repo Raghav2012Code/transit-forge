@@ -136,6 +136,15 @@
 .tf-speeds { display: inline-flex; gap: var(--s-2); }
 .tf-speeds.tf-seg { gap: 2px; }
 
+/* map tools: set apart from the transport controls, like the clock is */
+.tf-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding-left: var(--s-5);
+  border-left: 1px solid var(--rule);
+}
+
 .tf-controls {
   display: flex;
   align-items: center;
@@ -212,10 +221,19 @@
   font-size: var(--fs-fine);
   font-weight: 500;
   color: var(--on-ink);
-  background: oklch(18% 0.012 250 / 0.88);
+  background: var(--plate-surface);
   border-radius: var(--r-sm);
-  backdrop-filter: blur(8px);
 }
+/* One surface for everything that floats on the plate, so the legend, the
+   navigation cluster, the minimap and the chips read as the same material. */
+.tf-hud-chip,
+.tf-overlay-hint,
+.tf-measure-bar,
+.tf-legend,
+.tf-nav,
+.tf-minimap,
+.tf-split-label { box-shadow: 0 0 0 1px var(--plate-edge); }
+
 .tf-hud-chip::before {
   content: '';
   width: 3px;
@@ -237,10 +255,9 @@
   bottom: calc(var(--status-h) + var(--s-3));
   font-size: var(--fs-fine);
   color: oklch(78% 0.006 250);
-  background: oklch(18% 0.012 250 / 0.85);
+  background: var(--plate-surface);
   border-radius: var(--r-sm);
   padding: 4px var(--s-4);
-  backdrop-filter: blur(8px);
   pointer-events: none;
   z-index: 3;
 }
@@ -260,9 +277,8 @@
   font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
   color: var(--on-ink);
-  background: oklch(18% 0.012 250 / 0.9);
+  background: var(--plate-surface);
   border-radius: var(--r-sm);
-  backdrop-filter: blur(8px);
   z-index: 6;
 }
 .tf-viewport.tf-measuring { cursor: crosshair; }
@@ -315,9 +331,8 @@
   width: 168px;
   padding: var(--s-4);
   color: var(--on-ink);
-  background: oklch(18% 0.012 250 / 0.88);
+  background: var(--plate-surface);
   border-radius: var(--r-md);
-  backdrop-filter: blur(8px);
   pointer-events: none;
   z-index: 3;
 }
@@ -362,12 +377,21 @@
   flex: none;
 }
 
-/* ---- map navigation: a real control cluster, top-right of the plate ---- */
-.tf-nav {
+/* navigation and minimap share one column, so neither can sit on the other */
+.tf-map-stack {
   position: absolute;
   top: var(--s-4);
   right: var(--s-4);
   z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  width: 168px;
+}
+
+/* ---- map navigation: a real control cluster, top-right of the plate ---- */
+.tf-nav {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
@@ -375,9 +399,8 @@
   width: 168px;
   padding: var(--s-4);
   color: var(--on-ink);
-  background: oklch(18% 0.012 250 / 0.9);
+  background: var(--plate-surface);
   border-radius: var(--r-md);
-  backdrop-filter: blur(8px);
 }
 /* compass and zoom share the first row; everything else spans the widget */
 .tf-nav > *:not(.tf-compass):not(.tf-nav-zoom) { grid-column: 1 / -1; }
@@ -441,15 +464,11 @@
 
 /* ---- minimap: a small plan inset, bottom-right under the legend ---- */
 .tf-minimap {
-  position: absolute;
-  right: var(--s-4);
-  top: calc(var(--s-4) + 150px);
+  position: relative;
   width: 168px;
-  z-index: 4;
   padding: 4px;
-  background: oklch(18% 0.012 250 / 0.9);
+  background: var(--plate-surface);
   border-radius: var(--r-md);
-  backdrop-filter: blur(8px);
   line-height: 0;
 }
 .tf-minimap svg {
@@ -466,7 +485,7 @@
   max-width: 240px;
   padding: var(--s-3) var(--s-4);
   color: var(--on-ink);
-  background: oklch(16% 0.012 250 / 0.95);
+  background: var(--plate-surface);
   border-radius: var(--r-sm);
   box-shadow: var(--lift-float);
   font-size: var(--fs-small);
@@ -499,10 +518,9 @@
   gap: var(--s-4);
   padding: var(--s-3) var(--s-4);
   color: var(--on-ink);
-  background: oklch(17% 0.012 250 / 0.94);
+  background: var(--plate-surface);
   border-radius: var(--r-sm);
   box-shadow: var(--lift-float);
-  backdrop-filter: blur(8px);
   animation: tf-toast-in var(--d-slow) var(--ease) both;
 }
 .tf-toast::before {
@@ -548,7 +566,6 @@
   padding: 0 var(--s-4);
   background: oklch(14% 0.012 250 / 0.94);
   border-top: 1px solid oklch(100% 0 0 / 0.1);
-  backdrop-filter: blur(8px);
   font-family: var(--font-data);
   font-size: var(--fs-fine);
   font-variant-numeric: tabular-nums;
@@ -567,6 +584,8 @@
 .tf-status-cell:last-child { border-right: none; }
 .tf-status-cell b { font-weight: 600; color: var(--on-ink); }
 .tf-status-cell span { color: oklch(66% 0.008 250); }
+.tf-status-more { display: none; margin-left: auto; }
+.tf-status-more span { font-style: normal; }
 .tf-status-cell.good b { color: oklch(78% 0.14 160); }
 .tf-status-cell.warn b { color: oklch(82% 0.13 75); }
 .tf-status-cell.bad b { color: oklch(72% 0.16 25); }
@@ -807,7 +826,7 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   color: var(--ink-faint);
 }
 .tf-tile.good .tf-kpi-value { color: var(--ok); }
-.tf-tile.warn .tf-kpi-value { color: var(--watch); }
+.tf-tile.warn .tf-kpi-value { color: var(--watch-ink); }
 .tf-tile.bad .tf-kpi-value { color: var(--alert); }
 
 /* segmented read-out: discrete blocks, like a line diagram */
@@ -1103,6 +1122,14 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   gap: var(--s-3);
   flex-wrap: wrap;
 }
+/* a row of short fields that share the width and line up at the control */
+.tf-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-4);
+  align-items: end;
+}
+.tf-fields.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tf-namelabel {
   display: flex;
   flex-direction: column;
@@ -1344,7 +1371,7 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   font-size: var(--fs-fine);
   font-weight: 600;
   color: var(--on-ink);
-  background: oklch(18% 0.012 250 / 0.9);
+  background: var(--plate-surface);
   border-radius: var(--r-sm);
 }
 .tf-split-close { position: absolute; top: var(--s-4); right: var(--s-4); z-index: 5; }
@@ -1403,10 +1430,11 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
  * ===================================================================== */
 
 @media (max-width: 1200px) {
-  .tf-status-cell:nth-of-type(n + 9) { display: none; }
+  .tf-status-cell:nth-of-type(n + 9):not(.tf-status-more) { display: none; }
+  .tf-status-more { display: flex; }
 }
 @media (max-width: 980px) {
-  .tf-status-cell:nth-of-type(n + 7) { display: none; }
+  .tf-status-cell:nth-of-type(n + 7):not(.tf-status-more) { display: none; }
   .tf-minimap { display: none; }
 }
 
@@ -1436,6 +1464,7 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   }
   .tf-controls { flex-wrap: wrap; gap: var(--s-3); }
   .tf-clock { padding-left: var(--s-4); }
+  .tf-tools { padding-left: var(--s-4); }
   .tf-inspector-card {
     width: min(272px, calc(100% - var(--s-6)));
     max-height: calc(100% - var(--status-h) - var(--s-7));

@@ -105,7 +105,7 @@ import CompareSplit from './ui/map/CompareSplit.tsx';
 import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './rendering/SceneView.tsx';
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
 import RailTabs, { type RailTab } from './ui/shell/RailTabs.tsx';
-import { IconClose, IconInspect, IconMeasure, IconPlan, IconSearch } from './ui/shell/icons.tsx';
+import { IconInspect, IconMeasure, IconPanel, IconPlan, IconSearch } from './ui/shell/icons.tsx';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
 import { headwayAt } from './simulation/service/servicePlan.ts';
 import { LOOP_ROUTES } from './simulation/passengers/passengers.ts';
@@ -2074,56 +2074,58 @@ export default function App() {
             onReset={resetAll}
             onStep={() => { simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); }}
           />
-          <button
-            type="button"
-            className="tf-btn icon ghost"
-            onClick={() => setRailOpen((r) => !r)}
-            title={railOpen ? 'Hide side panel' : 'Show side panel'}
-            aria-label={railOpen ? 'Hide side panel' : 'Show side panel'}
-            aria-pressed={railOpen}
-          >
-            {railOpen ? <IconClose /> : <IconPlan />}
-          </button>
-          <button
-            type="button"
-            className={`tf-btn icon ghost${searchOpen ? ' active' : ''}`}
-            onClick={() => setSearchOpen((v) => !v)}
-            title="Search map (/)"
-            aria-label="Search map"
-            aria-pressed={searchOpen}
-          >
-            <IconSearch />
-          </button>
-          <button
-            type="button"
-            className={`tf-btn icon ghost${measureTool ? ' active' : ''}`}
-            onClick={() => {
-              setMeasureTool((v) => {
-                if (v) {
-                  setMeasure(null);
-                  setMeasureHover(null);
-                } else {
-                  pushToast('info', 'Measure: click two points on the map.');
-                }
-                return !v;
-              });
-            }}
-            title="Measure distance"
-            aria-label="Measure distance"
-            aria-pressed={measureTool}
-          >
-            <IconMeasure />
-          </button>
-          <button
-            type="button"
-            className={`tf-btn icon ghost${inspectMode ? ' active' : ''}`}
-            onClick={() => setInspectMode((v) => !v)}
-            title="Quick inspect (I)"
-            aria-label="Quick inspect"
-            aria-pressed={inspectMode}
-          >
-            <IconInspect />
-          </button>
+          <div className="tf-tools" role="toolbar" aria-label="Map tools">
+            <button
+              type="button"
+              className={`tf-btn icon ghost${searchOpen ? ' active' : ''}`}
+              onClick={() => setSearchOpen((v) => !v)}
+              title="Search the map (/)"
+              aria-label="Search the map"
+              aria-pressed={searchOpen}
+            >
+              <IconSearch />
+            </button>
+            <button
+              type="button"
+              className={`tf-btn icon ghost${measureTool ? ' active' : ''}`}
+              onClick={() => {
+                setMeasureTool((v) => {
+                  if (v) {
+                    setMeasure(null);
+                    setMeasureHover(null);
+                  } else {
+                    pushToast('info', 'Measure: click two points on the map.');
+                  }
+                  return !v;
+                });
+              }}
+              title="Measure distance"
+              aria-label="Measure distance"
+              aria-pressed={measureTool}
+            >
+              <IconMeasure />
+            </button>
+            <button
+              type="button"
+              className={`tf-btn icon ghost${inspectMode ? ' active' : ''}`}
+              onClick={() => setInspectMode((v) => !v)}
+              title="Quick inspect (I)"
+              aria-label="Quick inspect"
+              aria-pressed={inspectMode}
+            >
+              <IconInspect />
+            </button>
+            <button
+              type="button"
+              className={`tf-btn icon ghost${railOpen ? ' active' : ''}`}
+              onClick={() => setRailOpen((r) => !r)}
+              title={railOpen ? 'Hide side panel ([)' : 'Show side panel (])'}
+              aria-label="Side panel"
+              aria-pressed={railOpen}
+            >
+              <IconPanel />
+            </button>
+          </div>
         </div>
       </header>
       <main className="tf-main">
@@ -2221,7 +2223,7 @@ export default function App() {
           />
           <StatusBar stats={stats} viewing={viewing} incidents={stats.activeIncidents} opCost={stats.opCost} />
           {!splitView && (
-            <>
+            <div className="tf-map-stack">
               <NavWidget
                 cam={camInfo}
                 tilt={tilt}
@@ -2239,7 +2241,7 @@ export default function App() {
                 selection={selection}
                 onJump={minimapJump}
               />
-            </>
+            </div>
           )}
           <HoverTooltip hover={hoverInfo} />
           <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />

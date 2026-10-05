@@ -59,6 +59,9 @@ export default function StatusBar({ stats, viewing, incidents, opCost }: Props) 
       <div className={`tf-status-cell${incidents > 0 ? ' bad' : ''}`}>
         <span>incidents</span><b>{incidents}</b>
       </div>
+      <div className="tf-status-cell tf-status-more">
+        <span>More in the Network tab</span>
+      </div>
     </div>
   );
 }
