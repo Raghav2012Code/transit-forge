@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { Layers } from '../../rendering/SceneView.tsx';
 
 interface Props {
@@ -41,7 +42,12 @@ export default function LayerToggles({ layers, onChange }: Props) {
           <span className="tf-hint">{g.title}</span>
           <div className="tf-layer-row">
             {g.items.map((it) => (
-              <label key={it.key} className="tf-check" title={it.hint}>
+              <label
+                key={it.key}
+                className="tf-check"
+                title={it.hint}
+                style={{ '--chip-color': it.color } as CSSProperties}
+              >
                 <input
                   type="checkbox"
                   checked={layers[it.key]}

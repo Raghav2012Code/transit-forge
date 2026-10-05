@@ -666,10 +666,17 @@
   transition: color var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease);
 }
 .tf-check:hover { color: var(--text); border-color: var(--hairline-strong); }
+/* Checked state reads in the chip's own --chip-color when one is set (e.g.
+   per-transport-mode layer toggles), so it actually matches the legend and
+   the 3D scene instead of every layer looking identical once switched on. */
 .tf-check:has(input:checked) {
   color: var(--text);
-  border-color: var(--signal-line);
-  background: var(--signal-soft);
+  border-color: color-mix(in oklch, var(--chip-color, var(--signal)) 45%, transparent);
+  background: color-mix(in oklch, var(--chip-color, var(--signal)) 16%, transparent);
+}
+.tf-check:has(input:checked) input[type='checkbox'] {
+  background: var(--chip-color, var(--signal));
+  border-color: var(--chip-color, var(--signal));
 }
 .tf-layer-row {
   display: flex;
