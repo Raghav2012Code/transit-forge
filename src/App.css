@@ -335,6 +335,17 @@
   color: oklch(70% 0.008 250);
 }
 .tf-legend-rows { display: flex; flex-direction: column; gap: 4px; }
+.tf-legend-group {
+  margin-top: var(--s-4);
+  padding-top: var(--s-3);
+  border-top: 1px solid oklch(100% 0 0 / 0.12);
+}
+.tf-legend .tf-legend-group h5 {
+  margin: 0 0 var(--s-3);
+  font-size: var(--fs-fine);
+  font-weight: 600;
+  color: oklch(75% 0.008 250);
+}
 .tf-legend-row {
   display: flex;
   align-items: center;
@@ -572,6 +583,11 @@
   flex-direction: column;
   min-width: 0;
 }
+/* The rail takes focus from code when its contents are swapped, so keyboard
+   users keep their place. It is a landmark, not a control: no ring around the
+   whole column. Controls inside it keep theirs. */
+.tf-panel:focus,
+.tf-panel:focus-visible { outline: none; }
 
 /* task tabs: which part of the job you are doing */
 .tf-rail-tabs {
@@ -725,21 +741,23 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   border-bottom: 1px solid var(--rule-soft);
 }
 .tf-stat-row:last-child { border-bottom: none; }
+/* The label keeps its full width; a long value wraps instead of clipping it. */
 .tf-stat-row dt {
   color: var(--ink-soft);
   font-size: var(--fs-small);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: none;
 }
 .tf-stat-row dd {
   margin: 0;
+  min-width: 0;
   font-size: var(--fs-body);
   font-weight: 500;
   color: var(--ink-strong);
   text-align: right;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
+.tf-stat-row dd:has(> select, > .tf-stepper) { overflow-wrap: normal; white-space: nowrap; }
 .tf-stats dl, .tf-inspector dl, .tf-debug dl { margin: 0; }
 
 /* headline readings */
@@ -980,7 +998,7 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 .tf-bars { display: flex; flex-direction: column; gap: var(--s-3); }
 .tf-bar-row {
   display: grid;
-  grid-template-columns: 92px 1fr 46px;
+  grid-template-columns: clamp(88px, 36%, 120px) minmax(0, 1fr) 46px;
   gap: var(--s-4);
   align-items: center;
   font-size: var(--fs-small);
@@ -1010,9 +1028,19 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   transition: width var(--d-slow) var(--ease);
 }
 .tf-chart {
+  display: block;
   background: var(--paper-sunken);
   border-radius: var(--r-sm);
 }
+.tf-series { margin: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.tf-series figcaption {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: var(--fs-fine);
+  color: var(--ink-soft);
+}
+.tf-series-key { width: 16px; height: 0; border-top-width: 2px; flex: none; }
 
 /* callouts */
 .tf-draft {

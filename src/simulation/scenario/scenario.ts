@@ -156,6 +156,7 @@ export const COST_RATES = {
 };
 
 export function formatCost(inr: number): string {
+  if (inr <= 0) return '₹0';
   if (inr >= 1_00_00_00_000) return `₹${(inr / 1_00_00_00_000).toFixed(1)}B`;
   if (inr >= 1_00_00_000) return `₹${(inr / 1_00_00_000).toFixed(1)}Cr`;
   return `₹${Math.round(inr / 1_00_000)}L`;

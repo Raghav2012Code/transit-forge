@@ -101,25 +101,35 @@ export default function Legend({ overlay, demandLayer, extras }: {
   extras?: Partial<LegendExtras>;
 }) {
   const entry = LEGENDS[overlay];
-  const extraRows: { color: string; label: string }[] = [];
+  // Markers are conditions, not lines, so each group is titled by what it
+  // marks rather than appended to the line colours.
+  const groups: { title: string; rows: { color: string; label: string }[] }[] = [];
   if (extras?.problems) {
-    extraRows.push(
-      { color: '#ef4444', label: 'Severe problem' },
-      { color: '#facc15', label: 'Watch / single point of failure' },
-      { color: '#6ea8fe', label: 'Access / growth pressure' },
-    );
+    groups.push({
+      title: 'Problem markers',
+      rows: [
+        { color: '#ef4444', label: 'Severe problem' },
+        { color: '#facc15', label: 'Watch, single point of failure' },
+        { color: '#6ea8fe', label: 'Access or growth pressure' },
+      ],
+    });
   }
-  if (extras?.catchment) extraRows.push({ color: '#6ea8fe', label: 'Walking catchment' });
-  if (extras?.measure) extraRows.push({ color: '#6ea8fe', label: 'Measured distance' });
+  const tools: { color: string; label: string }[] = [];
+  if (extras?.catchment) tools.push({ color: '#6ea8fe', label: 'Walking catchment' });
+  if (extras?.measure) tools.push({ color: '#6ea8fe', label: 'Measured distance' });
+  if (extras?.split) tools.push({ color: 'var(--on-ink)', label: 'Left baseline, right scenario' });
+  if (tools.length > 0) groups.push({ title: 'Map tools', rows: tools });
   if (extras?.changes) {
-    extraRows.push(
-      { color: '#34d399', label: 'Added infrastructure' },
-      { color: '#ef4444', label: 'Removed infrastructure' },
-      { color: '#6ea8fe', label: 'Service / fare change' },
-    );
+    groups.push({
+      title: 'Changes in this scenario',
+      rows: [
+        { color: '#34d399', label: 'Added infrastructure' },
+        { color: '#ef4444', label: 'Removed infrastructure' },
+        { color: '#6ea8fe', label: 'Service or fare change' },
+      ],
+    });
   }
-  if (extras?.split) extraRows.push({ color: 'var(--on-ink)', label: 'Left baseline, right scenario' });
-  if (!entry && extraRows.length === 0) return null;
+  if (!entry && groups.length === 0) return null;
   const title =
     overlay === 'demand' ? `Demand — ${demandLayer}` : (entry?.title ?? 'Map');
   return (
@@ -144,16 +154,19 @@ export default function Legend({ overlay, demandLayer, extras }: {
           ))}
         </div>
       ) : null}
-      {extraRows.length > 0 && (
-        <div className="tf-legend-rows">
-          {extraRows.map((r) => (
-            <div className="tf-legend-row" key={r.label}>
-              <span className="tf-swatch" style={{ background: r.color }} />
-              <span>{r.label}</span>
-            </div>
-          ))}
+      {groups.map((g) => (
+        <div className="tf-legend-group" key={g.title}>
+          <h5>{g.title}</h5>
+          <div className="tf-legend-rows">
+            {g.rows.map((r) => (
+              <div className="tf-legend-row" key={r.label}>
+                <span className="tf-swatch" style={{ background: r.color }} />
+                <span>{r.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }
