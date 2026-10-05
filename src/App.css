@@ -93,7 +93,14 @@
   border-radius: var(--r-md);
   box-shadow: inset 0 1px 2px oklch(6% 0.02 258 / 0.35);
 }
-.tf-seg.wrap { flex-wrap: wrap; }
+/* Overlay/demand/destination groups: a fixed 3-column grid instead of
+   content-width flex-wrap, so a 5- or 6-item group breaks into even rows
+   (3+3, 3+2) instead of an orphaned single item stranded on its own row. */
+.tf-seg.wrap {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.tf-seg.wrap .tf-seg-item { width: 100%; padding: 0 6px; }
 
 .tf-seg-item {
   display: inline-flex;
