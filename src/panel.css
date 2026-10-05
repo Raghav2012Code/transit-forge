@@ -6,12 +6,6 @@
    selection rides above it, marked by a heavy ink rule, so picking a station
    never costs you the form you were filling in. */
 
-.tf-app > .tf-panel {
-  border: 0;
-  border-left: 1px solid var(--rule);
-  border-radius: 0;
-}
-
 .tf-home { display: flex; flex-direction: column; padding: 0 var(--s-5) var(--s-7); }
 .tf-home-intro { padding: var(--s-6) 0 var(--s-5); border-bottom: 1px solid var(--rule-soft); }
 .tf-home-intro h3 { margin: 0 0 var(--s-3); font-size: var(--fs-lead); font-weight: 600; color: var(--ink-strong); }
@@ -63,3 +57,7 @@
 .tf-selected[data-place='top'] { border-bottom: 2px solid var(--ink-strong); }
 .tf-selected[data-place='bottom'] { border-top: 2px solid var(--ink-strong); }
 .tf-selected .tf-dock:last-child { border-bottom: 0; }
+
+/* Long labels ("M1 Metro Blue toward North Residences") wrap instead of pushing the panel sideways. */
+.tf-inspector .tf-stat-row:not(.stacked) dt { flex: 1 1 auto; min-width: 0; white-space: normal; }
+.tf-inspector .tf-stat-row:not(.stacked) dd { flex: none; max-width: 60%; }

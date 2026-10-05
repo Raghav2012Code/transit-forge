@@ -45,13 +45,6 @@
   min-height: 0;
   background: var(--plate);
 }
-/* The map fills the stage: no frame, no inset. The rules around it are enough. */
-.tf-app .tf-viewport {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  border-radius: 0;
-}
 
 /* =====================================================================
  * Bar

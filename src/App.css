@@ -1,38 +1,18 @@
-/* TransitForge shell + components. Tokens live in index.css.
+/* TransitForge components. Tokens live in index.css.
 
-   Structure: masthead (paper) → map plate (light, inset like a figure in a
-   report) → rail (a document column, not a stack of cards) → status strip.
+   Where things sit is decided elsewhere, one file per concern:
+     shell.css        the grid, top bar, rail, day bar, popovers, help
+     map.css          what is laid on the map and where
+     reports.css      the reports sheet
+     panel.css        the side panel
+     responsive.css   the breakpoints
 
-   One environment: the chrome is paper and ink, and anything
-   floating *inside* the map plate is paper too, so the map and page agree. */
+   This file holds the pieces they all share: buttons' neighbours, segmented
+   controls, readings, tables, docks, bars, callouts, and so on. */
 
 /* =====================================================================
- * 1. Shell
+ * 1. Brand, segmented controls, transport
  * ===================================================================== */
-
-.tf-root {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
-  background: var(--paper);
-}
-
-/* ---- masthead ---- */
-.tf-topbar {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  column-gap: var(--s-6);
-  height: var(--hud-h);
-  padding: 0 var(--s-5);
-  flex: none;
-  background: var(--paper-raised);
-  border-bottom: 1px solid var(--rule);
-  position: relative;
-  z-index: 20;
-}
 
 .tf-brand {
   display: flex;
@@ -67,14 +47,6 @@
   font-size: var(--fs-fine);
   font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
-}
-
-.tf-hud-right {
-  display: flex;
-  align-items: center;
-  gap: var(--s-5);
-  flex: none;
-  justify-self: end;
 }
 
 /* ---- segmented controls: the selected cell is solid ink ---- */
@@ -136,15 +108,6 @@
 .tf-speeds { display: inline-flex; gap: var(--s-2); }
 .tf-speeds.tf-seg { gap: 2px; }
 
-/* map tools: set apart from the transport controls, like the clock is */
-.tf-tools {
-  display: flex;
-  align-items: center;
-  gap: var(--s-2);
-  padding-left: var(--s-5);
-  border-left: 1px solid var(--rule);
-}
-
 .tf-controls {
   display: flex;
   align-items: center;
@@ -175,44 +138,23 @@
 .tf-clock.paused strong { color: var(--ink-faint); }
 
 /* =====================================================================
- * 2. The map plate — a light figure set into the paper
+ * 2. On the map
  * ===================================================================== */
 
-.tf-main {
-  display: grid;
-  grid-template-columns: 1fr var(--panel-w);
-  min-height: 0;
-  flex: 1;
-  gap: var(--s-5);
-  padding: var(--s-5);
-}
-.tf-root.rail-collapsed .tf-main { grid-template-columns: 1fr; }
-.tf-root.rail-collapsed .tf-panel { display: none; }
-
+/* The map fills the stage: no frame, no inset. The rules around it are enough. */
 .tf-viewport {
-  position: relative;
+  position: absolute;
+  inset: 0;
   min-width: 0;
   min-height: 0;
   background: var(--plate);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r-md);
   overflow: hidden;
 }
 .scene-mount { position: absolute; inset: 0; }
 .scene-mount canvas { display: block; width: 100%; height: 100%; }
 
-/* ---- things floating on the plate are paper, like the page around it ---- */
-.tf-hud-tl {
-  position: absolute;
-  top: var(--s-4);
-  left: var(--s-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-2);
-  align-items: flex-start;
-  pointer-events: none;
-  z-index: 4;
-}
+/* ---- things floating on the map are paper, like the page around it ---- */
+
 .tf-hud-chip {
   display: inline-flex;
   align-items: center;
@@ -227,10 +169,8 @@
 /* One surface for everything that floats on the plate, so the legend, the
    navigation cluster, the minimap and the chips read as the same material. */
 .tf-hud-chip,
-.tf-overlay-hint,
 .tf-measure-bar,
 .tf-legend,
-.tf-nav,
 .tf-minimap,
 .tf-split-label { box-shadow: 0 0 0 1px var(--plate-edge); }
 
@@ -246,22 +186,6 @@
 .tf-hud-chip.mode-disrupt::before { background: var(--line-red); }
 .tf-hud-chip.mode-plan::before { background: var(--line-green); }
 .tf-hud-chip.alert::before { background: var(--line-red); }
-
-.tf-overlay-hint {
-  position: absolute;
-  left: var(--s-4);
-  right: 184px;
-  text-align: center;
-  bottom: calc(var(--status-h) + var(--s-3));
-  font-size: var(--fs-fine);
-  color: var(--ink-soft);
-  background: var(--plate-surface);
-  border-radius: var(--r-sm);
-  padding: 4px var(--s-4);
-  pointer-events: none;
-  z-index: 3;
-}
-.tf-inspect-chip { color: var(--ink-strong); }
 
 /* measure readout */
 .tf-measure-bar {
@@ -283,35 +207,6 @@
 }
 .tf-viewport.tf-measuring { cursor: crosshair; }
 
-/* selection card: a sheet of paper laid on the plate, so the figures in it
-   read like the rail beside it and line bullets sit on their own ground */
-.tf-inspector-card {
-  position: absolute;
-  left: var(--s-4);
-  bottom: calc(var(--status-h) + var(--s-4));
-  width: 296px;
-  max-height: min(60vh, 480px);
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  z-index: 6;
-  padding: var(--s-5);
-  color: var(--ink);
-  background: var(--paper-raised);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
-  box-shadow: var(--lift-float);
-  animation: tf-rise var(--d-slow) var(--ease) both;
-}
-.tf-inspector-card .tf-inspector {
-  border: none;
-  padding: 0;
-  background: transparent;
-  animation: none;
-}
-/* long labels wrap inside the card instead of pushing it sideways */
-.tf-inspector-card .tf-stat-row dt { white-space: normal; flex: 1 1 auto; min-width: 0; }
-.tf-inspector-card .tf-stat-row dd { flex: none; max-width: 60%; }
 .tf-stat-row.stacked { flex-direction: column; align-items: flex-start; gap: var(--s-2); padding: var(--s-3) 0; }
 .tf-stat-row.stacked dd { max-width: none; text-align: left; }
 .tf-route-list { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); }
@@ -371,72 +266,7 @@
   flex: none;
 }
 
-/* navigation and minimap share one column, so neither can sit on the other */
-.tf-map-stack {
-  position: absolute;
-  top: var(--s-4);
-  right: var(--s-4);
-  z-index: 5;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s-3);
-  width: 168px;
-}
-
-/* ---- map navigation: a real control cluster, top-right of the plate ---- */
-.tf-nav {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: var(--s-3);
-  width: 168px;
-  padding: var(--s-4);
-  color: var(--ink);
-  background: var(--plate-surface);
-  border-radius: var(--r-md);
-}
-/* compass and zoom share the first row; everything else spans the widget */
-.tf-nav > *:not(.tf-compass):not(.tf-nav-zoom) { grid-column: 1 / -1; }
-.tf-nav .tf-seg {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.tf-nav .tf-seg-item {
-  height: 24px;
-  padding: 0 4px;
-  font-size: var(--fs-fine);
-}
-.tf-nav select {
-  font-size: var(--fs-fine);
-  height: 26px;
-  padding: 3px 22px 3px 6px;
-  background-position: calc(100% - 11px) 50%, calc(100% - 7px) 50%;
-}
-.tf-nav .tf-namelabel { gap: 3px; }
-.tf-nav .tf-hint { color: var(--ink-soft); font-size: var(--fs-fine); }
-.tf-nav .tf-draft-actions { gap: var(--s-2); }
-.tf-nav .tf-btn { flex: 1; }
-
-.tf-compass {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-family: var(--font-data);
-  font-size: var(--fs-fine);
-  font-weight: 600;
-  color: var(--ink-strong);
-}
-.tf-compass span { display: inline-block; }
-.tf-nav-zoom {
-  font-family: var(--font-data);
-  font-size: var(--fs-fine);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-soft);
-  text-align: right;
-}
-
-/* ---- minimap: a small plan inset, bottom-right under the legend ---- */
+/* ---- minimap: a small plan inset in the camera corner ---- */
 .tf-minimap {
   position: relative;
   width: 168px;
@@ -532,92 +362,25 @@
   to { opacity: 1; }
 }
 
-/* ---- status strip: the always-on reading, along the bottom edge ---- */
-.tf-statusbar {
-  position: absolute;
-  inset: auto 0 0 0;
-  height: var(--status-h);
-  display: flex;
-  align-items: center;
-  padding: 0 var(--s-4);
-  background: var(--paper-raised);
-  border-top: 1px solid var(--rule);
-  font-family: var(--font-data);
-  font-size: var(--fs-fine);
-  font-variant-numeric: tabular-nums;
-  z-index: 5;
-  overflow: hidden;
-}
-.tf-status-cell {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s-3);
-  padding: 0 var(--s-5);
-  border-right: 1px solid var(--rule-soft);
-  white-space: nowrap;
-}
-.tf-status-cell:first-child { padding-left: 0; font-weight: 600; color: var(--ink-strong); }
-.tf-status-cell:last-child { border-right: none; }
-.tf-status-cell b { font-weight: 600; color: var(--ink-strong); }
-.tf-status-cell span { color: var(--ink-soft); }
-.tf-status-more { display: none; margin-left: auto; }
-.tf-status-more span { font-style: normal; }
-.tf-status-cell.good b { color: var(--ok); }
-.tf-status-cell.warn b { color: var(--watch-ink); }
-.tf-status-cell.bad b { color: var(--alert); }
-
 /* =====================================================================
- * 3. Rail — a document column. Sections are separated by rules and
+ * 3. Side panel — a document column. Sections are separated by rules and
  *    space, not boxed into cards.
  * ===================================================================== */
 
 .tf-panel {
   background: var(--paper-raised);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-md);
+  border-left: 1px solid var(--rule);
   overflow-y: auto;
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-/* The rail takes focus from code when its contents are swapped, so keyboard
+/* The panel takes focus from code when its contents are swapped, so keyboard
    users keep their place. It is a landmark, not a control: no ring around the
    whole column. Controls inside it keep theirs. */
 .tf-panel:focus,
 .tf-panel:focus-visible { outline: none; }
-
-/* task tabs: which part of the job you are doing */
-.tf-rail-tabs {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  background: var(--paper-raised);
-  border-bottom: 1px solid var(--rule);
-}
-.tf-rail-tab {
-  appearance: none;
-  border: none;
-  background: transparent;
-  padding: var(--s-4) var(--s-2);
-  font-family: var(--font-data);
-  font-size: var(--fs-small);
-  font-weight: 500;
-  color: var(--ink-soft);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color var(--d-fast) var(--ease), border-color var(--d-fast) var(--ease);
-}
-.tf-rail-tab:hover { color: var(--ink-strong); }
-.tf-rail-tab[aria-selected='true'] {
-  color: var(--ink-strong);
-  font-weight: 600;
-  border-bottom-color: var(--ink-strong);
-}
 
 .tf-rail-body {
   display: flex;
@@ -626,10 +389,14 @@
   min-width: 0;
 }
 
-/* a rail section: ruled, not boxed */
-.tf-build, .tf-compare, .tf-scenario, .tf-debug, .tf-plan,
-.tf-analytics, .tf-charts, .tf-growth, .tf-service, .tf-stats,
-.tf-layers, .tf-inspector {
+/* a panel section: ruled, not boxed */
+.tf-build,
+.tf-compare,
+.tf-scenario,
+.tf-debug,
+.tf-stats,
+.tf-layers,
+.tf-inspector {
   display: flex;
   flex-direction: column;
   gap: var(--s-4);
@@ -640,7 +407,7 @@
 .tf-panel > *:last-child,
 .tf-rail-body > *:last-child { border-bottom: none; }
 
-.tf-panel h3, .tf-plan h3 {
+.tf-panel h3 {
   display: flex;
   align-items: center;
   gap: var(--s-3);
@@ -650,15 +417,7 @@
   letter-spacing: -0.005em;
   color: var(--ink-strong);
 }
-.tf-plan h4, .tf-plan h5,
-.tf-analytics h4, .tf-analytics h5,
-.tf-charts h5, .tf-growth h4, .tf-growth h5, .tf-service h5 {
-  margin: var(--s-4) 0 0;
-  font-size: var(--fs-small);
-  font-weight: 600;
-  color: var(--ink);
-}
-.tf-plan h4:first-child, .tf-analytics h4:first-child { margin-top: 0; }
+
 .tf-panel h5 { margin: 0; font-size: var(--fs-small); color: var(--ink-soft); font-weight: 500; }
 
 .tf-hint {
@@ -670,11 +429,7 @@
 
 .tf-build > .tf-btn,
 .tf-compare > .tf-btn,
-.tf-plan > .tf-btn,
 .tf-scenario > .tf-btn,
-.tf-analytics > .tf-btn,
-.tf-growth > .tf-btn,
-.tf-service > .tf-btn,
 .tf-dock-body > .tf-btn { align-self: flex-start; }
 
 /* =====================================================================
@@ -856,7 +611,6 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 .tf-compare-table tbody tr:hover td { background: var(--paper-sunken); }
 .tf-good { color: var(--ok); }
 .tf-bad { color: var(--alert); }
-.tf-flat { color: var(--ink-faint); }
 
 /* layer toggles */
 .tf-check {
@@ -933,7 +687,6 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 }
 .tf-dock-body > .tf-stats,
 .tf-dock-body > .tf-layers,
-.tf-dock-body > .tf-plan,
 .tf-dock-body > .tf-build,
 .tf-dock-body > .tf-compare,
 .tf-dock-body > .tf-scenario,
@@ -1090,8 +843,8 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   gap: var(--s-3);
   animation: tf-rise var(--d-base) var(--ease) both;
 }
-.tf-objective, .tf-overview { display: flex; flex-direction: column; gap: var(--s-3); }
-.tf-overview { display: grid; grid-template-columns: 1fr; gap: 0; }
+.tf-objective { display: flex; flex-direction: column; gap: var(--s-3); }
+
 .tf-objective { padding-bottom: var(--s-3); }
 .tf-draft-actions {
   display: flex;
@@ -1377,18 +1130,6 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 .tf-link:hover { text-decoration-color: var(--ink-strong); }
 
 .tf-debug .tf-btn { align-self: flex-start; }
-
-.tf-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s-3);
-  padding: var(--s-6);
-  color: var(--ink-soft);
-  font-size: var(--fs-small);
-  background: var(--paper-sunken);
-  border-radius: var(--r-sm);
-}
 
 .tf-sr-only {
   position: absolute;
