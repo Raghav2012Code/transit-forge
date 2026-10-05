@@ -52,9 +52,38 @@ export default function Minimap({ city, routes, stations, cam, selection, onJump
     onJump(frame.minX + (sx / W) * spanX, frame.minZ + (sy / H) * spanZ);
   };
 
+  // Keyboard equivalent of clicking a point: arrow keys nudge the camera
+  // target from where it currently is; Enter/Space jumps to the map centre.
+  const onKeyDown = (e: React.KeyboardEvent<SVGSVGElement>) => {
+    const step = Math.max(frame.maxX - frame.minX, frame.maxZ - frame.minZ) * 0.08;
+    const cx = cam ? cam.target[0] : (frame.minX + frame.maxX) / 2;
+    const cz = cam ? cam.target[2] : (frame.minZ + frame.maxZ) / 2;
+    switch (e.key) {
+      case 'ArrowUp': onJump(cx, cz - step); break;
+      case 'ArrowDown': onJump(cx, cz + step); break;
+      case 'ArrowLeft': onJump(cx - step, cz); break;
+      case 'ArrowRight': onJump(cx + step, cz); break;
+      case 'Enter':
+      case ' ':
+        onJump((frame.minX + frame.maxX) / 2, (frame.minZ + frame.maxZ) / 2);
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+  };
+
   return (
-    <div className="tf-minimap" role="img" aria-label="Minimap. Activate to move the camera.">
-      <svg viewBox={`0 0 ${W} ${H}`} onClick={onClick} style={{ cursor: 'crosshair', display: 'block' }}>
+    <div className="tf-minimap">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        onClick={onClick}
+        onKeyDown={onKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label="Minimap. Click or use arrow keys to move the camera, Enter to centre."
+        style={{ cursor: 'crosshair', display: 'block' }}
+      >
         <rect x={0} y={0} width={W} height={H} fill="var(--surface-sunken)" />
         {/* river */}
         <polyline
