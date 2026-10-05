@@ -21,7 +21,7 @@ export default function StatusBar({ stats, viewing, incidents, opCost }: Props) 
   return (
     <div className="tf-statusbar" role="status" aria-live="off">
       <div className="tf-status-cell">
-        <b>{viewing === 'base' ? 'BASELINE' : 'SCENARIO'}</b>
+        <b>{viewing === 'base' ? 'Baseline' : 'Scenario'}</b>
       </div>
       <div className="tf-status-cell">
         <span>transit</span><b>{stats.transitShare}%</b>
@@ -51,13 +51,16 @@ export default function StatusBar({ stats, viewing, incidents, opCost }: Props) 
         <span>done</span><b>{stats.completed.toLocaleString()}</b>
       </div>
       <div className="tf-status-cell">
-        <span>op cost</span><b>{opCost.toLocaleString()}</b>
+        <span>op cost</span><b>{opCost.toLocaleString()} OCU</b>
       </div>
       <div className="tf-status-cell">
         <span>recovery</span><b className={stats.costRecovery >= 60 ? 'good' : stats.costRecovery >= 30 ? 'warn' : 'bad'}>{stats.costRecovery}%</b>
       </div>
       <div className={`tf-status-cell${incidents > 0 ? ' bad' : ''}`}>
         <span>incidents</span><b>{incidents}</b>
+      </div>
+      <div className="tf-status-cell tf-status-more">
+        <span>More in the Network tab</span>
       </div>
     </div>
   );

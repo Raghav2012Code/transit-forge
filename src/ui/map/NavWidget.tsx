@@ -11,10 +11,10 @@ const PRESETS: { id: PresetId; label: string }[] = [
   { id: 'industrial', label: 'Industrial Area' },
 ];
 
-const TILTS: { id: TiltName; label: string }[] = [
-  { id: 'perspective', label: 'Perspective' },
-  { id: 'top', label: 'Top-down' },
-  { id: 'street', label: 'Street' },
+const TILTS: { id: TiltName; label: string; full: string }[] = [
+  { id: 'perspective', label: '3D', full: 'Perspective' },
+  { id: 'top', label: 'Plan', full: 'Top-down' },
+  { id: 'street', label: 'Street', full: 'Street level' },
 ];
 
 interface Props {
@@ -51,7 +51,7 @@ export default function NavWidget({ cam, tilt, onTilt, onPreset, onReset, onFocu
             key={t.id}
             type="button"
             className={`tf-seg-item${tilt === t.id ? ' active' : ''}`}
-            title={`${t.label} view`}
+            title={`${t.full} view`}
             onClick={() => onTilt(t.id)}
           >
             {t.label}

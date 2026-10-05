@@ -98,7 +98,7 @@ export default function BuildPanel(p: Props) {
       <div className="tf-draft-actions">
         <button type="button" className="tf-btn small" disabled={!p.canUndo} onClick={p.onUndo}>Undo</button>
         <button type="button" className="tf-btn small" disabled={!p.canRedo} onClick={p.onRedo}>Redo</button>
-        <span className="tf-hint">{p.opCount} edits · {p.scenarioCost}</span>
+        <span className="tf-hint">{p.opCount} edits, {p.scenarioCost}</span>
       </div>
     </div>
   );

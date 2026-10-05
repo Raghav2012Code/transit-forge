@@ -1,6 +1,7 @@
 import type { SimStats } from '../../types/index.ts';
 import type { GrowthPoint, PlanAdvice } from '../../simulation/growth/growth.ts';
 import { Bars, Line } from '../analytics/charts.tsx';
+import { SERIES } from '../analytics/seriesColors.ts';
 import Dock from '../shell/Dock.tsx';
 
 export interface GrowthSummary {
@@ -74,12 +75,12 @@ export default function GrowthPanel({ year, summary, districts, history, onAdvan
           <div className="tf-stat-row"><dt>Congestion</dt><dd>{forecast.before.congest.toFixed(2)} → {forecast.endStats.avgCongestion.toFixed(2)}</dd></div>
           <div className="tf-stat-row"><dt>Crowding</dt><dd>{forecast.before.crowd.toFixed(1)}% → {forecast.endStats.maxOccupancy.toFixed(1)}%</dd></div>
           <h5>Population over time</h5>
-          <Line values={forecast.history.map((p) => p.pop)} color="#38bdf8" />
-          <h5>Transit vs car / day</h5>
-          <Line values={forecast.history.map((p) => p.transitDay)} color="#38bdf8" />
-          <Line values={forecast.history.map((p) => p.carDay)} color="#fbbf24" />
+          <Line values={forecast.history.map((p) => p.pop)} ariaLabel="Population over time" />
+          <h5>Transit and car trips per day</h5>
+          <Line values={forecast.history.map((p) => p.transitDay)} label="Transit" />
+          <Line values={forecast.history.map((p) => p.carDay)} color={SERIES.secondary} dashed label="Car" />
           <h5>Access over time</h5>
-          <Line values={forecast.history.map((p) => p.avgAccess)} color="#4ade80" />
+          <Line values={forecast.history.map((p) => p.avgAccess)} color={SERIES.good} ariaLabel="Access score over time" />
         </>
       )}
 
@@ -88,32 +89,32 @@ export default function GrowthPanel({ year, summary, districts, history, onAdvan
           <h4>Planning warnings</h4>
           <ul className="tf-ranked">
             {advice.warnings.map((w, i) => (
-              <li key={i}>{w.level === 'warn' ? '⚠ ' : '· '}{w.text}</li>
+              <li key={i}>{w.text}</li>
             ))}
           </ul>
           {advice.recommendations.map((r, i) => (
             <div key={i} className="tf-draft">
               <strong>{r.intervention}</strong>
               <div className="tf-hint">{r.reason}</div>
-              <div className="tf-hint">{r.metrics} · {r.area}</div>
+              <div className="tf-hint">{r.metrics}, {r.area}</div>
             </div>
           ))}
         </>
       )}
 
       <h4>Development by district (% developed)</h4>
-      <Bars color="#a3e635" values={districts.map((d) => ({ label: d.name, value: Math.round(d.developed * 100) }))} />
+      <Bars values={districts.map((d) => ({ label: d.name, value: Math.round(d.developed * 100) }))} />
       {history.length >= 2 && (
         <>
           <h4>Timeline (applied years)</h4>
           <h5>Population</h5>
-          <Line values={history.map((p) => p.pop)} color="#38bdf8" />
-          <h5>Transit / car per day</h5>
-          <Line values={history.map((p) => p.transitDay)} color="#38bdf8" />
-          <Line values={history.map((p) => p.carDay)} color="#fbbf24" />
-          <h5>Access / congestion</h5>
-          <Line values={history.map((p) => p.avgAccess)} color="#4ade80" />
-          <Line values={history.map((p) => p.avgCongestion * 100)} color="#ef4444" />
+          <Line values={history.map((p) => p.pop)} ariaLabel="Population over time" />
+          <h5>Transit and car trips per day</h5>
+          <Line values={history.map((p) => p.transitDay)} label="Transit" />
+          <Line values={history.map((p) => p.carDay)} color={SERIES.secondary} dashed label="Car" />
+          <h5>Access and congestion</h5>
+          <Line values={history.map((p) => p.avgAccess)} color={SERIES.good} ariaLabel="Access score over time" />
+          <Line values={history.map((p) => p.avgCongestion * 100)} color={SERIES.bad} label="Congestion" />
         </>
       )}
     </Dock>

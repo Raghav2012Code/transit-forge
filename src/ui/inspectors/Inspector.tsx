@@ -5,6 +5,8 @@ import { stationCatchment } from '../../simulation/analytics/catchment.ts';
 import type { CityProblem } from '../../simulation/planning/problems.ts';
 import { LOOP_ROUTES } from '../../simulation/passengers/passengers.ts';
 import { nextArrivalMin, nextTerminusDeparture, routeEffectiveHeadway } from '../../simulation/service/timetable.ts';
+import { RouteRef } from '../shell/RouteBullet.tsx';
+import { IconClose } from '../shell/icons.tsx';
 
 /** Upcoming departures at a station, per serving route and direction. */
 function StationDepartures({ sim, stationId }: { sim: SimulationState; stationId: string }) {
@@ -107,6 +109,14 @@ function targetName(sim: SimulationState, target: CityProblem['target']): string
 
 const CATCHMENT_RADII = [400, 800, 1200];
 
+function CloseButton({ onClose }: { onClose: () => void }) {
+  return (
+    <button type="button" className="tf-btn icon ghost" onClick={onClose} aria-label="Close inspector" title="Close (Esc)">
+      <IconClose />
+    </button>
+  );
+}
+
 export default function Inspector({ selection, sim, onClose, problems, onFocusStation, onInvestigate, onOverlay, onOpenDisrupt, catchmentRadius, onCatchmentRadius, zoneCoverage, zoneTravel }: Props) {
   if (!selection) {
     return (
@@ -124,9 +134,9 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
       <div className="tf-inspector">
         <div className="tf-inspector-head">
           <h3>{problem.title}</h3>
-          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+          <CloseButton onClose={onClose} />
         </div>
-        <p className="tf-hint">Planning problem · severity {Math.round(problem.severity)}/100</p>
+        <p className="tf-hint">Planning problem, severity {Math.round(problem.severity)}/100</p>
         <dl>
           {problem.metrics.map(([k, v]) => (
             <div className="tf-stat-row" key={k}><dt>{k}</dt><dd>{v}</dd></div>
@@ -161,9 +171,9 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
       <div className="tf-inspector">
         <div className="tf-inspector-head">
           <h3>{route?.name ?? vv.routeId}</h3>
-          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+          <CloseButton onClose={onClose} />
         </div>
-        <p className="tf-hint">Vehicle · {vv.dwellLeft > 0 ? 'dwelling at station' : 'moving'}</p>
+        <p className="tf-hint">Vehicle, {vv.dwellLeft > 0 ? 'dwelling at station' : 'moving'}</p>
         <dl>
           <div className="tf-stat-row"><dt>Load</dt><dd>{vv.load} / {vv.capacity} ({pct}%)</dd></div>
           <div className="tf-stat-row"><dt>Completed trips</dt><dd>{vv.trips}</dd></div>
@@ -187,9 +197,9 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
       <div className="tf-inspector">
         <div className="tf-inspector-head">
           <h3>{inc.label}</h3>
-          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+          <CloseButton onClose={onClose} />
         </div>
-        <p className="tf-hint">Disruption · {inc.status}</p>
+        <p className="tf-hint">Disruption, {inc.status}</p>
         <dl>
           <div className="tf-stat-row"><dt>Kind</dt><dd>{inc.kind}</dd></div>
           {inc.status === 'active' && <div className="tf-stat-row"><dt>Remaining</dt><dd>~{left} min</dd></div>}
@@ -215,15 +225,15 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
       <div className="tf-inspector">
         <div className="tf-inspector-head">
           <h3>{st.name}</h3>
-          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+          <CloseButton onClose={onClose} />
         </div>
         <p className="tf-hint">{interchange ? 'Interchange station' : 'Station'}</p>
         {sim.closures.closedStations.has(st.id) && (
-          <p className="tf-hint">⚠ Closed by disruption</p>
+          <p className="tf-hint tf-warn">Closed by disruption</p>
         )}
         <dl>
           <div className="tf-stat-row"><dt>Modes</dt><dd>{st.modes.join(', ')}</dd></div>
-          <div className="tf-stat-row"><dt>Routes</dt><dd>{routes.map((r) => r.name).join(' · ')}</dd></div>
+          <div className="tf-stat-row stacked"><dt>Routes</dt><dd className="tf-route-list">{routes.map((r) => <RouteRef key={r.id} route={r} />)}</dd></div>
           <div className="tf-stat-row"><dt>Capacity</dt><dd>{st.capacityPerHr.toLocaleString()}/hr</dd></div>
           <div className="tf-stat-row"><dt>Waiting now</dt><dd>{Math.round(st.waiting).toLocaleString()}</dd></div>
           <div className="tf-stat-row"><dt>Peak waiting</dt><dd>{Math.round(st.peakWaiting).toLocaleString()}</dd></div>
@@ -270,15 +280,15 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
     return (
       <div className="tf-inspector">
         <div className="tf-inspector-head">
-          <h3>{r.name}</h3>
-          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+          <h3><RouteRef route={r} /></h3>
+          <CloseButton onClose={onClose} />
         </div>
-        <p className="tf-hint">{r.mode} · {r.stationIds.length} stations</p>
+        <p className="tf-hint">{r.mode} line, {r.stationIds.length} stations</p>
         {sim.closures.suspendedRoutes.has(r.id) && (
-          <p className="tf-hint">⚠ Suspended by disruption</p>
+          <p className="tf-hint tf-warn">Suspended by disruption</p>
         )}
         {(sim.closures.headwayMult.get(r.id) ?? 1) > 1 && (
-          <p className="tf-hint">⚠ Reduced service ×{sim.closures.headwayMult.get(r.id)}</p>
+          <p className="tf-hint tf-warn">Reduced service, vehicles come {sim.closures.headwayMult.get(r.id)}× less often</p>
         )}
         <dl>
           <div className="tf-stat-row"><dt>Headway</dt><dd>{r.headwayMin} min</dd></div>
@@ -332,7 +342,7 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
       <div className="tf-inspector">
         <div className="tf-inspector-head">
           <h3>{z.name}</h3>
-          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+          <CloseButton onClose={onClose} />
         </div>
         <p className="tf-hint">{z.kind}</p>
         <dl>
@@ -369,11 +379,11 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
       <div className="tf-inspector">
         <div className="tf-inspector-head">
           <h3>{edge.isBridge ? 'Bridge' : edge.isArterial ? 'Arterial' : 'Local'} {edge.a.replace(/^rn-/, '').toUpperCase()}–{edge.b.replace(/^rn-/, '').toUpperCase()}</h3>
-          <button type="button" className="tf-btn small" onClick={onClose}>×</button>
+          <CloseButton onClose={onClose} />
         </div>
-        <p className="tf-hint">{st.level} · {edge.lanes} lanes{edge.isBridge ? ' · bridge' : ''}</p>
+        <p className="tf-hint">{st.level}, {edge.lanes} lanes{edge.isBridge ? ', bridge' : ''}</p>
         {st.closed && (
-          <p className="tf-hint">⚠ Closed by disruption</p>
+          <p className="tf-hint tf-warn">Closed by disruption</p>
         )}
         <dl>
           <div className="tf-stat-row"><dt>Length</dt><dd>{Math.round(edge.lengthM)} m</dd></div>

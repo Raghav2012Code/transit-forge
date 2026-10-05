@@ -104,7 +104,10 @@ import SearchPalette from './ui/map/SearchPalette.tsx';
 import CompareSplit from './ui/map/CompareSplit.tsx';
 import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './rendering/SceneView.tsx';
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
-import { IconClose, IconInspect, IconMeasure, IconPlan, IconSearch } from './ui/shell/icons.tsx';
+import RailTabs, { type RailTab } from './ui/shell/RailTabs.tsx';
+import { IconInspect, IconMeasure, IconMoon, IconPanel, IconPlan, IconSearch, IconSun } from './ui/shell/icons.tsx';
+import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme.ts';
+import type { Theme } from './rendering/palette.ts';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
 import { headwayAt } from './simulation/service/servicePlan.ts';
 import { LOOP_ROUTES } from './simulation/passengers/passengers.ts';
@@ -114,6 +117,16 @@ const TICKS_PER_SEC: Record<Speed, number> = { 1: 2, 5: 8, 20: 24 };
 const ROAD_SNAP_M = 45;
 const TOAST_TTL_MS = 7000;
 const MAX_TOASTS = 4;
+
+/** Simulate mode's rail, scoped by the job you're doing rather than one scroll. */
+type SimTab = 'map' | 'network' | 'service' | 'analysis' | 'growth';
+const SIM_TABS: readonly RailTab<SimTab>[] = [
+  { id: 'map', label: 'Map' },
+  { id: 'network', label: 'Network' },
+  { id: 'service', label: 'Service' },
+  { id: 'analysis', label: 'Analysis' },
+  { id: 'growth', label: 'Growth' },
+];
 
 const MODE_LABEL: Record<Mode, string> = {
   simulate: 'Simulate',
@@ -221,6 +234,29 @@ export default function App() {
   const toastSeq = useRef(1);
   const toastTimers = useRef<Set<number>>(new Set());
   const [railOpen, setRailOpen] = useState(true);
+  // Theme: an explicit choice is remembered; until one is made, follow the system.
+  const [theme, setTheme] = useState<Theme>(() => savedTheme() ?? systemTheme());
+  const themePinned = useRef(savedTheme() !== null);
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const onChange = () => {
+      if (!themePinned.current) setTheme(mq.matches ? 'dark' : 'light');
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  function toggleTheme() {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark';
+    themePinned.current = true;
+    saveTheme(next);
+    setTheme(next);
+  }
+  const [railTab, setRailTab] = useState<SimTab>('map');
+  const railRef = useRef<HTMLElement>(null);
 
   function pushToast(level: Toast['level'], text: string) {
     const id = toastSeq.current++;
@@ -315,7 +351,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA');
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
       const mod = e.ctrlKey || e.metaKey;
       if (mod && (e.key === 'z' || e.key === 'Z')) {
         if (typing) return;
@@ -373,6 +409,8 @@ export default function App() {
           setMeasureHover(null);
         } else if (inspectMode) setInspectMode(false);
         else enterSimulate();
+      } else if ((e.key === 't' || e.key === 'T') && !mod && !e.altKey) {
+        toggleTheme();
       } else if (e.key === 'r' || e.key === 'R') {
         resetAll();
       }
@@ -407,6 +445,18 @@ export default function App() {
     }, TOAST_TTL_MS);
     toastTimers.current.add(timerId);
   }, [snapshot]);
+
+  // Changing mode or task swaps the rail's contents wholesale, so start the
+  // new reading at the top rather than wherever the last one was scrolled to.
+  // If the control that had focus went with the old contents (switching mode
+  // by hotkey while a rail tab was focused), catch focus on the rail itself
+  // so keyboard users carry on from there instead of falling back to body.
+  useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+    rail.scrollTo({ top: 0 });
+    if (document.activeElement === document.body) rail.focus({ preventScroll: true });
+  }, [mode, railTab]);
 
   // Unmount-only: clear any still-pending toast timers.
   useEffect(() => () => {
@@ -581,7 +631,7 @@ export default function App() {
         kind: 'district' as const,
         id: z.id,
         name: z.name,
-        typeLabel: `District · ${z.kind}`,
+        typeLabel: `${z.kind} district`,
         metric: `${z.population.toLocaleString()} residents`,
         x: z.center.x,
         z: z.center.z,
@@ -597,7 +647,7 @@ export default function App() {
         kind: 'road' as const,
         id: e.id,
         name: `${e.isBridge ? 'Bridge' : e.isArterial ? 'Arterial' : 'Local'} ${e.a.replace(/^rn-/, '').toUpperCase()}–${e.b.replace(/^rn-/, '').toUpperCase()}`,
-        typeLabel: `Road · ${e.lanes} lanes`,
+        typeLabel: `${e.lanes}-lane road`,
         metric: st ? `V/C ${Math.round(st.vc * 100) / 100}` : '',
         x: (a.x + b.x) / 2,
         z: (a.z + b.z) / 2,
@@ -2023,13 +2073,13 @@ export default function App() {
   return (
     <div className={`tf-root${railOpen ? '' : ' rail-collapsed'}`}>
       <header className="tf-topbar">
-        <div className="tf-brand">
+        <div className="tf-brand" title={`TransitForge v${APP_VERSION}`}>
           <span className="tf-brand-mark" aria-hidden="true">
             <IconPlan size={17} />
           </span>
           <span className="tf-brand-name">
             <b>TransitForge</b>
-            <span>v{APP_VERSION} · seed {SEED}</span>
+            <span>Seed {SEED}</span>
           </span>
         </div>
         <ModeSwitch mode={mode} onChange={selectMode} />
@@ -2049,56 +2099,67 @@ export default function App() {
             onReset={resetAll}
             onStep={() => { simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); }}
           />
-          <button
-            type="button"
-            className="tf-btn icon ghost"
-            onClick={() => setRailOpen((r) => !r)}
-            title={railOpen ? 'Hide side panel' : 'Show side panel'}
-            aria-label={railOpen ? 'Hide side panel' : 'Show side panel'}
-            aria-pressed={railOpen}
-          >
-            {railOpen ? <IconClose /> : <IconPlan />}
-          </button>
-          <button
-            type="button"
-            className={`tf-btn icon ghost${searchOpen ? ' active' : ''}`}
-            onClick={() => setSearchOpen((v) => !v)}
-            title="Search map (/)"
-            aria-label="Search map"
-            aria-pressed={searchOpen}
-          >
-            <IconSearch />
-          </button>
-          <button
-            type="button"
-            className={`tf-btn icon ghost${measureTool ? ' active' : ''}`}
-            onClick={() => {
-              setMeasureTool((v) => {
-                if (v) {
-                  setMeasure(null);
-                  setMeasureHover(null);
-                } else {
-                  pushToast('info', 'Measure: click two points on the map.');
-                }
-                return !v;
-              });
-            }}
-            title="Measure distance"
-            aria-label="Measure distance"
-            aria-pressed={measureTool}
-          >
-            <IconMeasure />
-          </button>
-          <button
-            type="button"
-            className={`tf-btn icon ghost${inspectMode ? ' active' : ''}`}
-            onClick={() => setInspectMode((v) => !v)}
-            title="Quick inspect (I)"
-            aria-label="Quick inspect"
-            aria-pressed={inspectMode}
-          >
-            <IconInspect />
-          </button>
+          <div className="tf-tools" role="toolbar" aria-label="Map tools">
+            <button
+              type="button"
+              className={`tf-btn icon ghost${searchOpen ? ' active' : ''}`}
+              onClick={() => setSearchOpen((v) => !v)}
+              title="Search the map (/)"
+              aria-label="Search the map"
+              aria-pressed={searchOpen}
+            >
+              <IconSearch />
+            </button>
+            <button
+              type="button"
+              className={`tf-btn icon ghost${measureTool ? ' active' : ''}`}
+              onClick={() => {
+                setMeasureTool((v) => {
+                  if (v) {
+                    setMeasure(null);
+                    setMeasureHover(null);
+                  } else {
+                    pushToast('info', 'Measure: click two points on the map.');
+                  }
+                  return !v;
+                });
+              }}
+              title="Measure distance"
+              aria-label="Measure distance"
+              aria-pressed={measureTool}
+            >
+              <IconMeasure />
+            </button>
+            <button
+              type="button"
+              className={`tf-btn icon ghost${inspectMode ? ' active' : ''}`}
+              onClick={() => setInspectMode((v) => !v)}
+              title="Quick inspect (I)"
+              aria-label="Quick inspect"
+              aria-pressed={inspectMode}
+            >
+              <IconInspect />
+            </button>
+            <button
+              type="button"
+              className="tf-btn icon ghost"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light theme (T)' : 'Switch to dark theme (T)'}
+              aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            >
+              {theme === 'dark' ? <IconSun /> : <IconMoon />}
+            </button>
+            <button
+              type="button"
+              className={`tf-btn icon ghost${railOpen ? ' active' : ''}`}
+              onClick={() => setRailOpen((r) => !r)}
+              title={railOpen ? 'Hide side panel ([)' : 'Show side panel (])'}
+              aria-label="Side panel"
+              aria-pressed={railOpen}
+            >
+              <IconPanel />
+            </button>
+          </div>
         </div>
       </header>
       <main className="tf-main">
@@ -2116,6 +2177,7 @@ export default function App() {
                 announceSelection(sel);
               }}
               networkKey={networkKey}
+              theme={theme}
               build={inspectMode ? null : buildIx}
               analytics={analyticsView}
               draft={draftView}
@@ -2141,6 +2203,7 @@ export default function App() {
               announceSelection(sel);
             }}
             networkKey={networkKey}
+            theme={theme}
             ghosts={viewing === 'scenario' ? diff.removedStations : []}
             highlightRoutes={viewing === 'scenario' ? diff.addedRoutes : []}
             build={inspectMode ? null : buildIx}
@@ -2159,32 +2222,29 @@ export default function App() {
             onMeasureHover={(x, z) => setMeasureHover({ x, z })}
           />
           )}
-          <span className="tf-bracket tl" />
-          <span className="tf-bracket tr" />
-          <span className="tf-bracket bl" />
-          <span className="tf-bracket br" />
           <div className="tf-hud-tl">
             <span className={`tf-hud-chip mode-${mode}`}>
-              {MODE_LABEL[mode]} · {viewing === 'base' ? 'Baseline network' : 'Scenario network'}
+              <strong>{MODE_LABEL[mode]}</strong>
+              <span>{viewing === 'base' ? 'baseline network' : 'scenario network'}</span>
             </span>
             {snapshot.incidents.filter((i) => i.status === 'active').map((i) => (
               <span className="tf-hud-chip alert" key={i.id}>
-                {i.label} · {Math.max(0, Math.round(i.startMin + i.durationMin - snapshot.timeMinutes))}m left
+                {i.label}, {Math.max(0, Math.round(i.startMin + i.durationMin - snapshot.timeMinutes))}m left
               </span>
             ))}
             {stats.worstVC >= 0.85 && (
-              <span className="tf-hud-chip alert">Congested: {stats.worstRoad} · V/C {stats.worstVC}</span>
+              <span className="tf-hud-chip alert">{stats.worstRoad} congested at V/C {stats.worstVC}</span>
             )}
           </div>
           <Toasts toasts={toasts} />
           <div className="tf-overlay-hint">
             {mode === 'build'
-              ? 'build mode · sim paused · edits reset the day'
+              ? 'Build mode. The clock is paused, and edits reset the day.'
               : mode === 'disrupt'
-                ? 'disrupt mode · sim paused · click infrastructure to target it'
+                ? 'Disrupt mode. The clock is paused. Click infrastructure to target it.'
                 : mode === 'plan'
-                  ? 'plan mode · pick a brief, build, then submit for evaluation'
-                  : 'drag orbit · right-drag pan · wheel zoom · click station/route/road/district'}
+                  ? 'Plan mode. Pick a brief, build against it, then submit for evaluation.'
+                  : 'Drag to orbit, right-drag to pan, scroll to zoom. Click anything to inspect it.'}
           </div>
           <Legend
             overlay={overlay}
@@ -2199,7 +2259,7 @@ export default function App() {
           />
           <StatusBar stats={stats} viewing={viewing} incidents={stats.activeIncidents} opCost={stats.opCost} />
           {!splitView && (
-            <>
+            <div className="tf-map-stack">
               <NavWidget
                 cam={camInfo}
                 tilt={tilt}
@@ -2217,7 +2277,7 @@ export default function App() {
                 selection={selection}
                 onJump={minimapJump}
               />
-            </>
+            </div>
           )}
           <HoverTooltip hover={hoverInfo} />
           <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
@@ -2235,7 +2295,7 @@ export default function App() {
           )}
           {inspectMode && (
             <div className="tf-overlay-hint tf-inspect-chip">
-              Quick inspect on · clicks select instead of building · I to exit
+              Quick inspect: clicking selects instead of building. Press I to exit.
             </div>
           )}
           <div className="tf-mobile-note">TransitForge works best on desktop — the full map needs room.</div>
@@ -2259,54 +2319,76 @@ export default function App() {
             </div>
           )}
         </section>
-        <aside className="tf-panel">
+        <aside className="tf-panel" ref={railRef} tabIndex={-1}>
           {mode === 'simulate' ? (
             <>
-              <LayerToggles layers={layers} onChange={onLayers} />
-              <OverlaySwitch
-                overlay={overlay}
-                onChange={setOverlay}
-                travelDest={travelDest}
-                onTravelDest={setTravelDest}
-                coverageThreshold={coverageThreshold}
-                onCoverageThreshold={setCoverageThreshold}
-                demandLayer={demandLayer}
-                onDemandLayer={setDemandLayer}
-              />
-              <StatsPanel stats={stats} />
-              <ServicePanel
-                sim={snapshot}
-                selectedRouteId={serviceRouteId}
-                onSelectRoute={setServiceRouteId}
-                onPatch={onServicePatch}
-                onFares={onFarePolicy}
-              />
-              <AnalyticsPanel
-                access={access}
-                coverage={coverage}
-                score={score}
-                bottlenecks={bottlenecks}
-                gaps={gaps}
-                utilization={utilization}
-                sim={snapshot}
-                onSelect={setSelection}
-              />
-              <ChartsPanel history={history} topStations={topStations} />
-              <GrowthPanel
-                year={BASE_YEAR + yearsApplied}
-                summary={growthSummary}
-                districts={districtBars}
-                history={growthHistory}
-                onAdvance={onAdvanceYears}
-                advancing={growing}
-                forecast={forecast}
-                onForecast={onForecast}
-                advice={advice}
-              />
-              <DebugPanel sim={snapshot} />
+              <RailTabs tabs={SIM_TABS} active={railTab} onChange={setRailTab} label="Rail sections" />
+              <div
+                className="tf-rail-body"
+                role="tabpanel"
+                id={`railpanel-${railTab}`}
+                aria-labelledby={`railtab-${railTab}`}
+              >
+                {railTab === 'map' && (
+                  <>
+                    <LayerToggles layers={layers} onChange={onLayers} />
+                    <OverlaySwitch
+                      overlay={overlay}
+                      onChange={setOverlay}
+                      travelDest={travelDest}
+                      onTravelDest={setTravelDest}
+                      coverageThreshold={coverageThreshold}
+                      onCoverageThreshold={setCoverageThreshold}
+                      demandLayer={demandLayer}
+                      onDemandLayer={setDemandLayer}
+                    />
+                  </>
+                )}
+                {railTab === 'network' && <StatsPanel stats={stats} />}
+                {railTab === 'service' && (
+                  <ServicePanel
+                    sim={snapshot}
+                    selectedRouteId={serviceRouteId}
+                    onSelectRoute={setServiceRouteId}
+                    onPatch={onServicePatch}
+                    onFares={onFarePolicy}
+                  />
+                )}
+                {railTab === 'analysis' && (
+                  <>
+                    <AnalyticsPanel
+                      access={access}
+                      coverage={coverage}
+                      score={score}
+                      bottlenecks={bottlenecks}
+                      gaps={gaps}
+                      utilization={utilization}
+                      sim={snapshot}
+                      onSelect={setSelection}
+                    />
+                    <ChartsPanel history={history} topStations={topStations} />
+                  </>
+                )}
+                {railTab === 'growth' && (
+                  <>
+                    <GrowthPanel
+                      year={BASE_YEAR + yearsApplied}
+                      summary={growthSummary}
+                      districts={districtBars}
+                      history={growthHistory}
+                      onAdvance={onAdvanceYears}
+                      advancing={growing}
+                      forecast={forecast}
+                      onForecast={onForecast}
+                      advice={advice}
+                    />
+                    <DebugPanel sim={snapshot} />
+                  </>
+                )}
+              </div>
             </>
           ) : mode === 'disrupt' ? (
-            <>
+            <div className="tf-rail-body">
               <DisruptPanel
                 sim={snapshot}
                 draft={incidentDraft}
@@ -2328,9 +2410,9 @@ export default function App() {
                 resilienceRunning={resilienceRunning}
                 onCompareResilience={compareResilienceLive}
               />
-            </>
+            </div>
           ) : mode === 'plan' ? (
-            <>
+            <div className="tf-rail-body">
               <PlanningPanel
                 briefs={briefs}
                 briefId={briefId}
@@ -2362,9 +2444,9 @@ export default function App() {
                 tutorialDismissed={tutorialDismissed}
                 onDismissTutorial={dismissTutorial}
               />
-            </>
+            </div>
           ) : (
-            <>
+            <div className="tf-rail-body">
               <BuildPanel
                 tool={tool}
                 onTool={(t) => { setTool(t); clearDraft(); }}
@@ -2436,7 +2518,7 @@ export default function App() {
                 splitView={splitView}
                 onSplitView={setSplitView}
               />
-            </>
+            </div>
           )}
         </aside>
       </main>

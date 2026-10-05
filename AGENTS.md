@@ -57,6 +57,7 @@ npm run build   # tsc -b && vite build
 | `1` `2` `3` | speed 1× / 5× / 20× |
 | `B` `D` `P` | build · disrupt · plan mode |
 | `A` | cycle the analytics overlay |
+| `T` | switch light / dark theme |
 | `[` `]` | hide / show the side panel |
 | `Esc` | back to simulate |
 | `R` | reset the simulated day |

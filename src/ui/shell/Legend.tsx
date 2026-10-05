@@ -20,23 +20,23 @@ const LEGENDS: Partial<Record<Overlay, Entry>> = {
   },
   coverage: {
     kind: 'ramp', title: 'Covered population', lo: '0%', hi: '100%',
-    gradient: 'linear-gradient(90deg, #1e3a8a, #ffffff)',
+    gradient: 'linear-gradient(90deg, var(--ramp-blue-lo), var(--ramp-blue-hi))',
   },
   popdensity: {
     kind: 'ramp', title: 'Population density', lo: 'low', hi: 'max',
-    gradient: 'linear-gradient(90deg, #1e3a8a, #ffffff)',
+    gradient: 'linear-gradient(90deg, var(--ramp-blue-lo), var(--ramp-blue-hi))',
   },
   jobdensity: {
     kind: 'ramp', title: 'Job density', lo: 'low', hi: 'max',
-    gradient: 'linear-gradient(90deg, #1e3a8a, #ffffff)',
+    gradient: 'linear-gradient(90deg, var(--ramp-blue-lo), var(--ramp-blue-hi))',
   },
   development: {
     kind: 'ramp', title: 'Developed share', lo: '0%', hi: '100%',
-    gradient: 'linear-gradient(90deg, #475569, #34d399 25%, #facc15 50%, #fb923c 75%, #ef4444)',
+    gradient: 'linear-gradient(90deg, var(--ramp-none), #34d399 25%, #facc15 50%, #fb923c 75%, #ef4444)',
   },
   growth: {
     kind: 'ramp', title: 'Population growth', lo: 'low', hi: 'max',
-    gradient: 'linear-gradient(90deg, #14532d, #ffffff)',
+    gradient: 'linear-gradient(90deg, var(--ramp-green-lo), var(--ramp-green-hi))',
   },
   demand: {
     kind: 'ramp', title: 'Trip demand', lo: 'low', hi: 'max',
@@ -52,7 +52,7 @@ const LEGENDS: Partial<Record<Overlay, Entry>> = {
   },
   frequency: {
     kind: 'ramp', title: 'Service frequency', lo: 'rare', hi: 'dense',
-    gradient: 'linear-gradient(90deg, #14532d, #ffffff)',
+    gradient: 'linear-gradient(90deg, var(--ramp-green-lo), var(--ramp-green-hi))',
   },
   crowding: {
     kind: 'ramp', title: 'Vehicle crowding', lo: 'seated', hi: 'crushed',
@@ -82,7 +82,7 @@ const LEGENDS: Partial<Record<Overlay, Entry>> = {
     kind: 'keys', title: 'Network status', rows: [
       { color: '#ef4444', label: 'Suspended / closed' },
       { color: '#fb923c', label: 'Reduced service' },
-      { color: 'var(--signal)', label: 'Normal' },
+      { color: 'var(--line-green)', label: 'Normal' },
     ],
   },
 };
@@ -101,25 +101,35 @@ export default function Legend({ overlay, demandLayer, extras }: {
   extras?: Partial<LegendExtras>;
 }) {
   const entry = LEGENDS[overlay];
-  const extraRows: { color: string; label: string }[] = [];
+  // Markers are conditions, not lines, so each group is titled by what it
+  // marks rather than appended to the line colours.
+  const groups: { title: string; rows: { color: string; label: string }[] }[] = [];
   if (extras?.problems) {
-    extraRows.push(
-      { color: '#ef4444', label: 'Severe problem' },
-      { color: '#facc15', label: 'Watch / single point of failure' },
-      { color: '#6ea8fe', label: 'Access / growth pressure' },
-    );
+    groups.push({
+      title: 'Problem markers',
+      rows: [
+        { color: '#ef4444', label: 'Severe problem' },
+        { color: 'var(--mark-amber)', label: 'Watch, single point of failure' },
+        { color: 'var(--mark-blue)', label: 'Access or growth pressure' },
+      ],
+    });
   }
-  if (extras?.catchment) extraRows.push({ color: '#6ea8fe', label: 'Walking catchment' });
-  if (extras?.measure) extraRows.push({ color: '#6ea8fe', label: 'Measured distance' });
+  const tools: { color: string; label: string }[] = [];
+  if (extras?.catchment) tools.push({ color: 'var(--mark-blue)', label: 'Walking catchment' });
+  if (extras?.measure) tools.push({ color: 'var(--mark-blue)', label: 'Measured distance' });
+  if (extras?.split) tools.push({ color: 'var(--on-ink)', label: 'Left baseline, right scenario' });
+  if (tools.length > 0) groups.push({ title: 'Map tools', rows: tools });
   if (extras?.changes) {
-    extraRows.push(
-      { color: '#34d399', label: 'Added infrastructure' },
-      { color: '#ef4444', label: 'Removed infrastructure' },
-      { color: '#6ea8fe', label: 'Service / fare change' },
-    );
+    groups.push({
+      title: 'Changes in this scenario',
+      rows: [
+        { color: '#34d399', label: 'Added infrastructure' },
+        { color: '#ef4444', label: 'Removed infrastructure' },
+        { color: 'var(--mark-blue)', label: 'Service or fare change' },
+      ],
+    });
   }
-  if (extras?.split) extraRows.push({ color: 'var(--signal)', label: 'Left: baseline · right: scenario' });
-  if (!entry && extraRows.length === 0) return null;
+  if (!entry && groups.length === 0) return null;
   const title =
     overlay === 'demand' ? `Demand — ${demandLayer}` : (entry?.title ?? 'Map');
   return (
@@ -144,16 +154,19 @@ export default function Legend({ overlay, demandLayer, extras }: {
           ))}
         </div>
       ) : null}
-      {extraRows.length > 0 && (
-        <div className="tf-legend-rows">
-          {extraRows.map((r) => (
-            <div className="tf-legend-row" key={r.label}>
-              <span className="tf-swatch" style={{ background: r.color }} />
-              <span>{r.label}</span>
-            </div>
-          ))}
+      {groups.map((g) => (
+        <div className="tf-legend-group" key={g.title}>
+          <h5>{g.title}</h5>
+          <div className="tf-legend-rows">
+            {g.rows.map((r) => (
+              <div className="tf-legend-row" key={r.label}>
+                <span className="tf-swatch" style={{ background: r.color }} />
+                <span>{r.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }

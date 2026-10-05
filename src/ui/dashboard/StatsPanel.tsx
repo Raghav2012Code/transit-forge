@@ -1,9 +1,12 @@
 import type { SimStats } from '../../types/index.ts';
 import Kpi from '../shell/Kpi.tsx';
 
+/** A named leader with its count, or a plain "None yet" before there is any activity. */
+const ranked = (name: string, count: number) => (count > 0 ? `${name} (${count.toLocaleString()})` : 'None yet');
+
 function Section({ title, rows, tone }: { title: string; rows: [string, string][]; tone?: 'alert' }) {
   return (
-    <div className="tf-stats" style={tone === 'alert' ? { borderColor: 'var(--bad)' } : undefined}>
+    <div className="tf-stats" style={tone === 'alert' ? { borderColor: 'var(--alert)' } : undefined}>
       <h3>{title}</h3>
       <dl>
         {rows.map(([k, val]) => (
@@ -24,6 +27,9 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
     <>
       <div className="tf-stats">
         <h3>Overview</h3>
+        {stats.completed === 0 && stats.activeNow === 0 && (
+          <p className="tf-hint">No trips have started yet. Press play and these figures update as the day runs.</p>
+        )}
         <div className="tf-kpis">
           <Kpi
             label="Transit share"
@@ -67,7 +73,7 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
           ['Daily trips', stats.generated.toLocaleString()],
           ['Completed', stats.completed.toLocaleString()],
           ['Active now', stats.activeNow.toLocaleString()],
-          ['Mode split M/R/B', `${stats.metroShare}/${stats.railShare}/${stats.busShare}%`],
+          ['Metro / rail / bus share',`${stats.metroShare}/${stats.railShare}/${stats.busShare}%`],
         ]}
       />
       <Section
@@ -84,9 +90,9 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
       <Section
         title="Infrastructure"
         rows={[
-          ['Most used st', `${stats.topStation} (${stats.topStationCount.toLocaleString()})`],
-          ['Crowded now', `${stats.crowdedStation} (${stats.crowdedCount.toLocaleString()})`],
-          ['Top route', `${stats.topRoute} (${stats.topRouteCount.toLocaleString()})`],
+          ['Busiest station', ranked(stats.topStation, stats.topStationCount)],
+          ['Most crowded now', ranked(stats.crowdedStation, stats.crowdedCount)],
+          ['Busiest route', ranked(stats.topRoute, stats.topRouteCount)],
         ]}
       />
       <Section
