@@ -347,3 +347,15 @@
 @media (max-width: 640px) {
   .tf-help-body { grid-template-columns: 1fr; }
 }
+
+/* =====================================================================
+ * Command palette additions
+ * ===================================================================== */
+
+.tf-palette-group {
+  padding: var(--s-4) var(--s-6) var(--s-2);
+  font-size: var(--fs-fine);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.tf-palette-keys { display: inline-flex; gap: 2px; }

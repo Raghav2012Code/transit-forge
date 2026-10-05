@@ -3,16 +3,7 @@ import type { PresetId, TiltName } from '../../rendering/map/camera.ts';
 import type { CameraInfo } from '../../rendering/SceneView.tsx';
 import { IconFocus, IconMapFold, IconMinus, IconPlus, IconStationPin } from '../shell/icons.tsx';
 import Popover from '../shell/Popover.tsx';
-
-const PRESETS: { id: PresetId; label: string }[] = [
-  { id: 'overview', label: 'City overview' },
-  { id: 'cbd', label: 'CBD' },
-  { id: 'central', label: 'Central Interchange' },
-  { id: 'airport', label: 'Airport' },
-  { id: 'university', label: 'University' },
-  { id: 'harbor', label: 'Harbor' },
-  { id: 'industrial', label: 'Industrial area' },
-];
+import { PRESETS } from './places.ts';
 
 const TILTS: { id: TiltName; label: string; title: string }[] = [
   { id: 'perspective', label: '3D', title: 'Perspective view' },

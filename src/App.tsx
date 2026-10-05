@@ -75,7 +75,7 @@ import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
 import { type Speed } from './ui/controls/SimControls.tsx';
 import LensOptions from './ui/controls/LensOptions.tsx';
-import { LENS_NOTE, type DemandLayer, type TravelDest } from './ui/controls/lenses.ts';
+import { LENS_GROUPS, LENS_NOTE, type DemandLayer, type TravelDest } from './ui/controls/lenses.ts';
 import StatsPanel from './ui/dashboard/StatsPanel.tsx';
 import DebugPanel from './ui/dashboard/DebugPanel.tsx';
 import Inspector from './ui/inspectors/Inspector.tsx';
@@ -117,6 +117,8 @@ import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './render
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
 import ReportsSheet from './ui/shell/ReportsSheet.tsx';
 import { type ReportTab } from './ui/shell/reportTabs.ts';
+import type { Command } from './ui/shell/commands.ts';
+import { PRESETS } from './ui/map/places.ts';
 import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme.ts';
 import type { Theme } from './rendering/palette.ts';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
@@ -1570,6 +1572,70 @@ export default function App() {
     requestCameraPose(pose.pos, pose.target);
   }
 
+  // ---- commands: everything the workspace can do, findable by typing ----
+  function buildCommands(): Command[] {
+    const list: Command[] = [];
+    const add = (c: Command) => list.push(c);
+    const modes: { key: Mode; label: string; keys: string[]; words: string; suggested?: boolean }[] = [
+      { key: 'simulate', label: 'Go to Simulate', keys: ['Esc'], words: 'run watch day' },
+      { key: 'build', label: 'Go to Build', keys: ['B'], words: 'draw lines stations roads edit design', suggested: true },
+      { key: 'disrupt', label: 'Go to Disrupt', keys: ['D'], words: 'break stress incident closure outage' },
+      { key: 'plan', label: 'Go to Plan', keys: ['P'], words: 'brief objectives goals submit score', suggested: true },
+    ];
+    for (const m of modes) {
+      add({ id: `mode-${m.key}`, group: 'Mode', label: m.label, keys: m.keys, keywords: m.words, suggested: m.suggested, run: () => selectMode(m.key) });
+    }
+
+    add({ id: 'play', group: 'Day', label: playing ? 'Pause the day' : 'Play the day', keys: ['Space'], keywords: 'start stop resume clock', suggested: true, run: togglePlay });
+    add({ id: 'speed-1', group: 'Day', label: 'Run at normal speed', keys: ['1'], keywords: 'slow 1x', run: () => setSpeed(1) });
+    add({ id: 'speed-5', group: 'Day', label: 'Run at 5× speed', keys: ['2'], keywords: 'faster fast 5x', run: () => setSpeed(5) });
+    add({ id: 'speed-20', group: 'Day', label: 'Run at 20× speed', keys: ['3'], keywords: 'fastest fast 20x', run: () => setSpeed(20) });
+    add({ id: 'step', group: 'Day', label: 'Advance one minute', keywords: 'step tick', run: () => { clearRunTarget(); simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); } });
+    add({ id: 'reset', group: 'Day', label: 'Reset the day', keys: ['R'], keywords: 'restart start over', run: resetAll });
+
+    for (const g of LENS_GROUPS) {
+      for (const it of g.items) {
+        add({
+          id: `lens-${it.key}`,
+          group: 'Lens',
+          label: it.key === 'normal' ? 'Show the map with no lens' : `Show ${it.label.toLowerCase()}`,
+          keywords: `overlay lens map layer ${g.title.toLowerCase()}`,
+          run: () => setOverlay(it.key),
+        });
+      }
+    }
+
+    add({ id: 'view-reset', group: 'View', label: 'Reset the view', keys: ['0'], keywords: 'home overview camera', run: resetCamera });
+    add({ id: 'zoom-in', group: 'View', label: 'Zoom in', keywords: 'closer camera', run: () => zoomBy(0.75) });
+    add({ id: 'zoom-out', group: 'View', label: 'Zoom out', keywords: 'farther camera', run: () => zoomBy(1 / 0.75) });
+    if (selection) add({ id: 'focus', group: 'View', label: 'Focus the selection', keys: ['F'], keywords: 'center camera', run: focusSelection });
+    add({ id: 'tilt-3d', group: 'View', label: 'View the city in 3D', keywords: 'perspective camera', run: () => setTilt('perspective') });
+    add({ id: 'tilt-top', group: 'View', label: 'View the city from above', keywords: 'plan top down camera', run: () => setTilt('top') });
+    add({ id: 'tilt-street', group: 'View', label: 'View the city at street level', keywords: 'camera low', run: () => setTilt('street') });
+    for (const pr of PRESETS) {
+      add({ id: `place-${pr.id}`, group: 'View', label: `Jump to ${pr.label}`, keywords: 'go fly camera place', run: () => applyCameraPreset(pr.id) });
+    }
+    add({ id: 'measure', group: 'Map', label: measureTool ? 'Stop measuring' : 'Measure a distance', keys: ['M'], keywords: 'ruler length', run: toggleMeasure });
+    add({ id: 'minimap', group: 'Map', label: minimapOpen ? 'Hide the overview map' : 'Show the overview map', keywords: 'minimap', run: toggleMinimap });
+
+    add({ id: 'reports', group: 'Workspace', label: reportsOpen ? 'Close reports' : 'Open reports', keys: ['S'], keywords: 'tables numbers statistics data', suggested: true, run: () => setReportsOpen((v) => !v) });
+    for (const [tab, label] of [['network', 'Network'], ['analysis', 'Analysis'], ['growth', 'Growth'], ['compare', 'Compare']] as const) {
+      add({ id: `reports-${tab}`, group: 'Workspace', label: `Open the ${label} report`, keywords: 'tables numbers', run: () => openReports(tab) });
+    }
+    add({ id: 'panel', group: 'Workspace', label: railOpen ? 'Hide the side panel' : 'Show the side panel', keys: [railOpen ? '[' : ']'], keywords: 'sidebar inspector', run: () => setRailOpen((r) => !r) });
+    add({ id: 'theme', group: 'Workspace', label: theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme', keys: ['T'], keywords: 'appearance night day mode colour', suggested: true, run: toggleTheme });
+    add({ id: 'help', group: 'Workspace', label: 'Show keyboard shortcuts', keys: ['?'], keywords: 'help keys hotkeys', suggested: true, run: () => setHelpOpen(true) });
+
+    if (ops.length > 0) {
+      add({ id: 'compare', group: 'Scenario', label: 'Compare this scenario with the baseline', keywords: 'diff versus', run: () => openReports('compare') });
+      add({ id: 'view-base', group: 'Scenario', label: 'Show the baseline network', keywords: 'original before', run: () => onView('base') });
+      add({ id: 'view-scenario', group: 'Scenario', label: 'Show the scenario network', keywords: 'edited after', run: () => onView('scenario') });
+      add({ id: 'undo', group: 'Scenario', label: 'Undo the last edit', keys: ['Ctrl', 'Z'], run: doUndo });
+    }
+    if (redo.length > 0) add({ id: 'redo', group: 'Scenario', label: 'Redo the edit', keys: ['Ctrl', 'Shift', 'Z'], run: doRedo });
+    return list;
+  }
+
   // ---- search (§29): pick focuses the camera, selects, and inspects ----
   function pickSearchResult(e: SearchEntry) {
     if (e.kind === 'district') setSelection({ kind: 'zone', id: e.id });
@@ -2363,7 +2429,7 @@ export default function App() {
           <HoverTooltip hover={hoverInfo} />
           <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
           {searchOpen && (
-            <SearchPalette entries={searchEntries} onPick={pickSearchResult} onClose={() => setSearchOpen(false)} />
+            <SearchPalette entries={searchEntries} commands={buildCommands()} onPick={pickSearchResult} onClose={() => setSearchOpen(false)} />
           )}
           {(measureTool || inspectMode) && (
             <div className="tf-map-bc">
