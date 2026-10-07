@@ -15,7 +15,7 @@ life (piece 2) and shareable plan links stay out (see Out of scope).
 A reviewer who has never seen the project, on a clean browser profile:
 
 1. Opens a public URL and sees the map running within a few seconds, with no console errors.
-2. Reaches a built line with trains moving in under 60 seconds, guided only by the first-run tour.
+2. Sees trains moving on the default network immediately, with nothing to dismiss first.
 3. Finds the same experience in light and dark and at 390 px wide, with no horizontal scroll.
 4. Reads the README top to bottom and learns what it is, why it is interesting, how it is built, and where the decisions are recorded, without opening the code.
 5. Sees a green CI badge, and `npm run lint`, `npm run test` and `npm run build` are clean.
@@ -44,21 +44,21 @@ Accepted when: a push to `main` builds in CI and the live URL serves that commit
 
 Risk: the repo's Vercel project needs the owner's account. The Vercel connector in this environment needs authentication; if it is not available, the owner connects the repo in the Vercel dashboard (a two-minute step) and the rest is unchanged.
 
-### 3. First-run experience and failure handling
+### 3. Failure handling
 
-Today the only onboarding is a "First run" checklist inside the Plan panel, collapsed by default (`PlanningPanel.tsx`), so a new visitor never sees it.
+No tour and no new onboarding UI. The existing "First run" checklist in the Plan panel stays as it is.
 
-- **Tour.** A first-visit guided tour of about five steps, each tied to the real action it teaches (see the map, build a line, run the day, read a result, open the command palette). It reuses the existing tutorial step tracking in `App.tsx` rather than adding a second progress system. Skippable at any step, closable with `Esc`, and never shown again once finished or skipped (a versioned `localStorage` key, wrapped in try/catch like the existing one). Reopened from the `?` sheet and from a "Take the tour" command in `buildCommands`; shortcuts follow the `onKey` and `shortcuts.ts` rule in `AGENTS.md`.
-- **Interface rules.** Tokens only, theme-blind, selection is ink, no new colour meaning (`DESIGN.md`). Motion respects `prefers-reduced-motion`. The tour is a real dialog: focus moves in, is trapped, and returns on close.
 - **Error boundary.** A top-level boundary around the app. On a render error it shows a plain message, the error text, a reload button, and a "Reset saved data" button that clears this app's `localStorage` keys, since corrupt saved state is the likeliest cause of a crash on a returning visit.
 - **No WebGL.** If the renderer cannot start, the same fallback says so in words instead of a blank canvas. A recruiter on a locked-down machine must not see an empty page.
 
-Accepted when: with an empty profile the tour appears, completes, and stays gone after a reload; forcing a render error shows the fallback; disabling WebGL shows the message; corrupt saved data can be reset from the fallback.
+The fallback uses tokens only and is theme-blind (`DESIGN.md`).
+
+Accepted when: forcing a render error shows the fallback; disabling WebGL shows the message; corrupt saved data can be reset from the fallback.
 
 ### 4. Quality pass and a smoke test
 
 - **Responsive and themes.** Walk every mode (simulate, build, disrupt, plan) and every sheet in both themes at 1440 px, 768 px and 390 px. Fix overflow, clipped controls and unreadable states found.
-- **Accessibility.** Keyboard reach and visible focus for every control; accessible names on icon buttons; contrast in both themes against the tokens; dialog semantics on sheets and the tour. Checked with an automated scan plus manual keyboard passes.
+- **Accessibility.** Keyboard reach and visible focus for every control; accessible names on icon buttons; contrast in both themes against the tokens; dialog semantics on sheets. Checked with an automated scan plus manual keyboard passes.
 - **Performance.** Record the cold-load size and time-to-first-frame on the deployed build, and a frame-time sample during a running day. Write the numbers in the README only if measured; fix only what is clearly bad.
 - **Smoke test.** One Playwright test, run as `npm run e2e` and as its own CI job so a browser flake never blocks `npm run test`. It loads the built app (software WebGL in headless Chromium), asserts the canvas renders, no console errors, play advances the clock, `T` switches theme, and at 390 px the page does not scroll horizontally. New dev dependencies: `@playwright/test` and `@axe-core/playwright`, for this purpose only.
 
@@ -92,6 +92,6 @@ Accepted when: the README renders correctly on GitHub in light and dark, every l
 ## Tests
 
 - Existing vitest suites stay green; this work adds no simulation logic.
-- A unit test for the tour's state (shown once, dismissed persists, reopen works) and for the error boundary's reset action, in the style of `commands.test.ts`.
+- A unit test for the error boundary's reset action, in the style of `commands.test.ts`.
 - The Playwright smoke test above.
 - Browser check in both themes and at 390 px for every UI milestone.
