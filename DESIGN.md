@@ -123,11 +123,51 @@ edge and the page agree; the dark values are the original dark plate. Switching
 theme rebuilds the scene with the other palette and carries the camera pose
 across, so the view does not jump and the selection stays.
 
+**A model on a plate.** The city stands on one slab with its sides showing; the
+sea and the river are cut into it a little below the land, with a pale shallow
+along the shore and a promenade on the land side. One sun throws soft shadows
+(the shadow map follows the camera, so it is sharp wherever you look), and a
+hemisphere light keeps the shaded sides readable.
+
 - **Ground and fabric** — land, roads, water and buildings are pale and
   desaturated. Districts differ by tint (blue CBD, green university, warm
   industrial), never by saturation, so a line colour is always the loudest
   thing in view.
-- **Stations** are ink-toned: dark slate, with interchanges darker still.
+- **Blocks, not scatter.** Every district lays its own street grid (`layout.ts`
+  in the simulation; some are turned a few degrees so the city is not one
+  lattice) and fills the blocks by kind: towers on podiums in the CBD, slabs
+  round courtyards in residential blocks, rows of houses in the suburbs, long
+  sheds with yards in industry, stacked containers at the harbour, a terminal,
+  hangars and a runway at the airport. Nothing stands on a road, in the river
+  or in the sea (a test holds this), and buildings thin out toward a district's
+  edge. Streets have kerbs and pavement; arterials have lane lines.
+- **Facades are measured, not stretched.** Windows tile per 2.9 m bay and 3.3 m
+  floor from each building's own size, so a tower has the floors a tower has.
+  Sheds and containers are plain walls. In dark, some bays are lit.
+- **Stations** are ink-toned and sized like stations: a platform with a canopy
+  on columns, a stair core, a forecourt where lines meet. Interchanges stack a
+  platform per mode, each turned to its own line. Load tints them toward the
+  alert colour as before.
+- **Lines run on one alignment.** Each route is a smooth curve that is straight
+  for 15 m either side of every platform and eases between stations
+  (`transport/trackPath.ts`). The line mesh, its viaduct, the trains and the
+  direction cones all read that one curve, so nothing can be off its line.
+  Metro and rail ride neutral concrete viaducts on piers (the line colour is a
+  band on top, so colour still means the line); buses run on a painted busway
+  at street level. Buildings keep clear of every viaduct and platform.
+- **Trains wear the line.** A pale body, dark glazing, and the line colour as a
+  stripe and a cab band, so a train never disappears into its own line. Metro
+  runs three cars, rail four, a bus is one body.
+- **Vehicles run the schedule, not the raw step.** The simulation moves a
+  vehicle in one-minute steps at real speeds across a compact map, so a metro
+  covers most of its line in one step. Drawn as is, that is a flicker. The
+  renderer therefore replays each line's service (`vehicles/schedule.ts`): the
+  simulation's own fleet and peak headway fix the cycle, so the spacing is the
+  headway; each vehicle accelerates, runs, brakes and holds at every platform
+  for that cycle. A clock that glides between whole-minute steps drives it, so
+  motion is smooth at any frame rate and any run speed, and stops when the run
+  is paused. Loads, boardings and every number come from the simulation; only
+  the vehicle's position along the line is replayed.
 - **Overlay ramps run pale to deep.** Little is a pale tint and a lot is a deep
   one (navy, deep green), because a ramp that ends in white vanishes on pale
   ground. Condition ramps (green, amber, red) are unchanged. Legends in
@@ -138,6 +178,8 @@ across, so the view does not jump and the selection stays.
 - **Markers** use the deepened amber and the line blue (`MARK`), which hold
   contrast on pale ground where the old yellow and light blue did not.
 - **Labels** are white pills with ink text and a thin accent edge.
+- **A draft is drawn on the real alignment**, as an amber band, so the line you
+  are laying is the line you will get.
 
 ## Spacing, radius, elevation
 

@@ -1,5 +1,7 @@
 // Deterministic PRNG (mulberry32). All simulation randomness flows from here.
-export function mulberry32(seed: number): () => number {
+export type Rng = () => number;
+
+export function mulberry32(seed: number): Rng {
   let a = seed >>> 0;
   return () => {
     a |= 0;

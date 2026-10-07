@@ -122,6 +122,45 @@ export interface Leg {
 
 export type TripPurpose = 'work' | 'education' | 'shopping' | 'leisure' | 'airport' | 'industrial' | 'other';
 
+/** Why a trip took the mode it did. Recorded once, when the trip is created. */
+export interface TripDecision {
+  options: 'both' | 'transit-only' | 'road-only';
+  chose: 'transit' | 'car';
+  /** Minutes, including expected platform waits. Null where that option did not exist. */
+  transitMin: number | null;
+  transfers: number | null;
+  roadMin: number | null;
+  /** Fare priced into the choice (OCU). 0 when there was no choice. */
+  fare: number;
+  /** Probability of choosing the car. Null when the choice was forced. */
+  pCar: number | null;
+  /** The car was chosen but could not be created (cap reached), so the trip took transit. */
+  carFailed: boolean;
+}
+
+/** A finished (or in-progress) trip, kept compactly for the inspector. */
+export interface TripRecord {
+  id: number;
+  kind: 'transit' | 'car';
+  originZone: string;
+  destZone: string;
+  purpose: TripPurpose;
+  departMin: number;
+  /** Minute the trip ended; the current minute while it is still active. */
+  endMin: number;
+  end: 'arrived' | 'abandoned' | 'active';
+  /** Current state while active ("WAITING", "ON_VEHICLE", "DRIVING", ...). */
+  state: string;
+  decision: TripDecision;
+  /** Empty for car trips. */
+  legs: Leg[];
+  waitMin: number;
+  travelMin: number;
+  transfers: number;
+  strandedMin: number;
+  farePaid: number;
+}
+
 export interface Passenger {
   id: number;
   originZone: string;
@@ -151,6 +190,8 @@ export interface Passenger {
   fareRouteId: string;
   /** First-leg mode ('road' legs price as bus). */
   fareMode: 'metro' | 'rail' | 'bus';
+  /** Why this trip took transit (see TripDecision). */
+  decision: TripDecision;
 }
 
 /** Day-long aggregate counters, updated incrementally by the step function. */
@@ -230,6 +271,8 @@ export interface CarTrip {
   travelMin: number;
   /** Ticks spent held by a closure with no alternative (abandon at 120). */
   heldTicks: number;
+  /** Why this trip took the car (see TripDecision). */
+  decision: TripDecision;
 }
 
 export interface RoadCounters {
@@ -257,6 +300,13 @@ export interface CityData {
   buildings: Building[];
   river: Vec3[];
   bridges: { id: string; a: Vec3; b: Vec3 }[];
+  /** Shoreline, north to south: land lies east of it, sea to the west. */
+  coast: Vec3[];
+  /** Local streets between blocks (the arterial grid is `roadEdges`). */
+  streets: Street[];
+  parks: Park[];
+  /** Runways, taxiways and piers: paved strips that are not streets. */
+  landmarks: Landmark[];
 }
 
 export interface Building {
@@ -265,6 +315,28 @@ export interface Building {
   d: number;
   h: number;
   district: DistrictKind;
+  /** Yaw in radians; footprints follow their district's street grid. */
+  rot: number;
+}
+
+export interface Street {
+  a: Vec3;
+  b: Vec3;
+  w: number;
+}
+
+export interface Park {
+  pos: Vec3;
+  w: number;
+  d: number;
+  rot: number;
+}
+
+export interface Landmark {
+  kind: 'runway' | 'taxiway' | 'pier';
+  a: Vec3;
+  b: Vec3;
+  w: number;
 }
 
 export interface SimStats {

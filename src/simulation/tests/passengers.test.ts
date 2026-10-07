@@ -75,3 +75,45 @@ describe('passenger simulation', () => {
     }
   });
 });
+
+describe('trip decisions and recent trips', () => {
+  const sim = run(1337, 240);
+
+  it('records why every live trip took its mode', () => {
+    expect(sim.passengers.length).toBeGreaterThan(0);
+    for (const p of sim.passengers) {
+      expect(p.decision.chose).toBe('transit');
+      expect(p.decision.options === 'both' || p.decision.options === 'transit-only').toBe(true);
+    }
+    expect(sim.cars.length).toBeGreaterThan(0);
+    for (const c of sim.cars) expect(c.decision.chose).toBe('car');
+  });
+
+  it('keeps probabilities sensible where there was a choice', () => {
+    for (const t of [...sim.passengers, ...sim.cars]) {
+      const d = t.decision;
+      if (d.options === 'both') {
+        expect(d.pCar).not.toBeNull();
+        expect(d.pCar!).toBeGreaterThanOrEqual(0);
+        expect(d.pCar!).toBeLessThanOrEqual(1);
+        expect(d.transitMin).not.toBeNull();
+        expect(d.roadMin).not.toBeNull();
+      } else {
+        expect(d.pCar).toBeNull();
+      }
+    }
+  });
+
+  it('remembers finished trips, bounded, oldest first', () => {
+    const recent = sim.recentTrips;
+    expect(recent.length).toBeGreaterThan(0);
+    expect(recent.length).toBeLessThanOrEqual(200);
+    for (const r of recent) {
+      expect(r.end).not.toBe('active');
+      if (r.kind === 'transit') expect(r.legs.length).toBeGreaterThan(0);
+      else expect(r.legs).toEqual([]);
+    }
+    const ends = recent.map((r) => r.endMin);
+    expect(ends).toEqual([...ends].sort((a, b) => a - b));
+  });
+});

@@ -6,11 +6,14 @@ import type {
   RoadCounters,
   RoadEdgeState,
   TransportRoute,
+  TripDecision,
   TripPurpose,
+  TripRecord,
   VehicleState,
   Zone,
 } from '../../types/index.ts';
 import { purposeOf } from '../passengers/demand.ts';
+import { pushTrip, recordOfCar } from '../passengers/tripRecord.ts';
 import { bprRatio, congestionLevel } from './bpr.ts';
 import { findRoadPath, nearestRoadNode, edgeName, type RoadGraph } from './roadGraph.ts';
 import type { DerivedClosures } from '../incidents/incidents.ts';
@@ -22,6 +25,7 @@ export interface TrafficWorld {
   edgeState: Record<string, RoadEdgeState>;
   cars: CarTrip[];
   nextCarId: number;
+  recentTrips: TripRecord[];
   roadCounters: RoadCounters;
   zoneRoadAccess: Record<string, string>;
   busRoadMap: Record<string, string[]>;
@@ -190,6 +194,7 @@ export function spawnCarTrip(
   oZone: Zone,
   dZone: Zone,
   accessDriveMin: number,
+  decision: TripDecision,
   purpose?: TripPurpose,
 ): boolean {
   const fromNode = w.zoneRoadAccess[oZone.id];
@@ -214,6 +219,7 @@ export function spawnCarTrip(
     arriveMin: null,
     travelMin: accessDriveMin,
     heldTicks: 0,
+    decision,
   });
   w.roadCounters.generated++;
   return true;
@@ -287,6 +293,9 @@ export function advanceTraffic(w: TrafficWorld, dtMin: number): void {
     }
   }
   if (w.cars.some((c) => c.state === 'DONE')) {
+    for (const c of w.cars) {
+      if (c.state === 'DONE') pushTrip(w.recentTrips, recordOfCar(c, w.timeMinutes));
+    }
     w.cars = w.cars.filter((c) => c.state !== 'DONE');
   }
 

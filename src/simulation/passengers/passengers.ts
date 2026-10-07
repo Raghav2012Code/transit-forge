@@ -11,6 +11,8 @@ import type {
   Station,
   TransportRoute,
   TripCounters,
+  TripDecision,
+  TripRecord,
   VehicleState,
   Zone,
 } from '../../types/index.ts';
@@ -25,7 +27,8 @@ import {
   type DemandMatrix,
 } from './demand.ts';
 import { cachedRoadPath, driveAccessMin, spawnCarTrip } from '../traffic/cars.ts';
-import { chooseMode, transitEstimate } from '../traffic/modeChoice.ts';
+import { carProbability, chooseMode, transitEstimate } from '../traffic/modeChoice.ts';
+import { pushTrip, recordOfPassenger } from './tripRecord.ts';
 import type { RoadGraph } from '../traffic/roadGraph.ts';
 import type { PathExclusions } from '../transport/graph.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
@@ -68,6 +71,7 @@ export interface PassengerWorld {
   edgeState: Record<string, RoadEdgeState>;
   cars: CarTrip[];
   nextCarId: number;
+  recentTrips: TripRecord[];
   roadCounters: RoadCounters;
   zoneRoadAccess: Record<string, string>;
   roadCache: Map<string, { edgeIds: string[]; nodes: string[]; totalMin: number; computedAt: number }>;
@@ -80,7 +84,12 @@ export interface PassengerWorld {
 }
 
 /** Bus routes that loop instead of ping-ponging. Exported for fleet math. */
-export const LOOP_ROUTES = new Set(['rt-b1']);
+/**
+ * Routes that run as a loop. None today: the movement model runs every line out
+ * and back, as the lines are drawn (B1 was a loop without a closing leg, so its
+ * vehicles jumped from the last stop to the first).
+ */
+export const LOOP_ROUTES = new Set<string>();
 const MAX_ACTIVE = 12000;
 const WALK_KPH = 5;
 const TRANSFER_MIN = 2;
@@ -232,14 +241,17 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         w.counters.unrouted++;
         continue;
       }
-      if (trip && road) {
-        // Wait estimates use the headway passengers actually experience
-        // (fleet-limited and congestion-degraded), not the schedule alone.
-        const headways = trip.legs.map((l) => {
+      // Wait estimates use the headway passengers actually experience
+      // (fleet-limited and congestion-degraded), not the schedule alone.
+      const headwaysOf = (legs: Leg[]) =>
+        legs.map((l) => {
           const r = routeById.get(l.routeId);
           if (!r) return 10;
           return effHeadway(w, r);
         });
+      let decision: TripDecision | null = null;
+      if (trip && road) {
+        const headways = headwaysOf(trip.legs);
         const drive = driveAccessMin(w.city, oz, dz, w.zoneRoadAccess);
         const [draw, rng2] = rngNext(rng);
         rng = rng2;
@@ -248,16 +260,51 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         const firstRoute = routeById.get(trip.legs[0].routeId);
         const fareMode = fareModeFor(firstRoute?.mode ?? 'bus');
         const fare = tripFare(fareMode, w.fares);
-        if (chooseMode(draw, transitEstimate(trip.totalMin, headways), trip.legs.length - 1, road.totalMin + drive, dz.kind, fare) === 'car') {
-          if (spawnCarTrip(w, oz, dz, drive)) continue;
+        const transitMin = transitEstimate(trip.totalMin, headways);
+        const transfers = trip.legs.length - 1;
+        const roadMin = road.totalMin + drive;
+        decision = {
+          options: 'both',
+          chose: chooseMode(draw, transitMin, transfers, roadMin, dz.kind, fare),
+          transitMin,
+          transfers,
+          roadMin,
+          fare,
+          pCar: carProbability(transitMin, transfers, roadMin, dz.kind, fare),
+          carFailed: false,
+        };
+        if (decision.chose === 'car') {
+          if (spawnCarTrip(w, oz, dz, drive, decision)) continue;
           // Car spawn failed (cap): fall through to transit.
+          decision = { ...decision, chose: 'transit', carFailed: true };
         }
       } else if (road) {
         const drive = driveAccessMin(w.city, oz, dz, w.zoneRoadAccess);
-        if (spawnCarTrip(w, oz, dz, drive)) continue;
+        decision = {
+          options: 'road-only',
+          chose: 'car',
+          transitMin: null,
+          transfers: null,
+          roadMin: road.totalMin + drive,
+          fare: 0,
+          pCar: null,
+          carFailed: false,
+        };
+        if (spawnCarTrip(w, oz, dz, drive, decision)) continue;
+      } else if (trip) {
+        decision = {
+          options: 'transit-only',
+          chose: 'transit',
+          transitMin: transitEstimate(trip.totalMin, headwaysOf(trip.legs)),
+          transfers: trip.legs.length - 1,
+          roadMin: null,
+          fare: 0,
+          pCar: null,
+          carFailed: false,
+        };
       }
       const legs = trip?.legs;
-      if (!legs) {
+      if (!legs || !decision) {
         w.counters.unrouted++;
         continue;
       }
@@ -286,6 +333,7 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         farePaid: tripFare(entryMode, w.fares),
         fareRouteId: legs[0].routeId,
         fareMode: entryMode,
+        decision,
       });
       w.counters.generated++;
     }
@@ -373,7 +421,6 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
     if (!route) continue;
     const plan = w.service[route.id];
     const cum = w.routeCumDist.get(route.id) ?? [0];
-    const total = Math.max(1, cum[cum.length - 1]);
     // Disruption hold: suspended routes park; vehicles stop before closed hops.
     const parked = w.closures.suspendedRoutes.has(vv.routeId);
     const held = parked || hopAheadBlocked(vv.routeId, route.stationIds, cum, vv.s, vv.direction, w.closures);
@@ -411,64 +458,8 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
           vv.riders = staying;
         }
       }
-    } else if (vv.dwellLeft > 0) {
-      // Holding at the platform (dwell + delays). No movement this tick.
-      vv.dwellLeft -= dtMin;
-      vv.load = vv.riders.length;
     } else {
-      const oldP = vv.s;
-      const rawP = vv.s + speedMpm * dtMin * vv.direction;
-      let p = rawP;
-      let direction = vv.direction;
-      if (LOOP_ROUTES.has(route.id)) {
-        p = ((p % total) + total) % total;
-      } else {
-        if (p >= total) { p = total - (p - total); direction = -1; }
-        if (p <= 0) { p = -p; direction = 1; }
-      }
-      vv.s = p;
-      vv.direction = direction;
-      w.counters.routeVehKm[vv.routeId] = (w.counters.routeVehKm[vv.routeId] ?? 0) + Math.abs(p - oldP) / 1000;
-
-      const lastIdx = cum.length - 1;
-      const visits = crossedStations(cum, oldP, p, vv.direction, LOOP_ROUTES.has(route.id));
-      if (!LOOP_ROUTES.has(route.id)) {
-        // Reflection clamps the endpoint exactly, so strict range checks would
-        // skip terminus stations. Serve them explicitly on turnaround ticks.
-        if (rawP >= total && !visits.includes(lastIdx)) visits.push(lastIdx);
-        if (rawP <= 0 && !visits.includes(0)) visits.unshift(0);
-      }
-      let boardN = 0;
-      let alightN = 0;
-      for (const idx of visits) {
-        const stationId = route.stationIds[idx];
-        if (!stationId) continue;
-        alightN += alightAt(w, vv, stationId, byId, zoneById, stationById, routeById);
-        const b = boardAt(w, vv, stationId, waitingByStation, routeById);
-        boardN += b.boarded;
-      }
-      if (plan && (boardN > 0 || alightN > 0 || visits.length > 0)) {
-        const load01 = vv.riders.length / Math.max(1, vv.capacity);
-        vv.dwellLeft = dwellMin(plan, boardN, alightN, load01);
-        // Major-delay incidents add dwell at every served stop.
-        vv.dwellLeft += w.closures.stopDelayMin.get(vv.routeId) ?? 0;
-        // Reliability draws happen at terminus turnarounds (deterministic).
-        if (visits.includes(0) || visits.includes(lastIdx)) {
-          vv.trips++;
-          const delay = tripDelayMin(w.seed, vv.id, vv.trips, plan.reliability);
-          if (delay > 0) {
-            vv.dwellLeft += delay;
-            w.counters.totalDelayMin += delay;
-          }
-          if (tripCancelled(w.seed, vv.id, vv.trips, plan.reliability)) {
-            const h = routeEffectiveHeadway(plan, total, route.stationIds.length, slow, w.timeMinutes);
-            if (Number.isFinite(h)) {
-              vv.dwellLeft += h;
-              w.counters.totalDelayMin += h;
-            }
-          }
-        }
-      }
+      driveVehicle(w, vv, route, plan, cum, speedMpm, dtMin, slow, byId, zoneById, stationById, routeById, waitingByStation);
       vv.load = vv.riders.length;
     }
     const occ = vv.load / Math.max(1, vv.capacity);
@@ -493,7 +484,111 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
 
   // 5. Sweep arrived passengers (aggregates already recorded).
   if (w.passengers.some((x) => x.state === 'ARRIVED')) {
+    for (const x of w.passengers) {
+      if (x.state === 'ARRIVED') pushTrip(w.recentTrips, recordOfPassenger(x, w.timeMinutes));
+    }
     w.passengers = w.passengers.filter((x) => x.state !== 'ARRIVED');
+  }
+}
+
+/**
+ * Spend one tick of `dtMin` minutes on a vehicle: finish any dwell, then run to
+ * the next station, serve it, dwell there, and carry on with what is left. A
+ * vehicle never skips a station, and each stop pays its own dwell. Termini
+ * serve once, take the turnaround, and send the vehicle back the other way.
+ * Loop routes are not supported by this movement (none is defined).
+ */
+function driveVehicle(
+  w: PassengerWorld,
+  vv: VehicleState,
+  route: TransportRoute,
+  plan: ServicePlan | undefined,
+  cum: number[],
+  speedMpm: number,
+  dtMin: number,
+  slow: number,
+  byId: Map<number, Passenger>,
+  zoneById: Map<string, Zone>,
+  stationById: Map<string, Station>,
+  routeById: Map<string, TransportRoute>,
+  waitingByStation: Map<string, Passenger[]>,
+): void {
+  const EPS = 1e-6;
+  const lastIdx = cum.length - 1;
+  let budget = dtMin;
+  if (vv.dwellLeft > 0) {
+    // Standing at a platform: people who arrive while it waits still board, and each costs a little time.
+    const here = cum.findIndex((c) => Math.abs(c - vv.s) < EPS);
+    const stationId = here >= 0 ? route.stationIds[here] : undefined;
+    if (stationId && plan && !w.closures.closedStations.has(stationId)) {
+      const late = boardAt(w, vv, stationId, waitingByStation, routeById).boarded;
+      vv.dwellLeft += (late * plan.dwellPerBoardSec) / 60;
+    }
+    const spent = Math.min(budget, vv.dwellLeft);
+    vv.dwellLeft -= spent;
+    budget -= spent;
+  }
+  // Each pass either ends the tick or serves one station, so this is bounded.
+  for (let guard = 0; guard <= cum.length * 2 && budget > EPS && vv.dwellLeft <= EPS && speedMpm > 0; guard++) {
+    let next = -1;
+    if (vv.direction === 1) {
+      for (let i = 0; i <= lastIdx; i++) if (cum[i] > vv.s + EPS) { next = i; break; }
+    } else {
+      for (let i = lastIdx; i >= 0; i--) if (cum[i] < vv.s - EPS) { next = i; break; }
+    }
+    if (next < 0) {
+      // At a terminus with nothing ahead (a vehicle placed on it): turn round.
+      vv.direction = vv.direction === 1 ? -1 : 1;
+      continue;
+    }
+    if (hopAheadBlocked(vv.routeId, route.stationIds, cum, vv.s, vv.direction, w.closures)) break;
+    const dist = Math.abs(cum[next] - vv.s);
+    const need = dist / speedMpm;
+    if (need > budget + EPS) {
+      const run = speedMpm * budget;
+      vv.s += run * vv.direction;
+      w.counters.routeVehKm[vv.routeId] = (w.counters.routeVehKm[vv.routeId] ?? 0) + run / 1000;
+      budget = 0;
+      break;
+    }
+    vv.s = cum[next];
+    budget -= need;
+    w.counters.routeVehKm[vv.routeId] = (w.counters.routeVehKm[vv.routeId] ?? 0) + dist / 1000;
+
+    const stationId = route.stationIds[next];
+    let boardN = 0;
+    let alightN = 0;
+    if (stationId) {
+      alightN = alightAt(w, vv, stationId, byId, zoneById, stationById, routeById);
+      boardN = boardAt(w, vv, stationId, waitingByStation, routeById).boarded;
+    }
+    const terminus = next === 0 || next === lastIdx;
+    if (plan) {
+      vv.dwellLeft = dwellMin(plan, boardN, alightN, vv.riders.length / Math.max(1, vv.capacity));
+      // Major-delay incidents add dwell at every served stop.
+      vv.dwellLeft += w.closures.stopDelayMin.get(vv.routeId) ?? 0;
+      if (terminus) {
+        // Turnaround, then the reliability draws (deterministic, per terminus visit).
+        vv.dwellLeft += plan.turnaroundMin;
+        vv.trips++;
+        const delay = tripDelayMin(w.seed, vv.id, vv.trips, plan.reliability);
+        if (delay > 0) {
+          vv.dwellLeft += delay;
+          w.counters.totalDelayMin += delay;
+        }
+        if (tripCancelled(w.seed, vv.id, vv.trips, plan.reliability)) {
+          const h = routeEffectiveHeadway(plan, cum[lastIdx], route.stationIds.length, slow, w.timeMinutes);
+          if (Number.isFinite(h)) {
+            vv.dwellLeft += h;
+            w.counters.totalDelayMin += h;
+          }
+        }
+      }
+    }
+    if (terminus) vv.direction = next === lastIdx ? -1 : 1;
+    const spent = Math.min(budget, vv.dwellLeft);
+    vv.dwellLeft -= spent;
+    budget -= spent;
   }
 }
 

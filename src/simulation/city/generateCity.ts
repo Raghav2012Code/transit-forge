@@ -5,6 +5,8 @@ import type { CityData, DistrictKind, Vec3, Zone } from '../../types/index.ts';
 import { mulberry32 } from './seededRng.ts';
 import { distM as dist2D } from '../transport/network.ts';
 import { initGrowthState } from '../growth/landUse.ts';
+import { riverCentreX } from './geography.ts';
+import { coastXAt, layoutCity, riverXAt, roadSegments } from './layout.ts';
 
 interface ZoneSpec {
   id: string;
@@ -29,6 +31,8 @@ const ZONE_SPECS: ZoneSpec[] = [
   { id: 'z-sub-s', name: 'South Suburbs', kind: 'suburban', x: 40, z: 300, radius: 160, population: 60000, jobs: 8000 },
   { id: 'z-sub-ne', name: 'North-East Suburbs', kind: 'suburban', x: 330, z: -300, radius: 150, population: 52000, jobs: 6000 },
 ];
+
+const LAYOUTS = new Map<number, ReturnType<typeof layoutCity>>();
 
 export function generateCity(seed: number): CityData {
   const zones: Zone[] = ZONE_SPECS.map((s) => ({
@@ -56,16 +60,19 @@ export function generateCity(seed: number): CityData {
   const river: Vec3[] = [];
   for (let i = 0; i <= 20; i++) {
     const z = -420 + (i / 20) * 840;
-    const x = 120 + Math.sin(i * 0.7) * 28;
+    const x = riverCentreX(z);
     river.push({ x, y: 0, z });
   }
 
-  // Bridges cross the river east-west at fixed z.
-  const bridges = [
-    { id: 'br-north', a: { x: 20, y: 0, z: -240 }, b: { x: 220, y: 0, z: -240 } },
-    { id: 'br-central', a: { x: 20, y: 0, z: 20 }, b: { x: 220, y: 0, z: 20 } },
-    { id: 'br-south', a: { x: 20, y: 0, z: 260 }, b: { x: 220, y: 0, z: 260 } },
-  ];
+  // Bridges carry the three east-west arterials over the river.
+  const bridges = [-300, 0, 300].map((z, i) => {
+    const x = riverXAt(river, z);
+    return {
+      id: ['br-north', 'br-central', 'br-south'][i],
+      a: { x: x - 50, y: 0, z },
+      b: { x: x + 50, y: 0, z },
+    };
+  });
 
   // Major roads: deformed grid arterials + ring, as data (meshes derived).
   const roadNodes = [
@@ -111,30 +118,18 @@ export function generateCity(seed: number): CityData {
     };
   });
 
-  // Procedural buildings: seeded scatter inside zones, kept off river/coast.
-  const rand = mulberry32(seed);
-  const buildings: CityData['buildings'] = [];
-  for (const z of zones) {
-    const count =
-      z.kind === 'cbd' ? 220 : z.kind === 'residential' ? 160 : z.kind === 'suburban' ? 110 : 70;
-    for (let i = 0; i < count; i++) {
-      const ang = rand() * Math.PI * 2;
-      const r = Math.sqrt(rand()) * (z.radius - 12);
-      const x = z.center.x + Math.cos(ang) * r;
-      const zz = z.center.z + Math.sin(ang) * r;
-      if (x < -310) continue; // water
-      if (Math.abs(x - 120) < 26) continue; // river gap
-      const base =
-        z.kind === 'cbd' ? 26 + rand() * 55 : z.kind === 'airport' || z.kind === 'harbor' ? 5 + rand() * 7 : 6 + rand() * 16;
-      buildings.push({
-        pos: { x, y: 0, z: zz },
-        w: 6 + rand() * 10,
-        d: 6 + rand() * 10,
-        h: base,
-        district: z.kind,
-      });
-    }
+  // Streets, blocks and buildings (render-only; see layout.ts).
+  // Nothing mutates the layout (growth changes zones, not blocks), so one copy per seed is shared.
+  let layout = LAYOUTS.get(seed);
+  if (!layout) {
+    layout = layoutCity({ zones, river, roadSegs: roadSegments(roadNodes, roadEdges) }, mulberry32(seed));
+    LAYOUTS.set(seed, layout);
   }
+  const { buildings, streets, parks, landmarks } = layout;
 
-  return { zones, roadNodes, roadEdges, buildings, river, bridges };
+  // Shoreline, north to south.
+  const coast: Vec3[] = [];
+  for (let z = -660; z <= 660; z += 20) coast.push({ x: coastXAt(z), y: 0, z });
+
+  return { zones, roadNodes, roadEdges, buildings, river, bridges, coast, streets, parks, landmarks };
 }

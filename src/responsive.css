@@ -67,7 +67,8 @@
 
   /* top bar: the mark, the scenario, search as a button */
   .tf-bar { grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s-3); padding: 0 var(--s-4); }
-  .tf-brand-name { display: none; }
+  /* Hidden to the eye but still the page heading for assistive technology. */
+  .tf-brand-name { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .tf-bar-left { gap: var(--s-3); }
   .tf-command { width: 34px; padding: 0; justify-content: center; }
   .tf-command > span,

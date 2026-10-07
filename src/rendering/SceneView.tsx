@@ -4,8 +4,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { SimulationState } from '../simulation/index.ts';
 import type { CongestionLevel } from '../types/index.ts';
 import { buildCityMeshes } from './city/buildCity.ts';
-import { buildNetworkMeshes } from './transport/buildNetwork.ts';
+import { buildNetworkMeshes, MODE_Y } from './transport/buildNetwork.ts';
+import { buildTrackCurve } from './transport/trackPath.ts';
+import { rectProfile, sweep } from './transport/sweep.ts';
 import { buildVehicles, syncVehicleMeshes, updateVehicles } from './vehicles/vehicles.ts';
+import { VisualClock } from './vehicles/schedule.ts';
 import { buildCarRig, updateCarRig } from './traffic/carRig.ts';
 import type { CameraCmd } from './map/camera.ts';
 import { resolveClick, type CycleCandidate, type CycleState } from './map/selectionCycle.ts';
@@ -247,6 +250,8 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     const dpr = Math.min(window.devicePixelRatio, 2);
     renderer.setPixelRatio(dpr);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     mount.appendChild(renderer.domElement);
     // Canvas-texture label billboards (map labels, measure tool) are drawn
@@ -276,13 +281,27 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     lastThemeRef.current = theme;
 
     scene.add(new THREE.AmbientLight(0xffffff, P.lighting.ambient));
-    const sun = new THREE.DirectionalLight(0xffffff, P.lighting.sun);
-    sun.position.set(200, 320, 120);
-    scene.add(sun);
+    scene.add(new THREE.HemisphereLight(0xffffff, SCENE.land, P.lighting.hemi));
+    const sun = new THREE.DirectionalLight(0xfff6ea, P.lighting.sun);
+    // One sun, low enough that towers throw long shadows across the blocks.
+    sun.position.set(-260, 420, 300);
+    sun.target.position.set(100, 0, 0);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(4096, 4096);
+    sun.shadow.camera.left = -760;
+    sun.shadow.camera.right = 760;
+    sun.shadow.camera.top = 760;
+    sun.shadow.camera.bottom = -760;
+    sun.shadow.camera.near = 50;
+    sun.shadow.camera.far = 1400;
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.6;
+    scene.add(sun, sun.target);
 
-    const city = buildCityMeshes(sim.city, P);
-    scene.add(city.group);
+    // The network goes first: its viaducts tell the city where not to build.
     const net = buildNetworkMeshes(sim.stations, sim.routes, P);
+    const city = buildCityMeshes(sim.city, P, net.avoid, !light);
+    scene.add(city.group);
     scene.add(net.group);
     const rig = buildVehicles(sim.vehicles, sim.routes, sim.stations);
     scene.add(rig.group);
@@ -552,14 +571,19 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const a = rep ? net.stationMeshById.get(rep.fromStationId) : undefined;
           const b = rep ? net.stationMeshById.get(rep.toStationId) : undefined;
           if (a && b) {
-            const line = new THREE.Line(
-              new THREE.BufferGeometry().setFromPoints([
-                a.position.clone().setY(9),
-                b.position.clone().setY(9),
-              ]),
-              new THREE.LineBasicMaterial({ color: 0xf472b6 }),
+            // The shuttle runs at street level on its own alignment, like any bus line.
+            const curve = buildTrackCurve(
+              [{ x: a.position.x, z: a.position.z }, { x: b.position.x, z: b.position.z }],
+              MODE_Y.bus,
             );
-            incidentGroup.add(line);
+            if (curve) {
+              incidentGroup.add(
+                new THREE.Mesh(
+                  sweep(curve, rectProfile(3.4, 0, 0.12), MODE_Y.bus + 0.2, 0, curve.length, 3),
+                  new THREE.MeshBasicMaterial({ color: 0xf472b6 }),
+                ),
+              );
+            }
           }
         }
       }
@@ -571,7 +595,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     draftGroup.name = 'draft';
     scene.add(draftGroup);
     let lastDraftKey = '';
-    const draftMat = new THREE.LineBasicMaterial({ color: MARK.amber });
+    const draftMat = new THREE.MeshBasicMaterial({ color: MARK.amber });
     const draftDotGeo = new THREE.SphereGeometry(2.2, 12, 12);
     const draftDotMat = new THREE.MeshBasicMaterial({ color: MARK.amber });
     const hoverDotMat = new THREE.MeshBasicMaterial({ color: MARK.green, transparent: true, opacity: 0.8 });
@@ -584,15 +608,18 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       // geometry/materials (draftDotGeo/draftDotMat/hoverDotMat) are shared
       // and reused below, so they must survive the clear.
       for (const child of draftGroup.children) {
-        if (child instanceof THREE.Line) child.geometry.dispose();
+        if (child instanceof THREE.Mesh && child.geometry !== draftDotGeo) child.geometry.dispose();
       }
       draftGroup.clear();
       if (!d) return;
-      const y = 9;
-      const pts = d.points.map((p) => new THREE.Vector3(p.x, y, p.z));
-      if (d.hover) pts.push(new THREE.Vector3(d.hover.x, y, d.hover.z));
-      if (pts.length >= 2) {
-        draftGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), draftMat));
+      // The draft is drawn on the same alignment a built line would get.
+      const y = MODE_Y.metro + 1.2;
+      const run = d.points.map((p) => ({ x: p.x, z: p.z }));
+      if (d.hover) run.push({ x: d.hover.x, z: d.hover.z });
+      const curve = buildTrackCurve(run, MODE_Y.metro);
+      if (curve) {
+        const ribbon = new THREE.Mesh(sweep(curve, rectProfile(3.2, 0, 0.5), 0.9, 0, curve.length, 2.5), draftMat);
+        draftGroup.add(ribbon);
       }
       for (const p of d.points) {
         const dot = new THREE.Mesh(draftDotGeo, draftDotMat);
@@ -890,6 +917,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     let raf = 0;
     let elapsed = 0;
     let lastFrame = performance.now();
+    const clock = new VisualClock();
     let frame = 0;
     // Smooth camera commands: eased glide, cancelled by user input.
     let appliedCamSeq = 0;
@@ -933,7 +961,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       const cur = simRef.current;
       if (cur) {
         syncVehicleMeshes(rig, cur.vehicles, cur.routes, cur.stations);
-        updateVehicles(rig, cur.vehicles, dt);
+        updateVehicles(rig, cur.vehicles, cur.routes, clock.read(cur.timeMinutes, now / 1000), cur.service);
         updateCarRig(carRig, cur.cars, edgeLen);
         rebuildDraft();
         rebuildMarkers();
@@ -1316,6 +1344,23 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         }
       }
       controls.update();
+      // Spend the shadow map where the camera looks: zoomed in, texels shrink.
+      {
+        const reach = Math.min(780, Math.max(170, camera.position.distanceTo(controls.target) * 1.05));
+        const texel = (2 * reach) / sun.shadow.mapSize.x;
+        const tx = Math.round(controls.target.x / texel) * texel;
+        const tz = Math.round(controls.target.z / texel) * texel;
+        sun.target.position.set(tx, 0, tz);
+        sun.position.set(tx - 260, 420, tz + 300);
+        const sc = sun.shadow.camera;
+        if (sc.right !== reach) {
+          sc.left = -reach;
+          sc.right = reach;
+          sc.top = reach;
+          sc.bottom = -reach;
+          sc.updateProjectionMatrix();
+        }
+      }
       renderer.render(scene, camera);
     };
     animate();
@@ -1345,5 +1390,5 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     // Live data flows via simRef, which is stable for the app lifetime.
   }, [networkKey, theme, simRef]);
 
-  return <div ref={mountRef} className="scene-mount" aria-label="TransitForge 3D viewport" />;
+  return <div ref={mountRef} className="scene-mount" role="img" aria-label="3D map of the city and its transit lines" />;
 }

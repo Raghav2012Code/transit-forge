@@ -10,6 +10,7 @@ import type {
   Station,
   TransportRoute,
   TripCounters,
+  TripRecord,
   VehicleState,
 } from '../types/index.ts';
 import { generateCity } from './city/generateCity.ts';
@@ -59,6 +60,8 @@ export interface SimulationState {
   edgeState: Record<string, RoadEdgeState>;
   cars: CarTrip[];
   nextCarId: number;
+  /** The last finished trips, newest last, for the trip inspector (bounded). */
+  recentTrips: TripRecord[];
   roadCounters: RoadCounters;
   zoneRoadAccess: Record<string, string>;
   busRoadMap: Record<string, string[]>;
@@ -215,6 +218,7 @@ export function createSimulationFromParts(
     edgeState: buildEdgeStates(roadGraph),
     cars: [],
     nextCarId: 1,
+    recentTrips: [],
     roadCounters: emptyRoadCounters(),
     zoneRoadAccess: buildZoneRoadAccess(city),
     busRoadMap: buildBusRoadMap(net.routes, stationPos, roadGraph, city),
