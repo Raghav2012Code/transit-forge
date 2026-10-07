@@ -3,6 +3,7 @@ import type { CompareRow } from '../scenario/compare.ts';
 import type { EditOp } from '../scenario/scenario.ts';
 import type { IncidentConfig } from '../incidents/incidents.ts';
 import type { Objective, PlanConstraint } from './objectives.ts';
+import { storageRead, storageWrite } from '../scenario/store.ts';
 
 export interface PlanAttempt {
   atClock: string;
@@ -34,26 +35,16 @@ interface Envelope {
 }
 
 function readEnvelope(): Envelope {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { version: 1, plans: [] };
-    const parsed = JSON.parse(raw) as Envelope;
-    if (parsed.version !== 1 || !Array.isArray(parsed.plans)) return { version: 1, plans: [] };
-    return {
-      version: 1,
-      plans: parsed.plans.filter((p) => p && typeof p.id === 'string' && Array.isArray(p.ops) && Array.isArray(p.attempts)),
-    };
-  } catch {
-    return { version: 1, plans: [] };
-  }
+  const parsed = storageRead<Envelope>(KEY, { version: 1, plans: [] });
+  if (parsed.version !== 1 || !Array.isArray(parsed.plans)) return { version: 1, plans: [] };
+  return {
+    version: 1,
+    plans: parsed.plans.filter((p) => p && typeof p.id === 'string' && Array.isArray(p.ops) && Array.isArray(p.attempts)),
+  };
 }
 
 function writeEnvelope(env: Envelope): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(env));
-  } catch {
-    // Storage full or unavailable: plans stay session-local.
-  }
+  storageWrite(KEY, env);
 }
 
 export function listPlans(): SavedPlan[] {

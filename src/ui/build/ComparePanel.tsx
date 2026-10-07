@@ -1,6 +1,7 @@
 import type { CompareRow } from '../../simulation/scenario/compare.ts';
 import type { PlanningScore, PopulationImpact } from '../../simulation/analytics/impact.ts';
 import type { SimStats } from '../../types/index.ts';
+import { compareTone } from './compareTone.ts';
 
 export interface CompareResult {
   rows: CompareRow[];
@@ -24,6 +25,16 @@ interface Props {
   onHorizon: (y: number) => void;
   splitView: boolean;
   onSplitView: (v: boolean) => void;
+}
+
+export function ScoreParts({ score }: { score: PlanningScore }) {
+  return (
+    <ul className="tf-score-parts">
+      {score.parts.map((p) => (
+        <li key={p.label}>{p.label} {p.value} × {Math.round(p.weight * 100)}%</li>
+      ))}
+    </ul>
+  );
 }
 
 export default function ComparePanel({ result, running, progress, onRun, viewing, onView, hasEdits, horizonYears, onHorizon, splitView, onSplitView }: Props) {
@@ -78,26 +89,19 @@ export default function ComparePanel({ result, running, progress, onRun, viewing
             </thead>
             <tbody>
               {result.rows.map((r) => {
-                const good = r.better && r.pct !== null && r.pct !== 0 &&
-                  ((r.better === 'down' && r.pct < 0) || (r.better === 'up' && r.pct > 0));
-                const bad = r.better && r.pct !== null && r.pct !== 0 && !good;
                 return (
                   <tr key={r.label}>
                     <td>{r.label}</td>
                     <td>{r.base}</td>
                     <td>{r.mod}</td>
-                    <td className={good ? 'tf-good' : bad ? 'tf-bad' : ''}>{r.delta}</td>
+                    <td className={compareTone(r)}>{r.delta}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
           <h5>Score breakdown (new)</h5>
-          <ul className="tf-score-parts">
-            {result.modScore.parts.map((p) => (
-              <li key={p.label}>{p.label} {p.value} × {Math.round(p.weight * 100)}%</li>
-            ))}
-          </ul>
+          <ScoreParts score={result.modScore} />
           <p className="tf-hint">
             {result.impact.improvedPop.toLocaleString()} improved · {result.impact.worsenedPop.toLocaleString()} worsened ·{' '}
             {result.impact.newlyCoveredPop.toLocaleString()} newly covered

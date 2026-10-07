@@ -94,7 +94,7 @@ import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
 import ServicePanel from './ui/service/ServicePanel.tsx';
 import FaresPanel from './ui/service/FaresPanel.tsx';
 import SimulateHome from './ui/panel/SimulateHome.tsx';
-import { MODE_LABEL, type AppMode as Mode } from './ui/shell/modes.ts';
+import { modeLabel, type AppMode as Mode } from './ui/shell/modes.ts';
 import TopBar from './ui/shell/TopBar.tsx';
 import Workbench from './ui/shell/Workbench.tsx';
 import DayBar from './ui/shell/DayBar.tsx';
@@ -117,8 +117,7 @@ import SearchPalette from './ui/map/SearchPalette.tsx';
 import CompareSplit from './ui/map/CompareSplit.tsx';
 import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './rendering/SceneView.tsx';
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
-import ReportsSheet from './ui/shell/ReportsSheet.tsx';
-import { type ReportTab } from './ui/shell/reportTabs.ts';
+import ReportsSheet, { type ReportTab } from './ui/shell/ReportsSheet.tsx';
 import type { Command } from './ui/shell/commands.ts';
 import { PRESETS } from './ui/map/places.ts';
 import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme.ts';
@@ -2519,7 +2518,7 @@ export default function App() {
           </ReportsSheet>
         )}
       </main>
-      <aside className="tf-panel" ref={railRef} tabIndex={-1} aria-label={selection ? 'Details' : `${MODE_LABEL[mode]} panel`}>
+      <aside className="tf-panel" ref={railRef} tabIndex={-1} aria-label={selection ? 'Details' : `${modeLabel(mode)} panel`}>
           {(mode === 'simulate' || mode === 'plan') && selectionBlock}
           {mode === 'simulate' ? (
             selection ? null : (

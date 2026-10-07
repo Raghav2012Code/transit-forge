@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { Layers, Overlay } from '../../rendering/SceneView.tsx';
 import LayerToggles from '../controls/LayerToggles.tsx';
 import LensMenu from '../controls/LensMenu.tsx';
+import Seg from '../controls/Seg.tsx';
 import { lensLabel, PRIMARY_LENSES } from '../controls/lenses.ts';
 import { IconChevron, IconLayers } from '../shell/icons.tsx';
 import Popover from '../shell/Popover.tsx';
@@ -25,20 +26,15 @@ export default function LensBar({ overlay, onOverlay, layers, onLayers, children
   return (
     <div className="tf-lens">
       <div className="tf-lens-row">
-        <div className="tf-seg tf-lens-seg" role="radiogroup" aria-label="Map lens">
-          {PRIMARY_LENSES.map((k) => (
-            <button
-              key={k}
-              type="button"
-              role="radio"
-              aria-checked={overlay === k}
-              className="tf-seg-item"
-              onClick={() => onOverlay(k)}
-            >
-              {lensLabel(k)}
-            </button>
-          ))}
-        </div>
+        <Seg
+          label="Map lens"
+          items={PRIMARY_LENSES.map((k) => ({ key: k, label: lensLabel(k) }))}
+          active={overlay}
+          onPick={onOverlay}
+          wrap={false}
+          bare
+          className="tf-lens-seg"
+        />
         <Popover
           label="All lenses"
           trigger={(props, open) => (

@@ -257,6 +257,13 @@ export interface CityData {
   buildings: Building[];
   river: Vec3[];
   bridges: { id: string; a: Vec3; b: Vec3 }[];
+  /** Shoreline, north to south: land lies east of it, sea to the west. */
+  coast: Vec3[];
+  /** Local streets between blocks (the arterial grid is `roadEdges`). */
+  streets: Street[];
+  parks: Park[];
+  /** Runways, taxiways and piers: paved strips that are not streets. */
+  landmarks: Landmark[];
 }
 
 export interface Building {
@@ -265,6 +272,28 @@ export interface Building {
   d: number;
   h: number;
   district: DistrictKind;
+  /** Yaw in radians; footprints follow their district's street grid. */
+  rot: number;
+}
+
+export interface Street {
+  a: Vec3;
+  b: Vec3;
+  w: number;
+}
+
+export interface Park {
+  pos: Vec3;
+  w: number;
+  d: number;
+  rot: number;
+}
+
+export interface Landmark {
+  kind: 'runway' | 'taxiway' | 'pier';
+  a: Vec3;
+  b: Vec3;
+  w: number;
 }
 
 export interface SimStats {

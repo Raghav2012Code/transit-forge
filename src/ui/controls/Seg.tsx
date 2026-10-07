@@ -5,6 +5,8 @@ export default function Seg<T extends string>({
   active,
   onPick,
   wrap = true,
+  bare = false,
+  className = '',
 }: {
   label: string;
   items: { key: T; label: string }[];
@@ -12,24 +14,32 @@ export default function Seg<T extends string>({
   onPick: (k: T) => void;
   /** Three columns that wrap, for long lists; off for a single compact row. */
   wrap?: boolean;
+  /** Skip the group wrapper and visible label; the row keeps the label as its name. */
+  bare?: boolean;
+  /** Extra class on the row itself (e.g. a lens tint). */
+  className?: string;
 }) {
+  const row = (
+    <div className={`tf-seg${wrap ? ' wrap' : ''}${className ? ` ${className}` : ''}`} role="radiogroup" aria-label={label}>
+      {items.map((it) => (
+        <button
+          key={it.key}
+          type="button"
+          role="radio"
+          aria-checked={active === it.key}
+          className="tf-seg-item"
+          onClick={() => onPick(it.key)}
+        >
+          {it.label}
+        </button>
+      ))}
+    </div>
+  );
+  if (bare) return row;
   return (
     <div className="tf-overlay-group">
       <span className="tf-overlay-group-label">{label}</span>
-      <div className={`tf-seg${wrap ? ' wrap' : ''}`} role="radiogroup" aria-label={label}>
-        {items.map((it) => (
-          <button
-            key={it.key}
-            type="button"
-            role="radio"
-            aria-checked={active === it.key}
-            className="tf-seg-item"
-            onClick={() => onPick(it.key)}
-          >
-            {it.label}
-          </button>
-        ))}
-      </div>
+      {row}
     </div>
   );
 }

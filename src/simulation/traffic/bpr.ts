@@ -15,10 +15,6 @@ export function bprRatio(vc: number, params: CongestionParams = DEFAULT_BPR): nu
   return 1 + params.alpha * Math.pow(x, params.beta);
 }
 
-export function congestedMinutes(freeMin: number, vc: number, params: CongestionParams = DEFAULT_BPR): number {
-  return freeMin * bprRatio(vc, params);
-}
-
 export function congestionLevel(vc: number): CongestionLevel {
   if (vc < 0.4) return 'free';
   if (vc < 0.65) return 'light';

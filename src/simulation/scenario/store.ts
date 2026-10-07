@@ -4,29 +4,37 @@ import type { Scenario } from './scenario.ts';
 
 const KEY = 'transitforge.scenarios.v1';
 
+export function storageRead<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function storageWrite(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Storage full or unavailable: stays session-local.
+  }
+}
+
 interface Envelope {
   version: 1;
   scenarios: Scenario[];
 }
 
 function readEnvelope(): Envelope {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return { version: 1, scenarios: [] };
-    const parsed = JSON.parse(raw) as Envelope;
-    if (parsed.version !== 1 || !Array.isArray(parsed.scenarios)) return { version: 1, scenarios: [] };
-    return { version: 1, scenarios: parsed.scenarios.filter((s) => s && s.version === 1 && Array.isArray(s.ops)) };
-  } catch {
-    return { version: 1, scenarios: [] };
-  }
+  const parsed = storageRead<Envelope>(KEY, { version: 1, scenarios: [] });
+  if (parsed.version !== 1 || !Array.isArray(parsed.scenarios)) return { version: 1, scenarios: [] };
+  return { version: 1, scenarios: parsed.scenarios.filter((s) => s && s.version === 1 && Array.isArray(s.ops)) };
 }
 
 function writeEnvelope(env: Envelope): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(env));
-  } catch {
-    // Storage full or unavailable: scenarios stay session-local.
-  }
+  storageWrite(KEY, env);
 }
 
 export function listScenarios(): Scenario[] {

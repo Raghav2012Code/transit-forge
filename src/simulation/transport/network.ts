@@ -8,7 +8,7 @@ function v(x: number, z: number): Vec3 {
   return { x, y: 0, z };
 }
 
-function distM(a: Vec3, b: Vec3): number {
+export function distM(a: Vec3, b: Vec3): number {
   return Math.hypot(a.x - b.x, a.z - b.z);
 }
 

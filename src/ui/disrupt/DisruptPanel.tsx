@@ -42,10 +42,6 @@ interface Props {
   onCompareResilience: () => void;
 }
 
-function fmt(t: number): string {
-  return formatClock(t);
-}
-
 export default function DisruptPanel(p: Props) {
   const d = p.draft;
   const set = (patch: Partial<IncidentDraft>) => p.onDraft({ ...d, ...patch });
@@ -199,7 +195,7 @@ export default function DisruptPanel(p: Props) {
             </button>
             <span className="tf-hint">{inc.status}</span>
           </div>
-          <div className="tf-hint">{fmt(inc.startMin)}–{fmt(inc.startMin + inc.durationMin)}, severity {(inc.severity01 * 100).toFixed(0)}%</div>
+          <div className="tf-hint">{formatClock(inc.startMin)}–{formatClock(inc.startMin + inc.durationMin)}, severity {(inc.severity01 * 100).toFixed(0)}%</div>
           {p.selectedIncidentId === inc.id && (
             <IncidentDetail
               sim={p.sim}
@@ -266,7 +262,7 @@ export default function DisruptPanel(p: Props) {
       <ol className="tf-ranked">
         {[...p.sim.events].reverse().slice(0, 30).map((e, i) => (
           <li key={`${e.t}-${i}`}>
-            <span className="tf-hint">{fmt(e.t)}</span> {e.level === 'warn' ? '⚠ ' : ''}{e.text}
+            <span className="tf-hint">{formatClock(e.t)}</span> {e.level === 'warn' ? '⚠ ' : ''}{e.text}
           </li>
         ))}
       </ol>

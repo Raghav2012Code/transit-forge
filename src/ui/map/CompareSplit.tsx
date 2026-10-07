@@ -49,7 +49,6 @@ export default function CompareSplit(p: SplitViewProps) {
   useEffect(() => {
     baseRef.current = p.baseSim;
   }, [p.baseSim]);
-  const noopDraft = null;
   return (
     <div className="tf-split">
       <div className="tf-split-pane">
@@ -65,7 +64,7 @@ export default function CompareSplit(p: SplitViewProps) {
           ghosts={[]}
           highlightRoutes={[]}
           build={null}
-          draft={noopDraft}
+          draft={null}
           analytics={null}
           cameraCmd={p.cameraCmd}
           onCamera={null}

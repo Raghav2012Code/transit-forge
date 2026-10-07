@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { CarTrip, CityData } from '../../types/index.ts';
 import type { ScenePalette } from '../palette.ts';
+import { merge } from '../transport/sweep.ts';
 
 /** Representative subset of cars as one InstancedMesh (never one object per car). */
 export const MAX_VISIBLE_CARS = 60;
@@ -15,11 +16,20 @@ export function buildCarRig(city: CityData, palette: ScenePalette): CarRig {
   const MARK = palette.mark;
   const group = new THREE.Group();
   group.name = 'cars';
-  const geo = new THREE.BoxGeometry(4, 1.6, 2);
-  geo.translate(0, 1.2, 0);
-  const mat = new THREE.MeshStandardMaterial({ color: MARK.car, emissive: MARK.car, emissiveIntensity: 0.1 });
+  // A saloon: body, glass cabin, long axis +x. Vertex colours carry body (1) and glass (dark).
+  const part = (w: number, h: number, d: number, x: number, y: number, shade: number) => {
+    const g = new THREE.BoxGeometry(w, h, d).toNonIndexed();
+    g.translate(x, y + h / 2, 0);
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(shade), 3));
+    return g;
+  };
+  const geo = merge([part(4.2, 0.85, 1.9, 0, 0.35, 1), part(2.3, 0.7, 1.7, -0.2, 1.2, 0.16), part(2.1, 0.12, 1.55, -0.2, 1.9, 0.9)]);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, vertexColors: true });
   const mesh = new THREE.InstancedMesh(geo, mat, MAX_VISIBLE_CARS);
+  mesh.castShadow = true;
   mesh.frustumCulled = false;
+  const paints = [MARK.car, 0xe5e8ec, 0x9aa3b0, 0x4b5563, 0xc7ccd4, 0x7b8696];
+  for (let i = 0; i < MAX_VISIBLE_CARS; i++) mesh.setColorAt(i, new THREE.Color(paints[i % paints.length]));
   group.add(mesh);
   const nodePos = new Map(city.roadNodes.map((n) => [n.id, { x: n.pos.x, z: n.pos.z }]));
   return { group, mesh, nodePos };
@@ -45,8 +55,12 @@ export function updateCarRig(rig: CarRig, cars: CarTrip[], edgeLen: Map<string, 
       continue;
     }
     const f = Math.min(1, Math.max(0, car.s / Math.max(1, len)));
-    dummy.position.set(from.x + (to.x - from.x) * f, 0.6, from.z + (to.z - from.z) * f);
-    dummy.rotation.set(0, -Math.atan2(to.z - from.z, to.x - from.x), 0);
+    // Drive on the right: a lane's width off the centre line.
+    const dx = to.x - from.x;
+    const dz = to.z - from.z;
+    const dl = Math.hypot(dx, dz) || 1;
+    dummy.position.set(from.x + dx * f - (dz / dl) * 1.5, 0.5, from.z + dz * f + (dx / dl) * 1.5);
+    dummy.rotation.set(0, -Math.atan2(dz, dx), 0);
     dummy.scale.set(1, 1, 1);
     dummy.updateMatrix();
     rig.mesh.setMatrixAt(slot, dummy.matrix);

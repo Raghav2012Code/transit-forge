@@ -19,9 +19,7 @@ export const MODES: readonly ModeInfo[] = [
   { key: 'plan', label: 'Plan', hotkey: 'P', icon: IconPlan, blurb: 'Pick a brief, build against it, then submit.' },
 ];
 
-export const MODE_LABEL: Record<AppMode, string> = {
-  simulate: 'Simulate',
-  build: 'Build',
-  disrupt: 'Disrupt',
-  plan: 'Plan',
-};
+/** The name on the panel and rail for a mode; derived so labels live in one place. */
+export function modeLabel(key: AppMode): string {
+  return MODES.find((m) => m.key === key)?.label ?? key;
+}
