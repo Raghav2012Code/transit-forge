@@ -6,6 +6,7 @@ import type { FarePolicy } from '../economics/fares.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
 import type { IncidentConfig } from '../incidents/incidents.ts';
 import { clampHeadway } from '../service/servicePlan.ts';
+import { CITY_BOUNDS, coastXAt, riverCentreX, RIVER_HALF_M } from '../city/geography.ts';
 
 export type RoadKind = 'local' | 'arterial' | 'highway';
 
@@ -162,16 +163,16 @@ export function formatCost(inr: number): string {
   return `₹${Math.round(inr / 1_00_000)}L`;
 }
 
-/** Placement rules shared by UI preview and apply (single source of truth). */
+/** Placement rules shared by UI preview and apply (single source of truth). Water and river come from the drawn geography. */
 export function validateStationPlacement(x: number, z: number): string | null {
-  if (Math.abs(x) > 600 || Math.abs(z) > 420) return 'Outside city bounds';
-  if (x < -300) return 'Cannot build on water';
-  if (Math.abs(x - 120) < 30) return 'Too close to the river';
+  if (Math.abs(x) > CITY_BOUNDS.x || Math.abs(z) > CITY_BOUNDS.z) return 'Outside city bounds';
+  if (x < coastXAt(z) + 10) return 'Cannot build on water';
+  if (Math.abs(x - riverCentreX(z)) < RIVER_HALF_M + 12) return 'Too close to the river';
   return null;
 }
 
 export function validateRoadNode(x: number, z: number): string | null {
-  if (Math.abs(x) > 600 || Math.abs(z) > 420) return 'Outside city bounds';
-  if (x < -300) return 'Cannot build on water';
+  if (Math.abs(x) > CITY_BOUNDS.x || Math.abs(z) > CITY_BOUNDS.z) return 'Outside city bounds';
+  if (x < coastXAt(z) + 4) return 'Cannot build on water';
   return null;
 }

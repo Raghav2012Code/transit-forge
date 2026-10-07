@@ -24,14 +24,17 @@ stop delay incidents, reliability draws and cancellations (at terminus
 turnarounds only), reflection at the ends of ping-pong routes, `vehKm` and
 `vehHr` counters. A turnaround still serves the terminus once.
 
-Loop routes (`LOOP_ROUTES`, only `rt-b1`): the loop length gains a closing leg
-from the last station back to the first. `routeLengths` and `routeCumDist` for
-a loop get one extra entry; connections are unchanged (routing never rides the
-closing leg). Vehicles on the closing leg carry riders as usual and serve the
-first station on arrival.
+Loop routes: B1 was the only one and had no closing leg, so it teleported. Rather
+than add a leg to routing, sizing and timetables, every line runs out and back as
+it is drawn (`LOOP_ROUTES` is empty; the unused loop code stays).
+
+Two more rules fell out of the first. A terminus takes the plan's turnaround (it
+was used only for fleet sizing). A vehicle standing at a platform keeps boarding
+people who arrive during its dwell, each costing its per-boarding time; without
+this a three-minute turnaround means nobody can board.
 
 Determinism: still seed 1337, no `Math.random()`. Results shift because dwell
-now applies at every stop; this is the point and is recorded in ADR 0002.
+now applies at every stop and B1 runs out and back; recorded in ADR 0002.
 
 ## 2. Placement checks match the drawn map
 
@@ -59,8 +62,8 @@ explained.
 - Vehicle crossing three stations in a tick serves all three, each with its own
   dwell, and a 1-minute tick never advances time past budget.
 - A vehicle whose dwell exceeds the tick carries the rest to the next tick.
-- Loop route: length equals chain plus closing leg; a vehicle completes a lap and
-  serves station 0 without a position jump larger than one tick of travel.
+- No vehicle ever moves further than a tick of travel, stands still anywhere but on a
+  station, or turns round anywhere but at an end; no line runs faster than its cycle.
 - Placement: points on the drawn coast and river are rejected, points just inland
   are accepted.
 - Existing suites stay green; run-length thresholds are updated only where the

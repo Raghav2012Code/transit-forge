@@ -571,14 +571,19 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const a = rep ? net.stationMeshById.get(rep.fromStationId) : undefined;
           const b = rep ? net.stationMeshById.get(rep.toStationId) : undefined;
           if (a && b) {
-            const line = new THREE.Line(
-              new THREE.BufferGeometry().setFromPoints([
-                a.position.clone().setY(9),
-                b.position.clone().setY(9),
-              ]),
-              new THREE.LineBasicMaterial({ color: 0xf472b6 }),
+            // The shuttle runs at street level on its own alignment, like any bus line.
+            const curve = buildTrackCurve(
+              [{ x: a.position.x, z: a.position.z }, { x: b.position.x, z: b.position.z }],
+              MODE_Y.bus,
             );
-            incidentGroup.add(line);
+            if (curve) {
+              incidentGroup.add(
+                new THREE.Mesh(
+                  sweep(curve, rectProfile(3.4, 0, 0.12), MODE_Y.bus + 0.2, 0, curve.length, 3),
+                  new THREE.MeshBasicMaterial({ color: 0xf472b6 }),
+                ),
+              );
+            }
           }
         }
       }

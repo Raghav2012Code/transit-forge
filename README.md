@@ -93,8 +93,8 @@ npm run build
 - World geography is compact (~1.2 km across), so absolute travel times read
   low (a few minutes cross-city). A world-scale pass (×5–6 coordinates with
   matched camera/fog/building density) should precede any fare/economics work.
-- Buses run ping-pong/loop approximations; no dwell timetables or headway
-  control yet. No congestion/BPR, no scenario editing.
+- Vehicles are drawn on each line's schedule rather than at their simulation
+  positions (the map is compact; see `docs/adr/0001`).
 
 ## Test
 

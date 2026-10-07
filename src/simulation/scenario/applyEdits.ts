@@ -8,6 +8,7 @@ import type {
   TransportRoute,
   Vec3,
 } from '../../types/index.ts';
+import { crossesRiver } from '../city/geography.ts';
 import { connectionsForRoute, type NetworkData } from '../transport/network.ts';
 import { defaultPlanFor } from '../service/servicePlan.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
@@ -249,14 +250,13 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
           warnings.push(`Road ${e.id} too short, skipped`);
           continue;
         }
-        const midX = (a.x + b.x) / 2;
         roadEdges.push({
           id: e.id,
           a: e.a,
           b: e.b,
           lengthM,
           lanes: ROAD_LANES[e.kind],
-          isBridge: Math.abs(midX - 120) < 40,
+          isBridge: crossesRiver(a.x, a.z, b.x, b.z),
           isArterial: e.kind !== 'local',
         });
         cost += lengthM * COST_RATES.roadPerM[e.kind];

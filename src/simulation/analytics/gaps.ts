@@ -3,6 +3,7 @@
 // Deterministic: fixed grid order, Dijkstra ties break deterministically.
 import type { Connection, Station, TransportRoute, Zone } from '../../types/index.ts';
 import { planTrip, walkMin } from '../passengers/passengers.ts';
+import { coastXAt, riverCentreX, RIVER_HALF_M } from '../city/geography.ts';
 
 export interface GapCandidate {
   x: number;
@@ -23,9 +24,6 @@ export interface GapInput {
   routes: TransportRoute[];
 }
 
-const WATER_X = -300;
-const RIVER_X = 120;
-const RIVER_HALF = 30;
 
 export function findTransitGaps(input: GapInput, cellM = 60, top = 8): GapCandidate[] {
   const { zones, stations, connections, routes } = input;
@@ -42,7 +40,7 @@ export function findTransitGaps(input: GapInput, cellM = 60, top = 8): GapCandid
   const cells: GapCandidate[] = [];
   for (const z of zs) {
     for (const x of xs) {
-      if (x < WATER_X || Math.abs(x - RIVER_X) < RIVER_HALF) continue;
+      if (x < coastXAt(z) + 8 || Math.abs(x - riverCentreX(z)) < RIVER_HALF_M + 10) continue;
       const zone = zones.find((zn) => Math.hypot(zn.center.x - x, zn.center.z - z) <= zn.radius);
       if (!zone) continue;
       const area = Math.PI * zone.radius * zone.radius;
