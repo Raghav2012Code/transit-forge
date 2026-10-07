@@ -3,6 +3,8 @@ import type { CityProblem } from '../../simulation/planning/problems.ts';
 import type { TransportRoute } from '../../types/index.ts';
 import Dock from '../shell/Dock.tsx';
 import { RouteRef } from '../shell/RouteBullet.tsx';
+import TripList from '../inspectors/TripList.tsx';
+import type { TripKind, TripRow } from '../inspectors/trips.ts';
 
 interface Props {
   routes: TransportRoute[];
@@ -15,6 +17,9 @@ interface Props {
   onLocateProblem: (p: CityProblem) => void;
   /** The network-wide fares panel. */
   fares: ReactNode;
+  /** The last finished trips, newest first. */
+  recentTrips: TripRow[];
+  onOpenTrip: (id: number, kind: TripKind) => void;
 }
 
 /**
@@ -22,7 +27,7 @@ interface Props {
  * look. Lines lead to their service plans, problems lead to the map, and the
  * one network-wide lever (fares) sits last.
  */
-export default function SimulateHome({ routes, peakHeadway, boardings, problems, onSelectRoute, onLocateProblem, fares }: Props) {
+export default function SimulateHome({ routes, peakHeadway, boardings, problems, onSelectRoute, onLocateProblem, fares, recentTrips, onOpenTrip }: Props) {
   const top = problems.slice(0, 5);
   return (
     <div className="tf-home">
@@ -66,6 +71,11 @@ export default function SimulateHome({ routes, peakHeadway, boardings, problems,
       </Dock>
 
       {fares}
+
+      <Dock title="Recent trips" meta={recentTrips.length > 0 ? String(recentTrips.length) : undefined} defaultOpen={false}>
+        <TripList rows={recentTrips} onOpen={onOpenTrip} empty="No trip has finished yet. Run the day and check back." />
+        <p className="tf-hint">Pick a trip to see why it happened.</p>
+      </Dock>
     </div>
   );
 }

@@ -61,3 +61,46 @@
 /* Long labels ("M1 Metro Blue toward North Residences") wrap instead of pushing the panel sideways. */
 .tf-inspector .tf-stat-row:not(.stacked) dt { flex: 1 1 auto; min-width: 0; white-space: normal; }
 .tf-inspector .tf-stat-row:not(.stacked) dd { flex: none; max-width: 60%; }
+
+/* trips: a list of people, and one trip explained */
+.tf-trip-list { margin: 0; padding: 0; list-style: none; }
+.tf-trip {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  width: 100%;
+  padding: 5px 0;
+  font: inherit;
+  font-size: var(--fs-small);
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--rule-soft);
+  cursor: pointer;
+}
+.tf-trip:hover .tf-trip-label { text-decoration: underline; text-underline-offset: 2px; }
+.tf-trip-hint {
+  flex: none;
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.tf-trip-hint.watch { color: var(--watch-ink); }
+.tf-trip-hint.alert { color: var(--alert); font-weight: 500; }
+
+.tf-trip-facts { margin: 0; padding: 0; list-style: none; }
+.tf-trip-facts li {
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+}
+.tf-trip-facts li:last-child { border-bottom: 0; }
+.tf-trip-facts li.watch { color: var(--watch-ink); }
+.tf-trip-facts li.alert { color: var(--alert); font-weight: 500; }
+.tf-trip-leg { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-4); }
