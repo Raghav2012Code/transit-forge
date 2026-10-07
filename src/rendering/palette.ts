@@ -15,7 +15,23 @@ export interface ScenePalette {
     roadLocal: number;
     roadArterial: number;
     bridge: number;
+    /** Kerb and pavement beside roads, quay edge along the water. */
+    sidewalk: number;
+    marking: number;
+    park: number;
+    /** Embankment either side of the river, and the beach strip. */
+    bank: number;
+    shore: number;
+    /** The slab the city stands on, seen from the side. */
+    plateEdge: number;
+    runway: number;
+    tree: number;
+    treeDark: number;
+    /** Container stacks at the harbour. */
+    container: [number, number, number];
   };
+  /** Viaducts, piers and platforms: neutral concrete, so the line colour carries. */
+  track: { deck: number; pier: number; platform: number; canopy: number };
   district: Record<'cbd' | 'residential' | 'industrial' | 'university' | 'airport' | 'harbor' | 'suburban', number>;
   /** Stations contrast with the ground: ink on paper, pale on the dark plate. */
   station: { regular: number; interchange: number; glow: number };
@@ -33,7 +49,7 @@ export interface ScenePalette {
     measureText: string;
     measureEdge: string;
   };
-  lighting: { ambient: number; sun: number; fogNear: number; fogFar: number };
+  lighting: { ambient: number; hemi: number; sun: number; fogNear: number; fogFar: number };
 }
 
 const LIGHT: ScenePalette = {
@@ -45,7 +61,18 @@ const LIGHT: ScenePalette = {
     roadLocal: 0xc3c7cd,
     roadArterial: 0xa6acb5,
     bridge: 0x99a1ab,
+    sidewalk: 0xe3e6ea,
+    marking: 0xf7f8f9,
+    park: 0xd3ddd0,
+    bank: 0xc4cfd9,
+    shore: 0xe2e5e8,
+    plateEdge: 0xaab1ba,
+    runway: 0x8a9099,
+    tree: 0xb5c4b2,
+    treeDark: 0x9db09b,
+    container: [0x9fa9b8, 0xb7ab97, 0x8d9aa8],
   },
+  track: { deck: 0xb4bbc5, pier: 0xa0a8b3, platform: 0xd4d8de, canopy: 0xf1f3f5 },
   district: {
     cbd: 0x8ea4d0,
     residential: 0xc6cbd5,
@@ -55,7 +82,7 @@ const LIGHT: ScenePalette = {
     harbor: 0xa5bfd5,
     suburban: 0xd5d8df,
   },
-  station: { regular: 0x4b5563, interchange: 0x1f2937, glow: 0x334155 },
+  station: { regular: 0xaab3bf, interchange: 0x8691a0, glow: 0x334155 },
   mark: { amber: 0xd48806, blue: 0x1b6fc4, green: 0x0e7a52, car: 0x6b7280 },
   ramp: { blueLow: 0xdfe7f5, blueHigh: 0x1e3a8a, greenLow: 0xdcefe3, greenHigh: 0x14532d, none: 0x9aa3b2 },
   label: {
@@ -68,7 +95,7 @@ const LIGHT: ScenePalette = {
     measureText: '#1b2026',
     measureEdge: '#1b6fc4',
   },
-  lighting: { ambient: 1.6, sun: 1.5, fogNear: 900, fogFar: 1900 },
+  lighting: { ambient: 0.35, hemi: 1.15, sun: 2.3, fogNear: 1100, fogFar: 2300 },
 };
 
 const DARK: ScenePalette = {
@@ -80,11 +107,22 @@ const DARK: ScenePalette = {
     roadLocal: 0x2a3552,
     roadArterial: 0x39496e,
     bridge: 0x8b9cc7,
+    sidewalk: 0x3a4666,
+    marking: 0x9aa7c4,
+    park: 0x1f3a3a,
+    bank: 0x1a2c4d,
+    shore: 0x2b3656,
+    plateEdge: 0x0b0f1a,
+    runway: 0x2a3148,
+    tree: 0x3a5f58,
+    treeDark: 0x2c4a47,
+    container: [0x4a5878, 0x6b5b45, 0x3f6a78],
   },
+  track: { deck: 0x56627f, pier: 0x47526e, platform: 0x7886a8, canopy: 0x9fb0d4 },
   district: {
     cbd: 0x5b7fc4,
     residential: 0x3d4a6b,
-    industrial: 0x7a6a55,
+    industrial: 0x625748,
     university: 0x5f8f7b,
     airport: 0x6b7280,
     harbor: 0x4f7fa3,
@@ -103,7 +141,7 @@ const DARK: ScenePalette = {
     measureText: '#dbe4ff',
     measureEdge: '#6ea8fe',
   },
-  lighting: { ambient: 0.75, sun: 1.4, fogNear: 700, fogFar: 1600 },
+  lighting: { ambient: 0.3, hemi: 0.8, sun: 1.7, fogNear: 900, fogFar: 2000 },
 };
 
 export function getPalette(theme: Theme): ScenePalette {

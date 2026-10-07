@@ -1,36 +1,115 @@
 import * as THREE from 'three';
-import type { Station, TransportRoute, VehicleState } from '../../types/index.ts';
-import { routePoints } from '../transport/buildNetwork.ts';
+import type { Station, TransportMode, TransportRoute, VehicleState } from '../../types/index.ts';
+import { routeCurve } from '../transport/buildNetwork.ts';
+import type { TrackCurve } from '../transport/trackPath.ts';
+import { merge } from '../transport/sweep.ts';
+import { buildSchedule, type Schedule } from './schedule.ts';
 
 export interface RoutePath {
-  pts: THREE.Vector3[];
-  cum: number[];
+  /** The alignment the line is drawn on; null for a route with fewer than two stops. */
+  curve: TrackCurve | null;
   total: number;
-  /**
-   * The same smoothed curve the route-line mesh is drawn from. Vehicles are
-   * placed on this curve (by fraction of route completed) so moving traffic
-   * always matches the drawn line, even through bends.
-   */
-  curve: THREE.CatmullRomCurve3 | null;
 }
 
 export interface VehicleRig {
   group: THREE.Group;
   meshById: Map<string, THREE.Mesh>;
   segmentsByRoute: Map<string, RoutePath>;
+  /** One consist per mode and line colour: the colour is painted into the vertices. */
+  geometries: Map<string, THREE.BufferGeometry>;
+  schedules: Map<string, { cycle: number; curve: TrackCurve; schedule: Schedule }>;
+}
+
+interface Consist {
+  cars: number;
+  length: number;
+  width: number;
+  height: number;
+}
+
+const CONSIST: Record<TransportMode, Consist> = {
+  metro: { cars: 3, length: 7.6, width: 2.8, height: 3.2 },
+  rail: { cars: 4, length: 8.4, width: 3.0, height: 3.5 },
+  bus: { cars: 1, length: 7.6, width: 2.6, height: 3.1 },
+  road: { cars: 1, length: 4, width: 2, height: 1.6 },
+};
+/** How far the wheels sit above the path: the thickness of the painted band. */
+const RIDE: Record<TransportMode, number> = { metro: 0.5, rail: 0.5, bus: 0.1, road: 0 };
+const COUPLING = 0.4;
+
+function box(w: number, h: number, d: number, y: number, z: number, rgb: THREE.Color): THREE.BufferGeometry {
+  const g = new THREE.BoxGeometry(w, h, d);
+  g.translate(0, y + h / 2, z);
+  const out = g.toNonIndexed();
+  const n = out.attributes.position.count;
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    col[i * 3] = rgb.r;
+    col[i * 3 + 1] = rgb.g;
+    col[i * 3 + 2] = rgb.b;
+  }
+  out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return out;
+}
+
+const BODY = new THREE.Color(0xe9edf2);
+const GLASS = new THREE.Color(0x2a3140);
+const ROOF = new THREE.Color(0xc4cbd6);
+const RUNNING = new THREE.Color(0x3b4250);
+
+/**
+ * One consist, long axis +z, wheels on y = 0, centred on its length. Pale
+ * body, dark glazing, and the line's colour as a stripe and a cab band, the
+ * way a real fleet wears its livery, so a train never vanishes into its line.
+ */
+function consistGeometry(mode: TransportMode, line: THREE.Color): THREE.BufferGeometry {
+  const c = CONSIST[mode];
+  const total = c.cars * c.length + (c.cars - 1) * COUPLING;
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < c.cars; i++) {
+    const z = -total / 2 + c.length / 2 + i * (c.length + COUPLING);
+    const body = c.height * 0.58;
+    parts.push(box(c.width, body, c.length, 0.4, z, BODY));
+    parts.push(box(c.width + 0.06, 0.34, c.length - 0.1, 0.62, z, line));
+    parts.push(box(c.width + 0.05, c.height * 0.26, c.length - 1.1, 0.4 + body, z, GLASS));
+    parts.push(box(c.width * 0.84, 0.28, c.length - 0.2, 0.4 + body + c.height * 0.26, z, ROOF));
+    for (const off of [-1, 1]) {
+      parts.push(box(c.width * 0.7, 0.42, 2, 0, z + off * (c.length / 2 - 1.6), RUNNING));
+      if (i === 0 && off === -1 || i === c.cars - 1 && off === 1) {
+        // Cab end: a band of line colour across the nose.
+        parts.push(box(c.width + 0.08, c.height * 0.26, 0.5, 0.4 + body, z + off * (c.length / 2 - 0.3), line));
+      }
+    }
+  }
+  for (let i = 0; i < c.cars - 1; i++) {
+    const z = -total / 2 + c.length + COUPLING / 2 + i * (c.length + COUPLING);
+    parts.push(box(c.width * 0.8, c.height * 0.5, COUPLING + 0.1, 0.5, z, RUNNING));
+  }
+  return merge(parts);
 }
 
 /** Path entry for one route; shared by the initial build and live sync. */
 export function buildRoutePath(route: TransportRoute, byId: Map<string, Station>): RoutePath {
-  const pts = routePoints(route, byId, 1.6);
-  const cum: number[] = [0];
-  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + pts[i].distanceTo(pts[i - 1]));
-  return {
-    pts,
-    cum,
-    total: cum[cum.length - 1] ?? 1,
-    curve: pts.length >= 2 ? new THREE.CatmullRomCurve3(pts) : null,
-  };
+  const curve = routeCurve(route, byId);
+  return { curve, total: curve?.length ?? 1 };
+}
+
+function vehicleMesh(rig: VehicleRig, v: VehicleState, route: TransportRoute | undefined): THREE.Mesh {
+  const mode = route?.mode ?? 'bus';
+  const color = route?.color ?? '#ffffff';
+  const key = `${mode}:${color}`;
+  let geo = rig.geometries.get(key);
+  if (!geo) {
+    geo = consistGeometry(mode, new THREE.Color(color));
+    rig.geometries.set(key, geo);
+  }
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.5, metalness: 0.1 }),
+  );
+  mesh.castShadow = true;
+  mesh.userData = { kind: 'vehicle', id: v.id, mode };
+  return mesh;
 }
 
 export function buildVehicles(
@@ -40,27 +119,16 @@ export function buildVehicles(
 ): VehicleRig {
   const group = new THREE.Group();
   group.name = 'vehicles';
-  const meshById = new Map<string, THREE.Mesh>();
+  const rig: VehicleRig = { group, meshById: new Map(), segmentsByRoute: new Map(), geometries: new Map(), schedules: new Map() };
   const byId = new Map(stations.map((s) => [s.id, s]));
   const routeById = new Map(routes.map((r) => [r.id, r]));
-  const segmentsByRoute = new Map<string, RoutePath>();
-
-  for (const route of routes) {
-    segmentsByRoute.set(route.id, buildRoutePath(route, byId));
-  }
-
+  for (const route of routes) rig.segmentsByRoute.set(route.id, buildRoutePath(route, byId));
   for (const v of vehicles) {
-    const route = routeById.get(v.routeId);
-    const color = route?.color ?? '#ffffff';
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(v.capacity > 100 ? 7 : 4.5, 2.4, 2.6),
-      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5 }),
-    );
-    mesh.userData = { kind: 'vehicle', id: v.id };
+    const mesh = vehicleMesh(rig, v, routeById.get(v.routeId));
     group.add(mesh);
-    meshById.set(v.id, mesh);
+    rig.meshById.set(v.id, mesh);
   }
-  return { group, meshById, segmentsByRoute };
+  return rig;
 }
 
 /**
@@ -86,69 +154,86 @@ export function syncVehicleMeshes(
   for (const [id, mesh] of rig.meshById) {
     if (!live.has(id)) {
       rig.group.remove(mesh);
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
+      (mesh.material as THREE.Material).dispose(); // geometry is shared per mode
       rig.meshById.delete(id);
     }
   }
   for (const v of vehicles) {
     if (rig.meshById.has(v.id)) continue;
-    const route = routeById.get(v.routeId);
-    const color = route?.color ?? '#ffffff';
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(v.capacity > 100 ? 7 : 4.5, 2.4, 2.6),
-      new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5 }),
-    );
-    mesh.userData = { kind: 'vehicle', id: v.id };
+    const mesh = vehicleMesh(rig, v, routeById.get(v.routeId));
     rig.group.add(mesh);
     rig.meshById.set(v.id, mesh);
   }
 }
 
-/** Position vehicle meshes from sim distance-along-route. Pure data read. */
+const tmpP = new THREE.Vector3();
 const tmpA = new THREE.Vector3();
 const tmpB = new THREE.Vector3();
-const tmpT = new THREE.Vector3();
-const tmpTan = new THREE.Vector3();
-const tmpLook = new THREE.Vector3();
-export function updateVehicles(rig: VehicleRig, vehicles: VehicleState[], dt: number): void {
+
+/** The service book as far as the renderer needs it: the headway each line is run to. */
+export type Headways = Record<string, { peakHeadwayMin: number } | undefined>;
+
+/** Out-and-back time of a line's service: its fleet times its headway, from the simulation. */
+function cycleOf(route: TransportRoute | undefined, plan: Headways[string], fleet: number): number {
+  return Math.max(2, fleet * (plan?.peakHeadwayMin ?? route?.headwayMin ?? 6));
+}
+
+/**
+ * Place vehicles on their lines for the clock `clockMin` (clock minutes; see
+ * `VisualClock`). Each line's fleet is spread evenly around the line's
+ * service cycle, and each vehicle follows the line's schedule: stopped at
+ * platforms, accelerating and braking between them. Position is a function of
+ * the clock alone, so motion is smooth at any frame rate and any run speed.
+ * Heading is the chord across the vehicle's own length, so it turns with the
+ * track rather than cutting across it.
+ */
+export function updateVehicles(
+  rig: VehicleRig,
+  vehicles: VehicleState[],
+  routes: TransportRoute[],
+  clockMin: number,
+  service: Headways = {},
+): void {
+  const byRoute = new Map<string, VehicleState[]>();
   for (const v of vehicles) {
-    const mesh = rig.meshById.get(v.id);
-    const seg = rig.segmentsByRoute.get(v.routeId);
-    if (!mesh || !seg || seg.pts.length < 2) continue;
-    const total = Math.max(1, seg.total);
-    const s = ((v.s % total) + total) % total;
-    if (seg.curve) {
-      // Same smoothed curve the route-line tube is drawn from, so vehicles
-      // follow the visible line through bends. Sim distance maps by fraction
-      // of route completed, so timetable timing is unchanged — only the path.
-      const u = Math.max(0, Math.min(1, s / total));
-      seg.curve.getPointAt(u, tmpT);
-      seg.curve.getTangentAt(u, tmpTan);
-      if (v.direction !== 1) tmpTan.negate();
-      tmpLook.copy(tmpT).add(tmpTan);
-    } else {
-      let i = 1;
-      while (i < seg.cum.length - 1 && seg.cum[i] < s) i++;
-      const s0 = seg.cum[i - 1];
-      const s1 = seg.cum[i];
-      const f = s1 > s0 ? (s - s0) / (s1 - s0) : 0;
-      tmpA.copy(seg.pts[i - 1]);
-      tmpB.copy(seg.pts[i]);
-      tmpT.lerpVectors(tmpA, tmpB, f);
-      tmpLook.copy(v.direction === 1 ? tmpB : tmpA);
+    const list = byRoute.get(v.routeId);
+    if (list) list.push(v);
+    else byRoute.set(v.routeId, [v]);
+  }
+  const routeById = new Map(routes.map((r) => [r.id, r]));
+  for (const [routeId, fleet] of byRoute) {
+    const curve = rig.segmentsByRoute.get(routeId)?.curve;
+    if (!curve) continue;
+    const cycle = cycleOf(routeById.get(routeId), service[routeId], fleet.length);
+    let entry = rig.schedules.get(routeId);
+    if (!entry || entry.cycle !== cycle || entry.curve !== curve) {
+      entry = { cycle, curve, schedule: buildSchedule(curve.knots, cycle) };
+      rig.schedules.set(routeId, entry);
     }
-    // Ease toward the target so fixed 1-minute sim steps render smoothly.
-    // Frame-rate independent: converges at the same real-world rate
-    // regardless of refresh rate (was a fixed 0.18-per-frame lerp, which
-    // moved vehicles faster on high-refresh displays and slower under a
-    // throttled/background tab). 12 matches the old factor's feel at 60fps.
-    if (!mesh.userData.init) {
-      mesh.position.copy(tmpT);
+    const { schedule } = entry;
+    fleet.sort((a, b) => (a.id < b.id ? -1 : 1));
+    fleet.forEach((v, k) => {
+      const mesh = rig.meshById.get(v.id);
+      if (!mesh) return;
+      const mode = mesh.userData.mode as TransportMode;
+      const c = CONSIST[mode];
+      const span = c.cars * c.length + (c.cars - 1) * COUPLING;
+      const here = schedule.at(clockMin + (k * schedule.cycle) / fleet.length);
+      // Half a body length each side keeps the front and rear on the track.
+      const half = Math.min(span / 2, curve.length / 2);
+      const mid = Math.min(Math.max(here.arc, half), curve.length - half);
+      curve.pointAtArc(mid - half, tmpA);
+      curve.pointAtArc(mid + half, tmpB);
+      curve.pointAtArc(here.arc, tmpP);
+      let dx = tmpB.x - tmpA.x;
+      let dz = tmpB.z - tmpA.z;
+      if (here.dir !== 1) {
+        dx = -dx;
+        dz = -dz;
+      }
+      mesh.position.set(tmpP.x, tmpP.y + RIDE[mode], tmpP.z);
+      if (Math.hypot(dx, dz) > 1e-6) mesh.rotation.y = Math.atan2(dx, dz);
       mesh.userData.init = true;
-    } else {
-      mesh.position.lerp(tmpT, 1 - Math.exp(-12 * dt));
-    }
-    mesh.lookAt(tmpLook);
+    });
   }
 }
