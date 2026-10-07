@@ -36,7 +36,7 @@ clean (`AGENTS.md`). Work lands on the fork's `main` through a pull request.
 
 ### 1. Land the open branch and make the README true
 
-- Open a pull request from `feature/sim-correctness` to the fork's `main` and merge it. The open PR to the parent (`feature/city-redesign` work) is separate and not touched here.
+- Open a pull request from `feature/sim-correctness` to the fork's `main` and merge it, after the owner confirms. Merging changes what the open parent PR sees: Raghav2012Code/transit-forge#4 ("Redesign the city, the lines and the trains") has the fork's `main` as its head, so every commit that lands on the fork's `main`, including this release work, appears in that PR. That is how `AGENTS.md` says work reaches the parent, but it is outward-facing and not undoable by deleting a branch, so it needs an explicit yes.
 - The README status section stops at v1.2 and its "Known limitations" no longer match the code (vehicles now stop at stations; ADR 0002). Correct both against the code. Version is read from `src/version.ts`; the README does not hard-code a test count.
 
 Accepted when: `main` contains the correctness work and no README sentence contradicts the code.
@@ -97,8 +97,8 @@ against the layering rule. The simulation is deterministic, so any minute of the
 be rebuilt exactly.
 
 - **Move the live-edit logic into the simulation layer.** `applyServicePatch` and `applyFares`, with the fleet reconciliation, come out of `App.tsx` unchanged in behaviour. `App.tsx` calls them. The golden hash proves nothing moved.
-- **Timed interventions.** `setService`, `setFares` and `scheduleIncident` ops take an optional `atMin` (minute of day). Absent means start of day, which is what every saved scenario does today, so saved data loads unchanged.
-- **Headless runs honour timing.** `runHeadlessDetailed` and the compare functions apply a timed op at its tick through the same two functions, so a branch's numbers equal what the live sim shows.
+- **Timed interventions.** `setService` and `setFares` ops take an optional `atMin`, in absolute simulation minutes like an incident's `startMin` (the day starts at 420). Absent means start of day, which is what every saved scenario does today, so saved data loads unchanged. `scheduleIncident` needs nothing new: an incident already carries its own `startMin`.
+- **One path for live, headless and replay.** `applyEdits` leaves timed ops out of the start-of-day fold and returns them as a pending list. The simulation state carries that list, and `stepSimulation` applies each op through `applyServicePatch` or `applyFares` at the first step where the clock has reached its `atMin`. A live edit made between steps lands in exactly the same place, so live, headless and replay agree by construction.
 - **Scrub.** Dragging the day strip back to minute M rebuilds the day from 07:00 by replay. A full replay costs roughly 1.2 ms per tick early in the day (a 360-tick run measures about 0.45 s here), and later ticks cost more as passengers accumulate; the spike measures the whole day. Replay runs on the main thread in chunks across frames with a progress indicator. Checkpoints (`structuredClone` of the state every 60 ticks) are added only if replay proves too slow, and must produce deep-equal states.
 - **Fork.** "Fork here" at minute M freezes the current timed interventions as branch A. The player makes new interventions (a headway change, a fare change, an incident) recorded at M as branch B. Both branches run headless in a worker; the result is the existing compare rows plus two series on the charts.
 - **Scope.** Structural edits stay whole-day (see Out of scope).
@@ -116,19 +116,23 @@ produces a plan. Both plans go through the same `evaluatePlan`, so the result is
 duel on this city and seed. The copy in the UI says so, and does not claim the planner's
 plan is best in general.
 
-Measured here with seed 1337 (Node, Vitest): one 360-tick headless run takes about 0.45 s;
-`evaluatePlan` takes about 0.9 s at horizon 0 and 1.85 s at horizon 5, because it re-runs
-the baseline on every call.
+Measured here with seed 1337 (Node, Vitest, one warm machine, so a guide and not a promise):
+one 360-tick headless run takes about 0.45 s. `evaluatePlan` takes about 0.9 s at horizon 0,
+1.0 to 1.9 s at 5 years, 1.3 s at 10 years and 4.5 s at 20 years, because it re-runs the
+baseline on every call. Briefs use 5 years at easy and medium, 10 at hard and 20 at expert, so
+the planner's first scope is **easy and medium briefs**; at 20 years even a cached candidate
+costs about 2 s, which is too slow to search.
 
 - **Cached baseline.** `evaluatePlan` accepts an optional precomputed baseline, roughly halving the cost of each candidate. A test shows output is identical with and without it.
-- **Pure planner in the simulation layer** (`src/simulation/planner/`). A candidate generator produces `EditOp`s from the current network, seeded by the existing rule-based `recommendFor` results and extended with headway, fleet and capacity steps per route, `extendRoute`, bus `addRoute` between uncovered high-demand zones, and `addStation` where `validateStationPlacement` allows it. Search is deterministic: candidates are ordered by id, ties broken by a fixed rule, no `Math.random()`. It runs a beam search of width 3 over op sequences, scoring in order: constraints satisfied, objectives passed, summed objective margin, `planningScore`, lower cost.
+- **Brief facts leave `App.tsx`.** Briefs are generated from facts built inside a `useMemo` in `App.tsx`. A headless planner and its spike need the same briefs, so that builder moves to `src/simulation/planning/briefFacts.ts` and `App.tsx` calls it. A test shows the facts are unchanged.
+- **Pure planner in the simulation layer** (`src/simulation/planner/`). A candidate generator produces `EditOp`s from the current network. The existing problem detection (`detectProblems`, over `findBottlenecks` and `findTransitGaps`) decides which routes, stations and zones the candidates touch; `recommendFor` returns advice as text, not ops, so it is not used. Candidates are headway, fleet and capacity steps per route, `extendRoute`, bus `addRoute` between uncovered high-demand zones, and `addStation` where `validateStationPlacement` allows it. Search is deterministic: candidates are ordered by id, ties broken by a fixed rule, no `Math.random()`. It runs a beam search of width 3 over op sequences, scoring in order: constraints satisfied, objectives passed, summed objective margin, `planningScore`, lower cost.
 - **Stops on an evaluation cap, not on the clock.** The same brief and cap always produce the same plan. A wall-clock limit exists only as a safety net.
-- **Worker pool** (`src/workers/`, named in `AGENTS.md` but not yet present): min(4, hardwareConcurrency − 1) workers, each holding its own copy of the base city and network. Messages carry candidate ops in and a small result summary out, with progress and cancel. At about 0.5 s per evaluation and four workers, 30 s is roughly 240 evaluations.
+- **Worker pool** (`src/workers/`, named in `AGENTS.md` but not yet present): min(4, hardwareConcurrency − 1) workers, each holding its own copy of the base city and network. Messages carry candidate ops in and a small result summary out, with progress and cancel. With the baseline cached, a 5-year candidate costs roughly 0.5 to 0.9 s, so four workers do about 130 to 240 evaluations in 30 s.
 - **UI.** In Plan mode, with a brief selected: "Challenge the planner". The player builds a plan as usual, then runs the planner (progress shows evaluations used and best score so far). A duel card shows both plans: objectives passed, construction cost against budget, score, and the list of interventions. "Load planner's plan" opens it as a scenario on the map. The winner is marked by ink, not colour.
 
 **Spike first, with a go/no-go rule.** Before any UI, run the planner headless against all
 seven briefs at easy and medium difficulty. Go for the full duel if it meets every objective
-on at least half the easy briefs within 240 evaluations. Otherwise ship the smaller
+on at least half the easy briefs within 150 evaluations. Otherwise ship the smaller
 **advisor**: one best next move per click, ranked by its evaluated gain, on the same
 pipeline. The spike reports pass counts and evaluations used, whichever way it goes.
 
