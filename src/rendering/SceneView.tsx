@@ -1390,5 +1390,5 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     // Live data flows via simRef, which is stable for the app lifetime.
   }, [networkKey, theme, simRef]);
 
-  return <div ref={mountRef} className="scene-mount" aria-label="TransitForge 3D viewport" />;
+  return <div ref={mountRef} className="scene-mount" role="img" aria-label="3D map of the city and its transit lines" />;
 }

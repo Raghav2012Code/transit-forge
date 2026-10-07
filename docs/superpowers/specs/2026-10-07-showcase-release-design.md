@@ -27,7 +27,7 @@ A reviewer who has never seen the project, on a clean browser profile:
 5. Sees a green CI badge, and `npm run lint`, `npm run test` and `npm run build` are clean.
 6. Can open any trip and read why it happened, scrub the day back and fork it to compare two interventions, and run the planner duel, all on the deployed build.
 
-Each of these is checked by hand or by the smoke test before the work is called done.
+Each of these is checked by hand, in a real browser, before the work is called done.
 
 ## Milestones
 
@@ -62,16 +62,14 @@ The fallback uses tokens only and is theme-blind (`DESIGN.md`).
 
 Accepted when: forcing a render error shows the fallback; disabling WebGL shows the message; corrupt saved data can be reset from the fallback.
 
-### 4. Quality pass and a smoke test
+### 4. Quality pass
 
 - **Responsive and themes.** Walk every mode (simulate, build, disrupt, plan) and every sheet in both themes at 1440 px, 768 px and 390 px. Fix overflow, clipped controls and unreadable states found.
 - **Accessibility.** Keyboard reach and visible focus for every control; accessible names on icon buttons; contrast in both themes against the tokens; dialog semantics on sheets. Checked with an automated scan plus manual keyboard passes.
 - **Performance.** Record the cold-load size and time-to-first-frame on the deployed build, and a frame-time sample during a running day. Write the numbers in the README only if measured; fix only what is clearly bad.
-- **Smoke test.** One Playwright test, run as `npm run e2e` and as its own CI job so a browser flake never blocks `npm run test`. It loads the built app (software WebGL in headless Chromium), asserts the canvas renders, no console errors, play advances the clock, `T` switches theme, and at 390 px the page does not scroll horizontally. New dev dependencies: `@playwright/test` and `@axe-core/playwright`, for this purpose only.
+- **No automated browser suite.** A Playwright smoke test and axe scan were built and dropped by the owner's decision: software WebGL in headless Chromium ran at about 5 frames a second, which made the suite slow and fragile. The accessibility scan was run once by hand (axe through Playwright, then removed) and its findings fixed; browser checks stay manual.
 
-Accepted when: the smoke test passes locally and in CI, the axe scan reports no serious or critical issues, and a manual keyboard-only run reaches every mode.
-
-Risk: headless WebGL can be flaky. If software rendering proves unstable in CI, keep the test local and documented rather than letting it become a red badge.
+Accepted when: the one-off axe scan reports no serious or critical issues in any mode, in both themes, at 1440 and 390 px; headings are in order; and a manual keyboard-only run reaches every mode.
 
 ### 5. Journey inspector
 
@@ -172,6 +170,5 @@ Accepted when: the README renders correctly on GitHub in light and dark, every l
 
 - Existing vitest suites stay green; this work adds no simulation logic.
 - A unit test for the error boundary's reset action, in the style of `commands.test.ts`.
-- The Playwright smoke test above, extended in milestones 5 to 7 with one cheap assertion each (a trip card opens, scrubbing changes the clock, the planner panel opens).
 - Milestones 5 to 7 add the tests listed in each milestone. Every one that touches the simulation first records a golden `SimStats` hash for seed 1337 from the unmodified code, and the change must reproduce it exactly unless the milestone says results move and why.
 - Browser check in both themes and at 390 px for every UI milestone.
