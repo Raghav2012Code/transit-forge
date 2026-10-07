@@ -28,7 +28,7 @@ export default function TopBar({ scenarioName, edits, scenarioMenu, onSearch, th
           <span className="tf-brand-mark" aria-hidden="true">
             <IconPlan size={17} />
           </span>
-          <span className="tf-brand-name"><b>TransitForge</b></span>
+          <h1 className="tf-brand-name"><b>TransitForge</b></h1>
         </div>
         <Popover
           label="Scenario"

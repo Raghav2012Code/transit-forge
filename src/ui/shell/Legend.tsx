@@ -136,7 +136,7 @@ export default function Legend({ overlay, demandLayer, extras, note }: {
     overlay === 'demand' ? `Demand — ${demandLayer}` : (entry?.title ?? 'Map');
   return (
     <div className="tf-legend">
-      <h4>{title}</h4>
+      <h2>{title}</h2>
       {note && <p className="tf-legend-note">{note}</p>}
       {entry && entry.kind === 'ramp' ? (
         <>

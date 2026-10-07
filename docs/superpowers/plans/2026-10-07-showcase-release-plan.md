@@ -317,7 +317,7 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
 
 ### Task 3.3 Verify by forcing each failure
 
-- [ ] **WebGL off.** With the dev server up, use the Playwright MCP to add an init script before navigating that saves the original `HTMLCanvasElement.prototype.getContext` and replaces it with one that returns `null` for any type matching `/webgl/i` (the same override the smoke test in task 4.2 uses). Expect the "cannot draw the 3D map" message, no blank page, no "Reset saved data" button. If the message does not appear because the error is swallowed inside `SceneView`'s effect, wrap the `new THREE.WebGLRenderer(...)` call at `src/rendering/SceneView.tsx:250` so a failure rethrows into React (set state and throw during render) rather than being swallowed; do not catch it silently.
+- [ ] **WebGL off.** With the dev server up, use the Playwright MCP to add an init script before navigating that saves the original `HTMLCanvasElement.prototype.getContext` and replaces it with one that returns `null` for any type matching `/webgl/i`. Expect the "cannot draw the 3D map" message, no blank page, no "Reset saved data" button. If the message does not appear because the error is swallowed inside `SceneView`'s effect, wrap the `new THREE.WebGLRenderer(...)` call at `src/rendering/SceneView.tsx:250` so a failure rethrows into React (set state and throw during render) rather than being swallowed; do not catch it silently.
 - [ ] **Render crash.** Temporarily add `throw new Error('boom')` at the top of `App`'s body, confirm the crash fallback and the reset button (set `localStorage.setItem('transitforge.theme','dark')` first and confirm the button clears it), then remove the throw. `git diff` must not contain it.
 - [ ] **Corrupt saved data.** Set `transitforge.plans.v1` to `not json` and reload. If the app crashes, make the reader tolerant (`storageRead` in `src/simulation/scenario/store.ts` should already guard it); if it does not crash, record that.
 - [ ] UI check (both themes, three widths).
@@ -330,165 +330,18 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
 
 ---
 
-## Milestone 4. Quality pass and the smoke test
+## Milestone 4. Quality pass (done; the automated browser suite was dropped)
 
 **Branch:** `feature/quality-pass`.
 
-### Task 4.1 Install and configure Playwright
+The owner dropped the Playwright smoke test and axe suite. Software WebGL in headless Chromium ran at about 5 frames a
+second here, so the suite was slow (minutes) and fragile. What was kept:
 
-**Files:** `package.json`, create `playwright.config.ts`, `e2e/`, edit `.gitignore`.
+- A one-off axe scan across all four modes, both themes, at 1440 and 390 px (run by hand through Playwright, then the packages were removed). Real findings fixed: the 3D viewport `div` had an `aria-label` and no role (`role="img"` now); the page had no `<h1>` (the brand name is now the `<h1>`, kept visible on desktop and visually hidden on phones); the map legend title jumped heading levels (`h4` became `h2`). The contrast findings from the first scan were mid-transition colours: after letting the page settle, none remained.
+- Browser checks stay manual with the Playwright MCP tools (the UI check procedure above).
 
-- [ ] `npm install -D @playwright/test @axe-core/playwright` then `npx playwright install chromium`.
-- [ ] Add scripts to `package.json`: `"e2e": "playwright test"`.
-- [ ] Append to `.gitignore`: `test-results/` and `playwright-report/`.
-- [ ] Create `playwright.config.ts`:
-
-```ts
-import { defineConfig, devices } from '@playwright/test';
-
-export default defineConfig({
-  testDir: 'e2e',
-  timeout: 60_000,
-  retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? 'github' : 'list',
-  use: {
-    baseURL: 'http://localhost:4173',
-    // Software WebGL, so the 3D map renders in headless Chromium with no GPU.
-    launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] },
-  },
-  projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-    { name: 'phone', use: { ...devices['Desktop Chrome'], viewport: { width: 390, height: 844 } } },
-  ],
-  webServer: {
-    command: 'npm run build && npm run preview -- --port 4173 --strictPort',
-    url: 'http://localhost:4173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-  },
-});
-```
-
-### Task 4.2 Hooks and the smoke test
-
-- [ ] Open the running app with the Playwright MCP and read the accessibility snapshot. Find the clock text in the top bar and the play button. If the clock has no stable handle, add `data-testid="clock"` to its element in `src/ui/shell/TopBar.tsx` (one attribute, no behaviour).
-- [ ] Create `e2e/smoke.spec.ts`. Adjust the two locators to what the snapshot showed:
-
-```ts
-import { expect, test } from '@playwright/test';
-
-function watchErrors(page: import('@playwright/test').Page) {
-  const errors: string[] = [];
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  page.on('pageerror', (e) => errors.push(String(e)));
-  return errors;
-}
-
-test('the map renders and the day runs', async ({ page }) => {
-  const errors = watchErrors(page);
-  await page.goto('/');
-  await expect(page.locator('canvas').first()).toBeVisible();
-  const clock = page.getByTestId('clock');
-  const before = await clock.innerText();
-  await page.keyboard.press('Space');
-  await expect.poll(async () => clock.innerText(), { timeout: 15_000 }).not.toBe(before);
-  expect(errors).toEqual([]);
-});
-
-test('T switches theme', async ({ page }) => {
-  await page.goto('/');
-  const html = page.locator('html');
-  const first = await html.getAttribute('data-theme');
-  await page.keyboard.press('t');
-  await expect(html).not.toHaveAttribute('data-theme', first ?? '');
-});
-
-test('no horizontal scroll', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.locator('canvas').first()).toBeVisible();
-  const fits = await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
-  expect(fits).toBe(true);
-});
-
-test('a browser without WebGL gets a message, not a blank page', async ({ page }) => {
-  await page.addInitScript(() => {
-    const original = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement, type: string, ...rest: unknown[]) {
-      if (/webgl/i.test(type)) return null;
-      return (original as (...a: unknown[]) => unknown).call(this, type, ...rest) as never;
-    } as typeof original;
-  });
-  await page.goto('/');
-  await expect(page.getByRole('alert')).toContainText(/cannot draw the 3D map/i);
-});
-```
-
-- [ ] `npm run e2e` passes on both projects. If the day does not advance in 15 s under software WebGL, measure tick rate and raise the timeout; do not remove the assertion.
-
-### Task 4.3 Accessibility scan
-
-- [ ] Create `e2e/a11y.spec.ts`: for each theme (press `T` once for the second) and each mode (`B`, `D`, `P`, then `Esc` for simulate), run `new AxeBuilder({ page }).analyze()` and assert there are no violations with impact `serious` or `critical`:
-
-```ts
-import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
-
-for (const mode of ['Escape', 'b', 'd', 'p']) {
-  test(`no serious accessibility issues after pressing ${mode}`, async ({ page }) => {
-    await page.goto('/');
-    await expect(page.locator('canvas').first()).toBeVisible();
-    await page.keyboard.press(mode);
-    for (const theme of ['first', 'second']) {
-      if (theme === 'second') await page.keyboard.press('t');
-      const results = await new AxeBuilder({ page }).analyze();
-      const bad = results.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
-      expect(bad.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
-    }
-  });
-}
-```
-
-- [ ] Fix each real finding in the component or in `src/index.css` / `src/App.css` (accessible names on icon buttons, contrast against the tokens in both themes, dialog semantics on sheets). If a finding is a false positive on the WebGL canvas, exclude that element with `.exclude('canvas')` and write the reason in a comment.
-
-### Task 4.4 Manual passes
-
-- [ ] Using the UI-check procedure, walk every mode (simulate, build, disrupt, plan) and every sheet (`?` help, reports, command palette) at 1440, 768 and 390 px in both themes. Keep screenshots in the scratchpad directory, not the repo. List each defect, fix it, re-check.
-- [ ] Keyboard-only: reach every mode and every sheet without the mouse; focus is visible and returns when a sheet closes.
-- [ ] `prefers-reduced-motion`: with `page.emulateMedia({ reducedMotion: 'reduce' })` confirm no looping decorative motion remains beyond the simulation itself.
-
-### Task 4.5 Performance numbers
-
-- [ ] Measure on the **deployed** build (milestone 2), cold: transfer size of `dist` assets (`npm run build` prints sizes; gzip with `node -e "..."` or read the Vite table), `performance.getEntriesByType('navigation')[0]` for load, and time to the first rendered frame (poll for the canvas being non-blank). Frame time during a running day: in the page, count `requestAnimationFrame` callbacks over 5 s at 20×.
-- [ ] Keep the numbers in the PR description. They go in the README (milestone 8) only as measured, with the machine and date. Fix only what is clearly bad (for example a chunk over 500 kB that is not Three.js).
-
-### Task 4.6 CI job and commit
-
-- [ ] Add a second job to `.github/workflows/ci.yml`:
-
-```yaml
-  e2e:
-    runs-on: ubuntu-latest
-    needs: check
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run e2e
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report
-          path: playwright-report/
-```
-
-- [ ] If the software-WebGL run is unstable in CI after two honest attempts, remove the job, keep `npm run e2e` documented as a local check, and say so in the PR. A flaky red badge is worse than no job.
-- [ ] `npm run lint && npm run test && npm run build && npm run e2e` clean. Commit `Fix layout and accessibility findings and add a smoke test`. PR, ask, merge.
-
-**Accepted when:** smoke and axe tests pass locally (and in CI unless removed as above), no serious or critical axe findings, keyboard-only run reaches every mode, 390 px has no horizontal scroll.
+No `playwright.config.ts`, no `e2e/` folder, no `npm run e2e`, no e2e CI job. Every later milestone's gate is
+`npm run lint && npm run test && npm run build`, plus the manual UI check where the interface changed.
 
 ---
 
@@ -795,10 +648,9 @@ export function explainTrip(t: TripRecord, n: TripNames): TripStatement[] {
 - [ ] Colour check: only `RouteBullet` shows line colour; `watch` and `alert` are the existing condition tokens; the open row is shown by ink.
 - [ ] UI check: run the sim at 20×, select a vehicle, open a rider; select a station with people waiting; open one from Recent trips. A stranded trip needs an incident: in Disrupt mode schedule a station closure and open a stranded passenger. Check light, dark, 390 px.
 
-### Task 5.6 Smoke assertion and commit
+### Task 5.6 Commit
 
-- [ ] In `e2e/smoke.spec.ts` add: run at 20× for a few seconds (press `3`), expect the text "Recent trips" and at least one row button below it.
-- [ ] `npm run lint && npm run test && npm run build && npm run e2e` clean, **golden unchanged**. Squash and commit `Explain why each trip happened: decisions, recent trips and a trip card`. PR, ask, merge.
+- [ ] `npm run lint && npm run test && npm run build` clean, **golden unchanged**. Squash and commit `Explain why each trip happened: decisions, recent trips and a trip card`. PR, ask, merge.
 
 **Accepted when:** selecting a vehicle, opening a rider and reading the card takes three clicks; a stranded trip explains itself; the golden hash is unchanged.
 
@@ -980,10 +832,9 @@ export function runDay(seed: number, city: CityData, net: NetworkData & { timed?
 - [ ] Tests for "branch is identical to the original before the fork minute": run both sides to the fork minute and compare full-state facts (`computeStats` JSON, `rng`, `passengers.length`).
 - [ ] UI check: fork at 10:30, lengthen one headway, compare; the table shows plausible differences and the chart shows two lines. Light, dark, 390 px.
 
-### Task 6.6 Smoke assertion and commit
+### Task 6.6 Commit
 
-- [ ] In `e2e/smoke.spec.ts` add: run for a few seconds, click the day strip left of the needle, expect the clock to show the earlier time.
-- [ ] `npm run lint && npm run test && npm run build && npm run e2e` clean; golden unchanged. Squash, commit `Add a time machine: rewind the day, fork it, and compare the branches`. PR, ask, merge.
+- [ ] `npm run lint && npm run test && npm run build` clean; golden unchanged. Squash, commit `Add a time machine: rewind the day, fork it, and compare the branches`. PR, ask, merge.
 
 **Accepted when:** from 10:30 you can rewind to 08:00, make one change, fork, compare, and the branch numbers match the live day.
 
@@ -1159,11 +1010,10 @@ export async function searchPlan(o: SearchOptions): Promise<{ best: Evaluated; e
 
 - [ ] One button, "Suggest next move": evaluate every move from `generateMoves(currentOps)` through the pool, rank by `compareSummaries`, show the top three with their effect (objectives passed, score, cost) and a "Apply" button that pushes the move's ops. Same pool, same evaluator, same fairness note. Skip the duel card.
 
-### Task 7.6 Tests, smoke assertion, commit
+### Task 7.6 Tests and commit
 
 - [ ] Planner tests from 7.3 pass; golden unchanged; `evaluatePlan` with and without `baseSide` identical; briefFacts test passes.
-- [ ] In `e2e/smoke.spec.ts` add: switch to Plan mode (`P`), expect the "Challenge the planner" section (or "Suggest next move") to be visible. Do not run the search in CI.
-- [ ] `npm run lint && npm run test && npm run build && npm run e2e` clean. Squash and commit `Add Beat the Planner: an automated planner to compete against` (or `Add a move advisor` if no-go). PR, ask, merge.
+- [ ] `npm run lint && npm run test && npm run build` clean. Squash and commit `Add Beat the Planner: an automated planner to compete against` (or `Add a move advisor` if no-go). PR, ask, merge.
 
 **Accepted when:** on a brief the spike marks as go, a player can finish a plan, run the planner, read a duel card and load the planner's plan, with the UI responsive throughout; the same brief and cap always give the same plan.
 
@@ -1181,7 +1031,7 @@ export async function searchPlan(o: SearchOptions): Promise<{ best: Evaluated; e
 ### Task 8.2 Capture the media
 
 - [ ] Check for ffmpeg: `ffmpeg -version`. If missing, ask the owner before installing (`winget install Gyan.FFmpeg`).
-- [ ] Write `e2e/capture.ts` (not a test; run with `npx playwright test e2e/capture.ts` or a small node script) against the live URL: for both themes, screenshot the default map, the plan screen with the duel card, the trip card, and the fork comparison, at 1440×900, to `docs/media/` as WebP or optimised PNG. Record a video of a day running at 20× for about 10 seconds with Playwright's `recordVideo`.
+- [ ] Write a capture script (a throwaway node script in the scratchpad, not committed; use `npx -y playwright` or the Playwright MCP, since Playwright is no longer a dependency) against the live URL: for both themes, screenshot the default map, the plan screen with the duel card, the trip card, and the fork comparison, at 1440×900, to `docs/media/` as WebP or optimised PNG. Record a video of a day running at 20× for about 10 seconds with Playwright's `recordVideo`.
 - [ ] Convert to the hero GIF: `ffmpeg -i day.webm -vf "fps=12,scale=960:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][s0]paletteuse" docs/media/hero.gif`. Tune `fps` and `scale` until the file is under about 5 MB.
 - [ ] A 1280×640 social preview image `docs/media/social-preview.png` (screenshot with the brand lockup). Tell the owner to upload it under Settings, Social preview (GitHub offers no API for it).
 
@@ -1190,7 +1040,7 @@ export async function searchPlan(o: SearchOptions): Promise<{ best: Evaluated; e
 **Files:** `README.md`.
 
 - [ ] Rewrite from the top: title and one-line pitch; badges (`[![CI](https://github.com/abivan100-stack/transit-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/abivan100-stack/transit-forge/actions/workflows/ci.yml)` and the live link from milestone 2); the hero GIF; light and dark screenshots side by side (an HTML `<table>` or `<picture>` with `prefers-color-scheme` sources).
-- [ ] Sections in order: **What it is**; **Try it** (live link and the keys table already in the README); **Three things worth a look** (trip card, time machine, Beat the Planner, one capture each); **How it is built** with the Mermaid diagram below; **Determinism** (seed 1337, no `Math.random()` in `src/simulation/`, the golden test); **Decisions worth reading** (links to `docs/adr/0001`, `docs/adr/0002`, `DESIGN.md`, `docs/engineering.md`); **Run and test** (`npm install`, `npm run dev`, `npm run test`, `npm run e2e`); **Known limitations** (as corrected in milestone 1, plus the planner's easy/medium scope); **Credits** (the parent repository and its author, linked).
+- [ ] Sections in order: **What it is**; **Try it** (live link and the keys table already in the README); **Three things worth a look** (trip card, time machine, Beat the Planner, one capture each); **How it is built** with the Mermaid diagram below; **Determinism** (seed 1337, no `Math.random()` in `src/simulation/`, the golden test); **Decisions worth reading** (links to `docs/adr/0001`, `docs/adr/0002`, `DESIGN.md`, `docs/engineering.md`); **Run and test** (`npm install`, `npm run dev`, `npm run test`); **Known limitations** (as corrected in milestone 1, plus the planner's easy/medium scope); **Credits** (the parent repository and its author, linked).
 - [ ] Mermaid, which GitHub renders:
 
 ````md
@@ -1229,7 +1079,7 @@ flowchart LR
 
 ### Task 8.5 Release checks and landing
 
-- [ ] `npm run lint && npm run test && npm run build && npm run e2e` clean.
+- [ ] `npm run lint && npm run test && npm run build` clean.
 - [ ] Final cold run on the live URL with the Playwright MCP in a fresh context: loads, no console errors, trains moving, light and dark, 390 px, the three features reachable.
 - [ ] Commit `Rewrite the README, add a changelog and media, and document the engineering decisions`. PR, ask, merge. Confirm CI is green on `main` and the badge shows it.
 - [ ] Ask the owner before tagging: `git tag v1.4.0 && git push origin v1.4.0` and, if wanted, `gh release create v1.4.0 --repo abivan100-stack/transit-forge --notes-file CHANGELOG.md`.
