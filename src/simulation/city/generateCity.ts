@@ -5,6 +5,7 @@ import type { CityData, DistrictKind, Vec3, Zone } from '../../types/index.ts';
 import { mulberry32 } from './seededRng.ts';
 import { distM as dist2D } from '../transport/network.ts';
 import { initGrowthState } from '../growth/landUse.ts';
+import { riverCentreX } from './geography.ts';
 import { coastXAt, layoutCity, riverXAt, roadSegments } from './layout.ts';
 
 interface ZoneSpec {
@@ -59,7 +60,7 @@ export function generateCity(seed: number): CityData {
   const river: Vec3[] = [];
   for (let i = 0; i <= 20; i++) {
     const z = -420 + (i / 20) * 840;
-    const x = 120 + Math.sin(i * 0.7) * 28;
+    const x = riverCentreX(z);
     river.push({ x, y: 0, z });
   }
 

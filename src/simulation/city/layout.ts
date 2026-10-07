@@ -2,14 +2,12 @@
 // streets and the same buildings. Nothing here feeds the simulation (demand
 // comes from zone populations); it is what the map is drawn from.
 import type { Building, CityData, DistrictKind, Landmark, Park, RoadEdge, Street, Vec3, Zone } from '../../types/index.ts';
+import { coastXAt, RIVER_HALF_M as WATER_HALF } from './geography.ts';
 import type { Rng } from './seededRng.ts';
 
-const WATER_HALF = 13; // river half-width the renderer draws
-const BEACH = 12; // keep lots this far from the shoreline
+export { coastXAt };
 
-export function coastXAt(z: number): number {
-  return -322 + 10 * Math.sin(z / 95 + 0.6) + 5 * Math.sin(z / 31);
-}
+const BEACH = 12; // keep lots this far from the shoreline
 
 export function riverXAt(river: Vec3[], z: number): number {
   if (river.length === 0) return 120;

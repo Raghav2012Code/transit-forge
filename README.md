@@ -51,6 +51,8 @@ npm run build
 
 ## Status
 
+Current version: 1.3.0 (`src/version.ts`).
+
 - v0.9 disruptions & resilience: 8 incident kinds (station/segment/route/
   service/delay/road/capacity/bridge) with scheduled→active→recovering→
   resolved lifecycle, Disrupt mode with map targeting, live rerouting with
@@ -58,7 +60,7 @@ npm run build
   guards, replacement shuttles from a 12-bus pool, road closures with car
   replan + abandon, transparent resilience scores, structural criticality +
   redundancy analysis, resilience-vs-base compare, status overlay + markers,
-  event timeline. 87 tests passing. Verified: segment closure → 102 rerouted,
+  event timeline. Verified: segment closure → 102 rerouted,
   network-wide road congestion, full recovery with measured deltas.
 - v1.2 economics: per-mode flat fares (OCU, entry-mode pricing, transfers free)
   with live steppers, fare locked at boarding, revenue counted from completions
@@ -71,30 +73,31 @@ npm run build
 - v1.1.1 vehicle-path fix: vehicle meshes ride the same smoothed curve the
   route-line tube is drawn from (fraction-of-route mapping, timing unchanged);
   replacement shuttles deployed mid-day now get path entries so they render
-  on their line. 117 tests passing.
+  on their line.
 - v1.0 planning campaign: objectives + constraints evaluated against live and
   simulated metrics, 7 procedural briefs with difficulty tiers, ranked city
   problems with drill-down, rule-based recommendations with Why, intervention
   summaries, plan save/load/attempts with multi-plan compare, structured
   reports (JSON/text/printable HTML), tutorial checklist, keyboard shortcuts,
   Plan mode, criticality overlay, live objective progress, resilience
-  objectives via real disruption sims. 101 tests passing.
+  objectives via real disruption sims.
 - v1.1 interface overhaul ("control room" design pass, see `DESIGN.md`):
   OKLCH token system, Space Grotesk + IBM Plex Mono typography, segmented
   mode/overlay controls, HUD bar with brand lockup and clock, pinned status
   strip, viewport corner brackets + vignette, HUD chip stack (mode, active
   incidents, worst congestion), event toasts, overlay legend matching the real
   scene ramps, floating selection card, collapsible rail docks, KPI tiles with
-  segmented tick meters, `[` panel toggle, `D` disrupt shortcut. 102 tests
-  passing.
+  segmented tick meters, `[` panel toggle, `D` disrupt shortcut.
 
-## Known limitations (v0.4 candidates)
+## Known limitations
 
 - World geography is compact (~1.2 km across), so absolute travel times read
   low (a few minutes cross-city). A world-scale pass (×5–6 coordinates with
   matched camera/fog/building density) should precede any fare/economics work.
-- Buses run ping-pong/loop approximations; no dwell timetables or headway
-  control yet. No congestion/BPR, no scenario editing.
+- Vehicles are drawn on each line's display schedule rather than at their
+  simulation positions, because the map is compact (`docs/adr/0001`). The
+  simulation itself spends each tick as a time budget per vehicle: it stops at
+  every station and pays that stop's dwell (`docs/adr/0002`).
 
 ## Test
 
