@@ -80,6 +80,8 @@ import { LENS_GROUPS, LENS_NOTE, type DemandLayer, type TravelDest } from './ui/
 import StatsPanel from './ui/dashboard/StatsPanel.tsx';
 import DebugPanel from './ui/dashboard/DebugPanel.tsx';
 import Inspector from './ui/inspectors/Inspector.tsx';
+import TripCard from './ui/inspectors/TripCard.tsx';
+import { recentRows, type TripKind } from './ui/inspectors/trips.ts';
 import AnalyticsPanel from './ui/analytics/AnalyticsPanel.tsx';
 import ChartsPanel from './ui/analytics/ChartsPanel.tsx';
 import { buildUtilization } from './simulation/analytics/utilization.ts';
@@ -159,10 +161,13 @@ export default function App() {
   }
   const [overlay, setOverlay] = useState<Overlay>('normal');
   const [selection, setSelectionRaw] = useState<Selection | null>(null);
+  // The trip whose card is open in the side panel, if any.
+  const [openTrip, setOpenTrip] = useState<{ id: number; kind: TripKind } | null>(null);
   // Below 1024px the panel is a drawer, and a selection is only readable in it,
   // so selecting opens it. (Declared as a function so every handler can use it.)
   function setSelection(sel: Selection | null) {
     setSelectionRaw(sel);
+    setOpenTrip(null);
     if (sel && window.innerWidth < 1024) setRailOpen(true);
   }
   const [travelDest, setTravelDest] = useState<TravelDest>('cbd');
@@ -482,6 +487,7 @@ export default function App() {
           setMeasure(null);
           setMeasureHover(null);
         } else if (inspectMode) setInspectMode(false);
+        else if (openTrip) setOpenTrip(null);
         else if (mode === 'simulate' && selection) setSelection(null);
         else enterSimulate();
       } else if ((e.key === 't' || e.key === 'T') && !mod && !e.altKey) {
@@ -2226,6 +2232,7 @@ export default function App() {
   // What is selected, shown beside the mode's own panel. Simulate and Plan are
   // about reading it, so it leads; Build and Disrupt are about filling in a form,
   // so the form keeps the top and the selection follows it.
+  const recentTripRows = useMemo(() => recentRows(snapshot), [snapshot]);
   const selectionBlock = selection ? (
             <div className={mode === 'simulate' ? 'tf-rail-body' : 'tf-selected'} data-place={mode === 'plan' ? 'top' : 'bottom'}>
               <Inspector
@@ -2237,6 +2244,7 @@ export default function App() {
                 onInvestigate={investigateProblem}
                 onOverlay={setOverlay}
                 onOpenDisrupt={enterDisrupt}
+                onOpenTrip={(id, kind) => setOpenTrip({ id, kind })}
                 catchmentRadius={catchmentRadius}
                 onCatchmentRadius={setCatchmentRadius}
                 zoneCoverage={selection.kind === 'zone' ? coverage.perZone.find((z) => z.zoneId === selection.id)?.pct : undefined}
@@ -2247,6 +2255,11 @@ export default function App() {
                 ) : null}
               </Inspector>
             </div>
+  ) : null;
+  const tripCard = openTrip && mode === 'simulate' ? (
+    <div className="tf-rail-body">
+      <TripCard key={`${openTrip.kind}-${openTrip.id}`} sim={snapshot} tripId={openTrip.id} kind={openTrip.kind} onBack={() => setOpenTrip(null)} />
+    </div>
   ) : null;
 
   return (
@@ -2518,10 +2531,10 @@ export default function App() {
           </ReportsSheet>
         )}
       </main>
-      <aside className="tf-panel" ref={railRef} tabIndex={-1} aria-label={selection ? 'Details' : `${modeLabel(mode)} panel`}>
-          {(mode === 'simulate' || mode === 'plan') && selectionBlock}
+      <aside className="tf-panel" ref={railRef} tabIndex={-1} aria-label={tripCard ? 'Trip' : selection ? 'Details' : `${modeLabel(mode)} panel`}>
+          {!tripCard && (mode === 'simulate' || mode === 'plan') && selectionBlock}
           {mode === 'simulate' ? (
-            selection ? null : (
+            tripCard ?? (selection ? null : (
               <div className="tf-rail-body">
                 <SimulateHome
                   routes={snapshot.routes}
@@ -2531,9 +2544,11 @@ export default function App() {
                   onSelectRoute={(id) => { setSelection({ kind: 'route', id }); announceSelection({ kind: 'route', id }); }}
                   onLocateProblem={onLocateProblem}
                   fares={<FaresPanel fares={snapshot.fares} onFares={onFarePolicy} />}
+                  recentTrips={recentTripRows}
+                  onOpenTrip={(id, kind) => setOpenTrip({ id, kind })}
                 />
               </div>
-            )
+            ))
           ) : mode === 'disrupt' ? (
             <div className="tf-rail-body">
               <DisruptPanel

@@ -122,6 +122,45 @@ export interface Leg {
 
 export type TripPurpose = 'work' | 'education' | 'shopping' | 'leisure' | 'airport' | 'industrial' | 'other';
 
+/** Why a trip took the mode it did. Recorded once, when the trip is created. */
+export interface TripDecision {
+  options: 'both' | 'transit-only' | 'road-only';
+  chose: 'transit' | 'car';
+  /** Minutes, including expected platform waits. Null where that option did not exist. */
+  transitMin: number | null;
+  transfers: number | null;
+  roadMin: number | null;
+  /** Fare priced into the choice (OCU). 0 when there was no choice. */
+  fare: number;
+  /** Probability of choosing the car. Null when the choice was forced. */
+  pCar: number | null;
+  /** The car was chosen but could not be created (cap reached), so the trip took transit. */
+  carFailed: boolean;
+}
+
+/** A finished (or in-progress) trip, kept compactly for the inspector. */
+export interface TripRecord {
+  id: number;
+  kind: 'transit' | 'car';
+  originZone: string;
+  destZone: string;
+  purpose: TripPurpose;
+  departMin: number;
+  /** Minute the trip ended; the current minute while it is still active. */
+  endMin: number;
+  end: 'arrived' | 'abandoned' | 'active';
+  /** Current state while active ("WAITING", "ON_VEHICLE", "DRIVING", ...). */
+  state: string;
+  decision: TripDecision;
+  /** Empty for car trips. */
+  legs: Leg[];
+  waitMin: number;
+  travelMin: number;
+  transfers: number;
+  strandedMin: number;
+  farePaid: number;
+}
+
 export interface Passenger {
   id: number;
   originZone: string;
@@ -151,6 +190,8 @@ export interface Passenger {
   fareRouteId: string;
   /** First-leg mode ('road' legs price as bus). */
   fareMode: 'metro' | 'rail' | 'bus';
+  /** Why this trip took transit (see TripDecision). */
+  decision: TripDecision;
 }
 
 /** Day-long aggregate counters, updated incrementally by the step function. */
@@ -230,6 +271,8 @@ export interface CarTrip {
   travelMin: number;
   /** Ticks spent held by a closure with no alternative (abandon at 120). */
   heldTicks: number;
+  /** Why this trip took the car (see TripDecision). */
+  decision: TripDecision;
 }
 
 export interface RoadCounters {

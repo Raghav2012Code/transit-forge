@@ -11,6 +11,8 @@ import type {
   Station,
   TransportRoute,
   TripCounters,
+  TripDecision,
+  TripRecord,
   VehicleState,
   Zone,
 } from '../../types/index.ts';
@@ -25,7 +27,8 @@ import {
   type DemandMatrix,
 } from './demand.ts';
 import { cachedRoadPath, driveAccessMin, spawnCarTrip } from '../traffic/cars.ts';
-import { chooseMode, transitEstimate } from '../traffic/modeChoice.ts';
+import { carProbability, chooseMode, transitEstimate } from '../traffic/modeChoice.ts';
+import { pushTrip, recordOfPassenger } from './tripRecord.ts';
 import type { RoadGraph } from '../traffic/roadGraph.ts';
 import type { PathExclusions } from '../transport/graph.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
@@ -68,6 +71,7 @@ export interface PassengerWorld {
   edgeState: Record<string, RoadEdgeState>;
   cars: CarTrip[];
   nextCarId: number;
+  recentTrips: TripRecord[];
   roadCounters: RoadCounters;
   zoneRoadAccess: Record<string, string>;
   roadCache: Map<string, { edgeIds: string[]; nodes: string[]; totalMin: number; computedAt: number }>;
@@ -237,14 +241,17 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         w.counters.unrouted++;
         continue;
       }
-      if (trip && road) {
-        // Wait estimates use the headway passengers actually experience
-        // (fleet-limited and congestion-degraded), not the schedule alone.
-        const headways = trip.legs.map((l) => {
+      // Wait estimates use the headway passengers actually experience
+      // (fleet-limited and congestion-degraded), not the schedule alone.
+      const headwaysOf = (legs: Leg[]) =>
+        legs.map((l) => {
           const r = routeById.get(l.routeId);
           if (!r) return 10;
           return effHeadway(w, r);
         });
+      let decision: TripDecision | null = null;
+      if (trip && road) {
+        const headways = headwaysOf(trip.legs);
         const drive = driveAccessMin(w.city, oz, dz, w.zoneRoadAccess);
         const [draw, rng2] = rngNext(rng);
         rng = rng2;
@@ -253,16 +260,51 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         const firstRoute = routeById.get(trip.legs[0].routeId);
         const fareMode = fareModeFor(firstRoute?.mode ?? 'bus');
         const fare = tripFare(fareMode, w.fares);
-        if (chooseMode(draw, transitEstimate(trip.totalMin, headways), trip.legs.length - 1, road.totalMin + drive, dz.kind, fare) === 'car') {
-          if (spawnCarTrip(w, oz, dz, drive)) continue;
+        const transitMin = transitEstimate(trip.totalMin, headways);
+        const transfers = trip.legs.length - 1;
+        const roadMin = road.totalMin + drive;
+        decision = {
+          options: 'both',
+          chose: chooseMode(draw, transitMin, transfers, roadMin, dz.kind, fare),
+          transitMin,
+          transfers,
+          roadMin,
+          fare,
+          pCar: carProbability(transitMin, transfers, roadMin, dz.kind, fare),
+          carFailed: false,
+        };
+        if (decision.chose === 'car') {
+          if (spawnCarTrip(w, oz, dz, drive, decision)) continue;
           // Car spawn failed (cap): fall through to transit.
+          decision = { ...decision, chose: 'transit', carFailed: true };
         }
       } else if (road) {
         const drive = driveAccessMin(w.city, oz, dz, w.zoneRoadAccess);
-        if (spawnCarTrip(w, oz, dz, drive)) continue;
+        decision = {
+          options: 'road-only',
+          chose: 'car',
+          transitMin: null,
+          transfers: null,
+          roadMin: road.totalMin + drive,
+          fare: 0,
+          pCar: null,
+          carFailed: false,
+        };
+        if (spawnCarTrip(w, oz, dz, drive, decision)) continue;
+      } else if (trip) {
+        decision = {
+          options: 'transit-only',
+          chose: 'transit',
+          transitMin: transitEstimate(trip.totalMin, headwaysOf(trip.legs)),
+          transfers: trip.legs.length - 1,
+          roadMin: null,
+          fare: 0,
+          pCar: null,
+          carFailed: false,
+        };
       }
       const legs = trip?.legs;
-      if (!legs) {
+      if (!legs || !decision) {
         w.counters.unrouted++;
         continue;
       }
@@ -291,6 +333,7 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         farePaid: tripFare(entryMode, w.fares),
         fareRouteId: legs[0].routeId,
         fareMode: entryMode,
+        decision,
       });
       w.counters.generated++;
     }
@@ -441,6 +484,9 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
 
   // 5. Sweep arrived passengers (aggregates already recorded).
   if (w.passengers.some((x) => x.state === 'ARRIVED')) {
+    for (const x of w.passengers) {
+      if (x.state === 'ARRIVED') pushTrip(w.recentTrips, recordOfPassenger(x, w.timeMinutes));
+    }
     w.passengers = w.passengers.filter((x) => x.state !== 'ARRIVED');
   }
 }

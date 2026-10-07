@@ -8,6 +8,8 @@ import { nextArrivalMin, nextTerminusDeparture, routeEffectiveHeadway } from '..
 import type { ReactNode } from 'react';
 import { RouteRef } from '../shell/RouteBullet.tsx';
 import { IconClose } from '../shell/icons.tsx';
+import TripList from './TripList.tsx';
+import { ridersOf, waitingAt, type TripKind } from './trips.ts';
 
 /** Upcoming departures at a station, per serving route and direction. */
 function StationDepartures({ sim, stationId }: { sim: SimulationState; stationId: string }) {
@@ -88,6 +90,7 @@ interface Props {
   onInvestigate: (target: { kind: 'station' | 'route' | 'road' | 'zone'; id: string }) => void;
   onOverlay: (o: Overlay) => void;
   onOpenDisrupt: () => void;
+  onOpenTrip: (id: number, kind: TripKind) => void;
   catchmentRadius: number | null;
   onCatchmentRadius: (r: number | null) => void;
   zoneCoverage?: number;
@@ -120,7 +123,7 @@ function CloseButton({ onClose }: { onClose: () => void }) {
   );
 }
 
-export default function Inspector({ selection, sim, onClose, problems, onFocusStation, onInvestigate, onOverlay, onOpenDisrupt, catchmentRadius, onCatchmentRadius, zoneCoverage, zoneTravel, children }: Props) {
+export default function Inspector({ selection, sim, onClose, problems, onFocusStation, onInvestigate, onOverlay, onOpenDisrupt, onOpenTrip, catchmentRadius, onCatchmentRadius, zoneCoverage, zoneTravel, children }: Props) {
   if (!selection) {
     return (
       <div className="tf-inspector">
@@ -181,6 +184,8 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
           <div className="tf-stat-row"><dt>Load</dt><dd>{vv.load} / {vv.capacity} ({pct}%)</dd></div>
           <div className="tf-stat-row"><dt>Completed trips</dt><dd>{vv.trips}</dd></div>
         </dl>
+        <p className="tf-hint">Riders</p>
+        <TripList rows={ridersOf(sim, vv.id)} onOpen={onOpenTrip} empty="No one aboard." />
         {route && (
           <div className="tf-draft-actions">
             <button type="button" className="tf-btn small" onClick={() => onInvestigate({ kind: 'route', id: route.id })}>
@@ -264,6 +269,8 @@ export default function Inspector({ selection, sim, onClose, problems, onFocusSt
           <div className="tf-stat-row"><dt>Trips served</dt><dd>{Math.round(st.boardedDay).toLocaleString()}</dd></div>
         </dl>
         <StationDepartures sim={sim} stationId={st.id} />
+        <p className="tf-hint">Who is waiting</p>
+        <TripList rows={waitingAt(sim, st.id)} onOpen={onOpenTrip} empty="No one is waiting." />
       </div>
     );
   }
