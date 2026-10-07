@@ -118,15 +118,16 @@ export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]
     const elevated = route.mode === 'metro' || route.mode === 'rail';
     const y0 = MODE_Y[route.mode];
 
+    // The curve already rides at MODE_Y: sweep offsets are relative to it.
     const band = new THREE.Mesh(
-      sweep(curve, rectProfile(BAND_W[route.mode], 0, elevated ? 0.5 : 0.1), y0, 0, curve.length, 2.5),
+      sweep(curve, rectProfile(BAND_W[route.mode], 0, elevated ? 0.5 : 0.1), 0, 0, curve.length, 2.5),
       new THREE.MeshStandardMaterial({ color: route.color, emissive: route.color, emissiveIntensity: 0.18, roughness: 0.6 }),
     );
     band.userData = { kind: 'route', id: route.id, baseColor: route.color };
     band.castShadow = !elevated;
     if (!elevated) {
       // A busway: a low slab under the paint that also carries the line over water.
-      const way = new THREE.Mesh(sweep(curve, rectProfile(5.4, -2.4, 0), 0.46, 0, curve.length, 3), deckMat);
+      const way = new THREE.Mesh(sweep(curve, rectProfile(5.4, -2.4, 0), 0.46 - MODE_Y.bus, 0, curve.length, 3), deckMat);
       way.receiveShadow = true;
       way.userData = { kind: 'deck' };
       byMode[route.mode].add(way);
@@ -139,10 +140,10 @@ export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]
       const m = route.mode as 'metro' | 'rail';
       const w = DECK_W[m];
       // Kerbs: two thin walls along the deck edges.
-      const kerbL = sweep(curve, [[w / 2 - 0.42, 0], [w / 2, 0], [w / 2, 0.8], [w / 2 - 0.42, 0.8]], y0, 0, curve.length, 3);
-      const kerbR = sweep(curve, [[-w / 2, 0], [-w / 2 + 0.42, 0], [-w / 2 + 0.42, 0.8], [-w / 2, 0.8]], y0, 0, curve.length, 3);
+      const kerbL = sweep(curve, [[w / 2 - 0.42, 0], [w / 2, 0], [w / 2, 0.8], [w / 2 - 0.42, 0.8]], 0, 0, curve.length, 3);
+      const kerbR = sweep(curve, [[-w / 2, 0], [-w / 2 + 0.42, 0], [-w / 2 + 0.42, 0.8], [-w / 2, 0.8]], 0, 0, curve.length, 3);
       const deckMesh = new THREE.Mesh(
-        merge([sweep(curve, rectProfile(w, -DECK_T, 0), y0, 0, curve.length, 3), kerbL, kerbR]),
+        merge([sweep(curve, rectProfile(w, -DECK_T, 0), 0, 0, curve.length, 3), kerbL, kerbR]),
         deckMat,
       );
       deckMesh.castShadow = true;

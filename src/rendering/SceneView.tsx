@@ -579,7 +579,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             if (curve) {
               incidentGroup.add(
                 new THREE.Mesh(
-                  sweep(curve, rectProfile(3.4, 0, 0.12), MODE_Y.bus + 0.2, 0, curve.length, 3),
+                  sweep(curve, rectProfile(3.4, 0, 0.12), 0, 0, curve.length, 3),
                   new THREE.MeshBasicMaterial({ color: 0xf472b6 }),
                 ),
               );
@@ -618,7 +618,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       if (d.hover) run.push({ x: d.hover.x, z: d.hover.z });
       const curve = buildTrackCurve(run, MODE_Y.metro);
       if (curve) {
-        const ribbon = new THREE.Mesh(sweep(curve, rectProfile(3.2, 0, 0.5), 0.9, 0, curve.length, 2.5), draftMat);
+        const ribbon = new THREE.Mesh(sweep(curve, rectProfile(3.2, 0, 0.5), 0, 0, curve.length, 2.5), draftMat);
         draftGroup.add(ribbon);
       }
       for (const p of d.points) {
@@ -961,7 +961,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       const cur = simRef.current;
       if (cur) {
         syncVehicleMeshes(rig, cur.vehicles, cur.routes, cur.stations);
-        updateVehicles(rig, cur.vehicles, cur.routes, clock.read(cur.timeMinutes, now / 1000), cur.service);
+        updateVehicles(rig, cur.vehicles, cur.routes, clock.read(cur.timeMinutes, now / 1000), cur.service, cur.closures.suspendedRoutes);
         updateCarRig(carRig, cur.cars, edgeLen);
         rebuildDraft();
         rebuildMarkers();

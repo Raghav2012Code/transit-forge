@@ -32,7 +32,10 @@ still come from the simulation.
 ## Consequences
 
 - Motion is smooth and legible at any run speed and frame rate, and trains stop
-  at stations. Simulation results are unchanged.
+  at stations. The replay itself changes no reported number, but it landed
+  alongside movement-model changes that did move results (terminus turnaround,
+  per-stop dwell, late-boarding dwell, B1 no longer looping): the golden
+  hashes were re-recorded for the new results.
 - A vehicle's drawn position is not where the simulation has it. Nothing in the
   interface reads the drawn position back, so nothing disagrees; if something
   ever needs "where is this vehicle now", it should ask the schedule.

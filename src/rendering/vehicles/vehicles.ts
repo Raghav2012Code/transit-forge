@@ -193,6 +193,7 @@ export function updateVehicles(
   routes: TransportRoute[],
   clockMin: number,
   service: Headways = {},
+  suspended: ReadonlySet<string> = new Set(),
 ): void {
   const byRoute = new Map<string, VehicleState[]>();
   for (const v of vehicles) {
@@ -215,6 +216,11 @@ export function updateVehicles(
     fleet.forEach((v, k) => {
       const mesh = rig.meshById.get(v.id);
       if (!mesh) return;
+      // A suspended line holds its trains where they are: skip re-placement
+      // (the schedule is clock-driven, so service resumes seamlessly). A
+      // vehicle never placed before is positioned once, so it never sits at
+      // the origin.
+      if (suspended.has(routeId) && mesh.userData.init) return;
       const mode = mesh.userData.mode as TransportMode;
       const c = CONSIST[mode];
       const span = c.cars * c.length + (c.cars - 1) * COUPLING;

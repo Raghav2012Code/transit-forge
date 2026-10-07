@@ -18,10 +18,14 @@ function goldenOf(ticks: number): string {
   return fnv1a(JSON.stringify(computeStats(sim)));
 }
 
-// Recorded from the unmodified simulation. If this fails, results moved: find out why before touching the number.
+// Pinned after the movement-model rework (PR #4): termini charge turnaround,
+// each stop deducts its own dwell, late boardings extend dwell, and B1 no
+// longer loops (LOOP_ROUTES emptied). Results moved, so the hashes were
+// re-recorded. If this fails, results moved again: find out why before
+// touching the number.
 const GOLDEN: Record<number, string> = { 360: '50d0008e', 1020: 'd5c6da4d' };
 
-describe('seed 1337 results are unchanged', () => {
+describe('seed 1337 golden results', () => {
   for (const ticks of [360, 1020]) {
     it(`after ${ticks} ticks`, () => {
       expect(goldenOf(ticks)).toBe(GOLDEN[ticks]);

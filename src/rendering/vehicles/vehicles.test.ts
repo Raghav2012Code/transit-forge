@@ -104,6 +104,19 @@ describe('vehicles ride the drawn route line', () => {
     expect(rig.meshById.get(v.id)?.userData.init).toBe(true);
   });
 
+  it('freezes vehicles on suspended routes where they are', () => {
+    const rig = buildVehicles(fleet, [rt], stations);
+    updateVehicles(rig, fleet, [rt], 3.3);
+    const before = fleet.map((v) => rig.meshById.get(v.id)?.position.clone());
+    updateVehicles(rig, fleet, [rt], 9.9, {}, new Set([rt.id]));
+    fleet.forEach((v, i) => {
+      expect(rig.meshById.get(v.id)?.position.distanceTo(before[i] as THREE.Vector3)).toBe(0);
+    });
+    // And service resumes once the suspension lifts.
+    updateVehicles(rig, fleet, [rt], 9.9);
+    expect(fleet.some((v, i) => (rig.meshById.get(v.id)?.position.distanceTo(before[i] as THREE.Vector3) ?? 0) > 0)).toBe(true);
+  });
+
   it('shares one consist geometry per mode and colour', () => {
     const rig = buildVehicles(fleet, [rt], stations);
     const geos = new Set([...rig.meshById.values()].map((m) => m.geometry));
