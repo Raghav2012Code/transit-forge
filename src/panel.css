@@ -104,3 +104,8 @@
 .tf-trip-facts li.watch { color: var(--watch-ink); }
 .tf-trip-facts li.alert { color: var(--alert); font-weight: 500; }
 .tf-trip-leg { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-4); }
+
+/* the fork comparison sits in the narrow side panel: fixed columns that wrap instead of scrolling */
+.tf-fork-table { table-layout: fixed; }
+.tf-fork-table th:first-child, .tf-fork-table td:first-child { width: 34%; }
+.tf-fork-table th, .tf-fork-table td { white-space: normal; overflow-wrap: anywhere; }

@@ -8,6 +8,10 @@ import './responsive.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
 import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
+import { advanceReplayFor, replayProgress01, startReplay } from './simulation/replay.ts';
+import { runDayInWorker } from './workers/client.ts';
+import ForkCard, { type ForkResult } from './ui/day/ForkCard.tsx';
+import { dayStartOf, rewindFloor } from './ui/shell/dayStrip.ts';
 import { computeAccessibility } from './simulation/analytics/accessibility.ts';
 import { computeCoverage } from './simulation/analytics/coverage.ts';
 import { findBottlenecks } from './simulation/analytics/bottlenecks.ts';
@@ -15,7 +19,7 @@ import { findTransitGaps } from './simulation/analytics/gaps.ts';
 import { planningScore, populationImpact } from './simulation/analytics/impact.ts';
 import { samplePoint, type SeriesPoint } from './simulation/analytics/series.ts';
 import { applyEdits, validateIncidentConfig } from './simulation/scenario/applyEdits.ts';
-import { compareHorizons, compareResilience, compareScenarios } from './simulation/scenario/compare.ts';
+import { buildCompareRows, compareHorizons, compareResilience, compareScenarios } from './simulation/scenario/compare.ts';
 import { evaluatePlan, type PlanEvaluation } from './simulation/scenario/evaluate.ts';
 import {
   evaluateConstraints,
@@ -55,13 +59,11 @@ import {
 import {
   createScenario,
   formatCost,
-  mergeServicePatch,
   nextRouteId,
   nextStationId,
   paletteColor,
   pushOp,
   redoOp,
-  sanitizeServicePatch,
   undoOp,
   validateRoadNode,
   validateStationPlacement,
@@ -70,7 +72,7 @@ import {
   type Scenario,
   type ServicePatch,
 } from './simulation/scenario/scenario.ts';
-import { sanitizeFares, type FarePolicy } from './simulation/economics/fares.ts';
+import type { FarePolicy } from './simulation/economics/fares.ts';
 import { deleteScenario, duplicateScenario, listScenarios, saveScenario } from './simulation/scenario/store.ts';
 import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
@@ -124,9 +126,7 @@ import type { Command } from './ui/shell/commands.ts';
 import { PRESETS } from './ui/map/places.ts';
 import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme.ts';
 import type { Theme } from './rendering/palette.ts';
-import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
-import { headwayAt } from './simulation/service/servicePlan.ts';
-import { LOOP_ROUTES } from './simulation/passengers/passengers.ts';
+import { applyFares, applyServicePatch } from './simulation/service/live.ts';
 
 const SEED = 1337;
 const TICKS_PER_SEC: Record<Speed, number> = { 1: 2, 5: 8, 20: 24 };
@@ -162,6 +162,17 @@ export default function App() {
   const [overlay, setOverlay] = useState<Overlay>('normal');
   const [selection, setSelectionRaw] = useState<Selection | null>(null);
   // The trip whose card is open in the side panel, if any.
+  // Incidents added by hand during the day, so a rebuilt day can bring them back (see scheduleLiveIncident).
+  const [liveIncidents, setLiveIncidents] = useState<{ cfg: IncidentConfig; createdAtMin: number }[]>([]);
+  // Set while a rewind is rebuilding the day: where to, and how far along.
+  const [rewind, setRewind] = useState<{ target: number; progress: number } | null>(null);
+  const rewindFrame = useRef(0);
+  // A forked day: the scenario's edits as they were at the fork. Changes made after it are compared against this.
+  const [fork, setFork] = useState<{ atMin: number; baseOps: EditOp[] } | null>(null);
+  const [forkResult, setForkResult] = useState<ForkResult | null>(null);
+  const [forkRunning, setForkRunning] = useState(false);
+  const [forkError, setForkError] = useState<string | null>(null);
+  const forkCancel = useRef<(() => void) | null>(null);
   const [openTrip, setOpenTrip] = useState<{ id: number; kind: TripKind } | null>(null);
   // Below 1024px the panel is a drawer, and a selection is only readable in it,
   // so selecting opens it. (Declared as a function so every handler can use it.)
@@ -174,7 +185,6 @@ export default function App() {
   const [coverageThreshold, setCoverageThreshold] = useState(500);
   const [history, setHistory] = useState<SeriesPoint[]>([]);
   const lastHistTick = useRef(0);
-  const fleetNonce = useRef(0);
 
   // Scenario + build state. Base city/seed never mutate; ops replay into mod.
   const [mode, setMode] = useState<Mode>('simulate');
@@ -359,6 +369,12 @@ export default function App() {
   function requestCameraPose(pos: [number, number, number], target: [number, number, number]) {
     setCameraCmd({ seq: camSeq.current++, pose: { pos, target } });
   }
+
+  // A rewind in progress stops with the page.
+  useEffect(() => () => {
+    cancelAnimationFrame(rewindFrame.current);
+    forkCancel.current?.();
+  }, []);
 
   // Simulation loop: fixed 1-minute steps, decoupled from render rate.
   useEffect(() => {
@@ -919,19 +935,11 @@ export default function App() {
   // logged as a setService op so scenarios, undo, and compare stay exact.
   function onServicePatch(routeId: string, patch: ServicePatch) {
     const sim = simRef.current;
-    const route = sim.routes.find((r) => r.id === routeId);
-    const current = sim.service[routeId];
-    if (!route || !current) return;
-    const mode = route.mode === 'metro' || route.mode === 'rail' ? route.mode : 'bus';
-    const next = mergeServicePatch(current, sanitizeServicePatch(patch, mode));
-    sim.service[routeId] = next;
-    sim.serviceOffsets[routeId] = phaseOffset(sim.seed, routeId, next);
-    for (const vv of sim.vehicles) {
-      if (vv.routeId === routeId) vv.capacity = next.vehicleCapacity;
-    }
-    reconcileFleet(sim, routeId);
+    const applied = applyServicePatch(sim, routeId, patch);
+    if (!applied) return;
     if (viewing === 'base') setViewing('scenario');
-    const r = pushOp(ops, redo, { type: 'setService', routeId, patch: sanitizeServicePatch(patch, mode) });
+    // Before the day starts an edit is a start-of-day edit; once it is running the edit is logged with its minute.
+    const r = pushOp(ops, redo, { type: 'setService', routeId, patch: applied, ...(sim.tick > 0 ? { atMin: sim.timeMinutes } : {}) });
     setOps(r.ops);
     setRedo(r.redo);
     setCompareResult(null);
@@ -945,48 +953,13 @@ export default function App() {
   // not reset the day.
   function onFarePolicy(fares: FarePolicy) {
     const sim = simRef.current;
-    const next = sanitizeFares(fares);
-    sim.fares = next;
+    const applied = applyFares(sim, fares);
     if (viewing === 'base') setViewing('scenario');
-    const r = pushOp(ops, redo, { type: 'setFares', fares: next });
+    const r = pushOp(ops, redo, { type: 'setFares', fares: applied, ...(sim.tick > 0 ? { atMin: sim.timeMinutes } : {}) });
     setOps(r.ops);
     setRedo(r.redo);
     setCompareResult(null);
     setSnapshot({ ...sim });
-  }
-
-  function reconcileFleet(sim: SimulationState, routeId: string) {
-    const route = sim.routes.find((r) => r.id === routeId);
-    const plan = sim.service[routeId];
-    if (!route || !plan) return;
-    const cum = sim.routeCumDist.get(routeId) ?? [0];
-    const total = Math.max(1, cum[cum.length - 1]);
-    const cycle = cycleMin(total, plan, route.stationIds.length, LOOP_ROUTES.has(routeId));
-    const h = headwayAt(plan, sim.timeMinutes);
-    const desired = plan.fleetSize > 0 ? plan.fleetSize : Number.isFinite(h) ? fleetRequired(cycle, h) : 0;
-    const existing = sim.vehicles.filter((vv) => vv.routeId === routeId);
-    if (existing.length < desired) {
-      for (let i = existing.length; i < desired; i++) {
-        fleetNonce.current++;
-        sim.vehicles.push({
-          id: `veh-${routeId}-${i}-n${fleetNonce.current}`,
-          routeId,
-          s: 0,
-          direction: 1,
-          load: 0,
-          capacity: plan.vehicleCapacity,
-          riders: [],
-          dwellLeft: 0,
-          trips: 0,
-        });
-      }
-    } else if (existing.length > desired) {
-      const removable = existing
-        .filter((vv) => vv.riders.length === 0)
-        .sort((a, b) => b.id.localeCompare(a.id));
-      const drop = new Set(removable.slice(0, existing.length - desired).map((vv) => vv.id));
-      if (drop.size > 0) sim.vehicles = sim.vehicles.filter((vv) => !drop.has(vv.id));
-    }
   }
 
   // ---- disruptions ----
@@ -1071,11 +1044,22 @@ export default function App() {
         };
       }
     }
+    scheduleLiveIncident(sim, cfg);
+    setIncidentDraft(EMPTY_DRAFT);
+    setSnapshot({ ...sim });
+  }
+
+  /**
+   * Add an incident to the running day and remember it, so rebuilding the day (a rewind or a fork)
+   * brings it back. It is kept apart from `ops` on purpose: plans are evaluated from `ops`, and a
+   * disruption tried out by hand should not change what a plan is scored against.
+   */
+  function scheduleLiveIncident(sim: SimulationState, cfg: IncidentConfig) {
     const id = `inc-${sim.nextIncidentId}`;
     sim.nextIncidentId++;
+    const withId = { ...cfg, id };
     sim.incidents.push({
-      ...cfg,
-      id,
+      ...withId,
       status: 'scheduled',
       activeTicks: 0,
       baselineWaiting: 0,
@@ -1083,9 +1067,8 @@ export default function App() {
       strandedPeakDuringIncident: 0,
     });
     sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
+    setLiveIncidents((l) => [...l, { cfg: withId, createdAtMin: sim.timeMinutes }]);
     setSelectedIncidentId(id);
-    setIncidentDraft(EMPTY_DRAFT);
-    setSnapshot({ ...sim });
   }
 
   /** Shuttle endpoints for a draft: closure span, or the station itself. */
@@ -1135,9 +1118,13 @@ export default function App() {
     if (inc.status === 'scheduled') {
       sim.incidents = sim.incidents.filter((i) => i.id !== id);
       sim.events.push({ t: sim.timeMinutes, text: `${inc.label} — cancelled before start`, level: 'info' });
+      setLiveIncidents((l) => l.filter((x) => x.cfg.id !== id));
     } else if (inc.status === 'active') {
-      // End now: recovery window starts immediately.
-      inc.durationMin = Math.max(0, sim.timeMinutes - inc.startMin);
+      // End now: recovery window starts immediately. Five minutes is the shortest an incident can be
+      // (the same rule that validates a scheduled one), which keeps a rewound day identical to this one.
+      inc.durationMin = Math.max(5, sim.timeMinutes - inc.startMin);
+      const duration = inc.durationMin;
+      setLiveIncidents((l) => l.map((x) => (x.cfg.id === id ? { ...x, cfg: { ...x.cfg, durationMin: duration } } : x)));
     }
     if (selectedIncidentId === id && inc.status !== 'active' && inc.status !== 'recovering') setSelectedIncidentId(null);
     setSnapshot({ ...sim });
@@ -1160,6 +1147,7 @@ export default function App() {
   }
 
   function resetAll() {
+    discardFork();
     setZoneState(null);
     setYearsApplied(0);
     setGrowthHistory([]);
@@ -1341,11 +1329,7 @@ export default function App() {
     const p = presets.find((x) => x.key === key);
     if (!p) return;
     const cfg = p.build(Math.round(sim.timeMinutes + 5));
-    const id = `inc-${sim.nextIncidentId}`;
-    sim.nextIncidentId++;
-    sim.incidents.push({ ...cfg, id, status: 'scheduled', activeTicks: 0, baselineWaiting: 0, recovered90: false, strandedPeakDuringIncident: 0 });
-    sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
-    setSelectedIncidentId(id);
+    scheduleLiveIncident(sim, cfg);
     setSnapshot({ ...sim });
   }
 
@@ -1395,10 +1379,106 @@ export default function App() {
   function resetSimTo(city: typeof baseCity, net: typeof baseNet) {
     simRef.current = createSimulationFromParts(SEED, city, net);
     clearRunTarget();
+    cancelRewind();
+    setLiveIncidents([]);
     setSnapshot(simRef.current);
     setSelection(null);
     setHistory([]);
     lastHistTick.current = 0;
+  }
+
+  function cancelRewind() {
+    cancelAnimationFrame(rewindFrame.current);
+    setRewind(null);
+  }
+
+  /** A fresh day built the way the current view's day was: this view's network, its timed edits, and the incidents added by hand. */
+  function freshDay(createdBy?: number): SimulationState {
+    const live = liveIncidents.filter((l) => createdBy === undefined || l.createdAtMin <= createdBy).map((l) => l.cfg);
+    if (viewing === 'base') return createSimulationFromParts(SEED, effBaseCity, { ...baseNet, incidents: live });
+    return createSimulationFromParts(SEED, mod.city, { ...mod, incidents: [...mod.incidents, ...live] });
+  }
+
+  /**
+   * Put the clock back. The simulation is deterministic, so the day is rebuilt by running a fresh one
+   * forward to the chosen minute; it is the same day, not an approximation. The work is spread over
+   * frames so the page stays responsive, and the chart history is rebuilt on the way.
+   */
+  function rewindTo(target: number) {
+    if (rewind) return;
+    setPlaying(false);
+    clearRunTarget();
+    const replay = startReplay(freshDay(), target);
+    const points: SeriesPoint[] = [];
+    let lastTick = 0;
+    const frame = () => {
+      advanceReplayFor(replay, 10, () => performance.now(), (s) => {
+        if (s.tick - lastTick >= 5) {
+          lastTick = s.tick;
+          points.push(samplePoint(s));
+        }
+      });
+      if (!replay.done) {
+        setRewind({ target, progress: replayProgress01(replay) });
+        rewindFrame.current = requestAnimationFrame(frame);
+        return;
+      }
+      simRef.current = replay.sim;
+      lastHistTick.current = lastTick;
+      setHistory(points.slice(-288));
+      setRewind(null);
+      setSnapshot(replay.sim);
+    };
+    setRewind({ target, progress: 0 });
+    rewindFrame.current = requestAnimationFrame(frame);
+  }
+
+  function forkHere() {
+    setFork({ atMin: simRef.current.timeMinutes, baseOps: ops.map((o) => ({ ...o })) });
+    setForkResult(null);
+    setForkError(null);
+  }
+
+  function discardFork() {
+    forkCancel.current?.();
+    setFork(null);
+    setForkResult(null);
+    setForkError(null);
+    setForkRunning(false);
+  }
+
+  /** Edits and hand-made disruptions since the fork. */
+  const forkChanges = fork
+    ? Math.max(0, ops.length - fork.baseOps.length) + liveIncidents.filter((l) => l.createdAtMin > fork.atMin).length
+    : 0;
+
+  /**
+   * Run both days to the end, each in its own worker: the day as it stood at the fork, and the day with
+   * everything done since. They are the same simulation up to the fork, so the difference is the change.
+   */
+  function compareFork() {
+    if (!fork || forkRunning) return;
+    setForkRunning(true);
+    setForkError(null);
+    setForkResult(null);
+    const common = { seed: SEED, city: effBaseCity, net: baseNet, endMin: dayStartOf(simRef.current.timeMinutes) + 1440 };
+    const a = runDayInWorker({ ...common, side: { ops: fork.baseOps, incidents: liveIncidents.filter((l) => l.createdAtMin <= fork.atMin).map((l) => l.cfg) } });
+    const b = runDayInWorker({ ...common, side: { ops, incidents: liveIncidents.map((l) => l.cfg) } });
+    const atMin = fork.atMin;
+    forkCancel.current = () => {
+      a.cancel();
+      b.cancel();
+    };
+    Promise.all([a.promise, b.promise])
+      .then(([ra, rb]) => setForkResult({ atMin, a: ra, b: rb, rows: buildCompareRows(ra.stats, rb.stats, ra.cost, rb.cost) }))
+      .catch((e: unknown) => {
+        if (e instanceof Error && e.message === 'cancelled') return;
+        setForkError(e instanceof Error ? e.message : 'The comparison failed.');
+      })
+      .finally(() => {
+        forkCancel.current = null;
+        setForkRunning(false);
+      });
   }
 
   function applyOps(nextOps: EditOp[], nextRedo: EditOp[], view: 'base' | 'scenario' = viewing) {
@@ -1603,6 +1683,32 @@ export default function App() {
     add({ id: 'speed-1', group: 'Day', label: 'Run at normal speed', keys: ['1'], keywords: 'slow 1x', run: () => setSpeed(1) });
     add({ id: 'speed-5', group: 'Day', label: 'Run at 5× speed', keys: ['2'], keywords: 'faster fast 5x', run: () => setSpeed(5) });
     add({ id: 'speed-20', group: 'Day', label: 'Run at 20× speed', keys: ['3'], keywords: 'fastest fast 20x', run: () => setSpeed(20) });
+    add({
+      id: 'rewind-hour',
+      group: 'Day',
+      label: 'Rewind the day by an hour',
+      keywords: 'back earlier replay time machine',
+      run: () => {
+        const floor = dayStartOf(snapshot.timeMinutes) + rewindFloor(snapshot.timeMinutes);
+        const t = Math.max(floor, Math.floor((snapshot.timeMinutes - 60) / 5) * 5);
+        if (t < snapshot.timeMinutes) rewindTo(t);
+      },
+    });
+    add({
+      id: 'rewind-start',
+      group: 'Day',
+      label: 'Rewind to the start of the day',
+      keywords: 'back earlier replay time machine beginning',
+      run: () => {
+        const floor = dayStartOf(snapshot.timeMinutes) + rewindFloor(snapshot.timeMinutes);
+        if (floor < snapshot.timeMinutes) rewindTo(floor);
+      },
+    });
+    add({ id: 'fork-here', group: 'Day', label: 'Fork the day here', keywords: 'time machine branch what if compare', run: forkHere });
+    if (fork) {
+      add({ id: 'fork-compare', group: 'Day', label: 'Compare with the unforked day', keywords: 'time machine branch what if', run: compareFork });
+      add({ id: 'fork-discard', group: 'Day', label: 'Discard the fork', keywords: 'time machine branch', run: discardFork });
+    }
     add({ id: 'step', group: 'Day', label: 'Advance one minute', keywords: 'step tick', run: () => { clearRunTarget(); simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); } });
     add({ id: 'reset', group: 'Day', label: 'Reset the day', keys: ['R'], keywords: 'restart start over', run: resetAll });
 
@@ -2544,6 +2650,18 @@ export default function App() {
                   onSelectRoute={(id) => { setSelection({ kind: 'route', id }); announceSelection({ kind: 'route', id }); }}
                   onLocateProblem={onLocateProblem}
                   fares={<FaresPanel fares={snapshot.fares} onFares={onFarePolicy} />}
+                  timeMachine={
+                    <ForkCard
+                      fork={fork}
+                      changes={forkChanges}
+                      running={forkRunning}
+                      error={forkError}
+                      result={forkResult}
+                      onFork={forkHere}
+                      onCompare={compareFork}
+                      onDiscard={discardFork}
+                    />
+                  }
                   recentTrips={recentTripRows}
                   onOpenTrip={(id, kind) => setOpenTrip({ id, kind })}
                 />
@@ -2664,6 +2782,8 @@ export default function App() {
         incidents={snapshot.incidents}
         runTarget={runTarget}
         onRunTo={runTo}
+        onRewindTo={rewindTo}
+        rewind={rewind}
         reportsOpen={reportsOpen}
         onReports={() => setReportsOpen((v) => !v)}
       />
