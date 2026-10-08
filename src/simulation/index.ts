@@ -39,6 +39,8 @@ import {
 } from './incidents/incidents.ts';
 import type { Incident, IncidentEvent } from '../types/index.ts';
 import { DEFAULT_FARES, type FarePolicy } from './economics/fares.ts';
+import { applyFares, applyServicePatch } from './service/live.ts';
+import type { TimedOp } from './scenario/scenario.ts';
 
 export interface SimulationState {
   seed: number;
@@ -60,6 +62,8 @@ export interface SimulationState {
   edgeState: Record<string, RoadEdgeState>;
   cars: CarTrip[];
   nextCarId: number;
+  /** Counts vehicles added by live service edits, so their ids are the same on every replay. */
+  fleetNonce: number;
   /** The last finished trips, newest last, for the trip inspector (bounded). */
   recentTrips: TripRecord[];
   roadCounters: RoadCounters;
@@ -73,6 +77,8 @@ export interface SimulationState {
   fares: FarePolicy;
   /** Deterministic departure phase per route (0 for synced routes). */
   serviceOffsets: Record<string, number>;
+  /** Service and fare edits waiting for their minute, in order. */
+  pendingTimed: TimedOp[];
   /** Disruption incidents (live + scheduled + resolved history). */
   incidents: Incident[];
   /** Timeline of simulation events (bounded). */
@@ -87,7 +93,8 @@ export interface SimulationState {
   eventFlags: Record<string, boolean>;
 }
 
-const START_MIN = 7 * 60;
+/** The simulated day starts at 07:00. */
+export const START_MIN = 7 * 60;
 
 function emptyCounters(routeIds: string[]): TripCounters {
   const routeBoardings: Record<string, number> = {};
@@ -164,6 +171,16 @@ function initVehicles(
   return vehicles;
 }
 
+/** The next free `inc-N` number, so incidents created later never reuse an id a replayed one already holds. */
+function nextIncidentNumber(configs: { id?: string }[]): number {
+  let max = 0;
+  for (const c of configs) {
+    const n = /^inc-(\d+)$/.exec(c.id ?? '')?.[1];
+    if (n) max = Math.max(max, Number(n));
+  }
+  return max + 1;
+}
+
 export function createSimulation(seed = 1337): SimulationState {
   const city = generateCity(seed);
   const net = buildNetwork();
@@ -183,6 +200,7 @@ export function createSimulationFromParts(
     service?: Record<string, ServicePlan>;
     incidents?: IncidentConfig[];
     fares?: FarePolicy;
+    timed?: TimedOp[];
   },
   serviceOverrides?: Record<string, ServicePlan>,
 ): SimulationState {
@@ -218,6 +236,7 @@ export function createSimulationFromParts(
     edgeState: buildEdgeStates(roadGraph),
     cars: [],
     nextCarId: 1,
+    fleetNonce: 0,
     recentTrips: [],
     roadCounters: emptyRoadCounters(),
     zoneRoadAccess: buildZoneRoadAccess(city),
@@ -227,6 +246,7 @@ export function createSimulationFromParts(
     service,
     fares: net.fares ? { ...net.fares } : { ...DEFAULT_FARES },
     serviceOffsets,
+    pendingTimed: (net.timed ?? []).map((op) => ({ ...op })),
     incidents: (net.incidents ?? []).map((cfg, i) => ({
       ...cfg,
       id: cfg.id || `inc-sched-${i}`,
@@ -239,7 +259,7 @@ export function createSimulationFromParts(
     events: [],
     closures: emptyClosures(),
     closureSig: '',
-    nextIncidentId: 1,
+    nextIncidentId: nextIncidentNumber(net.incidents ?? []),
     emergencyBusesFree: 12,
     eventFlags: {},
   };
@@ -247,6 +267,13 @@ export function createSimulationFromParts(
 
 /** Advance the clock by dtMinutes. Deterministic; no wall-clock or Math.random. */
 export function stepSimulation(state: SimulationState, dtMinutes = 1): SimulationState {
+  // Timed edits fire at the first step where the clock has reached them. A live edit made between
+  // steps at the same minute lands in exactly the same place, so live, headless and replay agree.
+  while (state.pendingTimed.length > 0 && state.pendingTimed[0].atMin <= state.timeMinutes) {
+    const op = state.pendingTimed.shift()!;
+    if (op.type === 'setService') applyServicePatch(state, op.routeId, op.patch);
+    else applyFares(state, op.fares);
+  }
   // Disruptions first: lifecycle transitions, then effective closures.
   // A changed incident set invalidates cached road paths immediately.
   const lifecycleEvents = updateIncidentLifecycle(state, dtMinutes);

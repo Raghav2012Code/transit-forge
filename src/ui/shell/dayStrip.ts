@@ -1,6 +1,7 @@
 // Geometry for the service-day strip. Pure functions: minutes in, pixels out.
 // The strip shows the operating day (04:00 to 24:00) so the peaks, the
 // disruptions and the clock read on one axis, the way a timetable does.
+import { START_MIN } from '../../simulation/index.ts';
 import { isPeak } from '../../simulation/service/servicePlan.ts';
 import type { SeriesPoint } from '../../simulation/analytics/series.ts';
 import type { IncidentStatus } from '../../types/index.ts';
@@ -97,13 +98,52 @@ export function tracePoints(history: SeriesPoint[], dayStart: number, width: num
     .join(' ');
 }
 
-/**
- * The absolute sim minute to run until, for a chosen minute of day. Only the
- * future is reachable: a replay backwards would mean re-running the day.
- */
+/** The absolute sim minute to run until, for a chosen minute of day. Null for a minute that has passed. */
 export function runTargetFor(chosenMinuteOfDay: number, timeMinutes: number): number | null {
   const target = dayStartOf(timeMinutes) + chosenMinuteOfDay;
   return target > timeMinutes ? target : null;
+}
+
+/** The earliest minute of the day the clock can be put back to: the sim starts at 07:00 on day one. */
+export function rewindFloor(timeMinutes: number): number {
+  return dayStartOf(timeMinutes) === 0 ? START_MIN : DAY_FROM;
+}
+
+/**
+ * The absolute sim minute to rewind to, for a chosen minute of day. Rewinding replays the
+ * day from its start up to that minute, which the simulation's determinism makes exact.
+ * Null for a minute that has not been reached yet, or one before the day began.
+ */
+export function rewindTargetFor(chosenMinuteOfDay: number, timeMinutes: number): number | null {
+  const target = dayStartOf(timeMinutes) + chosenMinuteOfDay;
+  return target < timeMinutes && chosenMinuteOfDay >= rewindFloor(timeMinutes) ? target : null;
+}
+
+/**
+ * One keyboard step towards the past, on the grid. A positive step goes further back and stops at
+ * the start of the day; a negative step comes forward and gives up (null) once it reaches now.
+ */
+export function nudgeRewind(current: number | null, timeMinutes: number, stepMinutes: number): number | null {
+  const day = dayStartOf(timeMinutes);
+  const now = minuteOfDay(timeMinutes);
+  const from = current === null ? now : minuteOfDay(current);
+  const raw = from - stepMinutes;
+  if (raw >= now) return null;
+  const snapped = Math.max(rewindFloor(timeMinutes), Math.floor(raw / TARGET_STEP) * TARGET_STEP);
+  return snapped >= now ? null : day + snapped;
+}
+
+/**
+ * One keyboard step either way. `later` moves a target towards the future (starting a run-to
+ * from now), `earlier` towards the past (starting a rewind). A target on one side of now walks
+ * back to now and is dropped there, so there is always a way out that is not Escape.
+ */
+export function nudgePending(current: number | null, timeMinutes: number, direction: 'later' | 'earlier', step: number): number | null {
+  const inFuture = current !== null && current > timeMinutes;
+  const inPast = current !== null && current < timeMinutes;
+  if (direction === 'later') return inPast ? nudgeRewind(current, timeMinutes, -step) : nudgeTarget(current, timeMinutes, step);
+  if (inFuture) return nudgeTarget(current, timeMinutes, -step);
+  return nudgeRewind(current, timeMinutes, step);
 }
 
 /**

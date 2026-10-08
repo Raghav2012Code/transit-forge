@@ -2,6 +2,10 @@
 // Everything reported comes from actual scenario state, never invented.
 import type { NetworkData } from '../transport/network.ts';
 import type { EditOp, ServicePatch } from '../scenario/scenario.ts';
+import { formatClock } from '../index.ts';
+
+/** " from 10:30" for an edit that fires during the day, nothing for one made at the start. */
+const fromClock = (atMin: number | undefined) => (atMin === undefined ? '' : ` from ${formatClock(atMin)}`);
 
 export interface InterventionSummary {
   infra: string[];
@@ -62,11 +66,11 @@ export function summarizeOps(
       case 'setService': {
         const base = baseNet.routes.find((r) => r.id === op.routeId);
         const bits = describeServicePatch(op.patch);
-        service.push(`${base?.name ?? op.routeId}: ${bits}`);
+        service.push(`${base?.name ?? op.routeId}: ${bits}${fromClock(op.atMin)}`);
         break;
       }
       case 'setFares':
-        service.push(`Fares: metro ${op.fares.metro} · rail ${op.fares.rail} · bus ${op.fares.bus} OCU`);
+        service.push(`Fares: metro ${op.fares.metro} · rail ${op.fares.rail} · bus ${op.fares.bus} OCU${fromClock(op.atMin)}`);
         break;
       case 'scheduleIncident':
         infra.push(`◷ Planned disruption: ${op.incident.label}`);
