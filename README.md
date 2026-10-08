@@ -149,6 +149,10 @@ every pull request. Release notes are in [`CHANGELOG.md`](CHANGELOG.md).
 - A fork changes service, fares and disruptions. Structural edits (stations,
   routes, roads) apply to the whole day and are made in Build mode.
 
+## Licence
+
+Apache License 2.0. See [`LICENSE`](LICENSE).
+
 ## Credits
 
 Built on [Raghav2012Code/transit-forge](https://github.com/Raghav2012Code/transit-forge),
