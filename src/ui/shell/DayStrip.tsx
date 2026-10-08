@@ -9,8 +9,9 @@ import {
   incidentSpans,
   minuteAt,
   minuteOfDay,
-  nudgeTarget,
+  nudgePending,
   peakBands,
+  rewindTargetFor,
   runTargetFor,
   tracePoints,
   xOf,
@@ -23,6 +24,10 @@ interface Props {
   /** Absolute minute the sim is running toward, if any. */
   runTarget: number | null;
   onRunTo: (absoluteMinute: number) => void;
+  /** Put the clock back to an earlier minute of today. */
+  onRewindTo: (absoluteMinute: number) => void;
+  /** Set while a rewind is rebuilding the day: where to, and how far along. */
+  rewind: { target: number; progress: number } | null;
 }
 
 const H = 44;
@@ -32,10 +37,11 @@ const KEY_STEP = 30;
 /**
  * The service day on one axis, drawn the way a timetable is: peaks shaded,
  * disruptions as bars, the day's load as a trace, and a needle for now.
- * Pointing at the future offers "run to"; the past cannot be revisited
- * because the day would have to be replayed.
+ * Pointing at the future offers "run to"; pointing at the past offers "rewind
+ * to", which rebuilds the day up to that minute (the simulation is
+ * deterministic, so the rebuilt day is the same day).
  */
-export default function DayStrip({ timeMinutes, history, incidents, runTarget, onRunTo }: Props) {
+export default function DayStrip({ timeMinutes, history, incidents, runTarget, onRunTo, onRewindTo, rewind }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
   const [hoverX, setHoverX] = useState<number | null>(null);
@@ -57,23 +63,31 @@ export default function DayStrip({ timeMinutes, history, incidents, runTarget, o
   const spans = incidentSpans(incidents, dayStart);
   const trace = tracePoints(history, dayStart, w, H);
 
-  const hoverTarget = hoverX === null ? null : runTargetFor(minuteAt(hoverX, w), timeMinutes);
-  const shown = pending ?? hoverTarget;
+  const busy = rewind !== null;
+  const targetAt = (x: number) => {
+    const minute = minuteAt(x, w);
+    return runTargetFor(minute, timeMinutes) ?? rewindTargetFor(minute, timeMinutes);
+  };
+  const hoverTarget = hoverX === null || busy ? null : targetAt(hoverX);
+  const shown = busy ? null : (pending ?? hoverTarget);
   const shownMinute = shown === null ? null : minuteOfDay(shown);
-  const goingTo = runTarget !== null ? minuteOfDay(runTarget) : null;
+  const shownIsPast = shown !== null && shown < timeMinutes;
+  const goingTo = rewind ? minuteOfDay(rewind.target) : runTarget !== null ? minuteOfDay(runTarget) : null;
+  const choose = (target: number) => (target > timeMinutes ? onRunTo(target) : onRewindTo(target));
 
   const pointerX = (e: PointerEvent<HTMLDivElement>) => e.clientX - (box.current?.getBoundingClientRect().left ?? 0);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (busy) return;
     if (e.key === 'ArrowRight') {
       e.preventDefault();
-      setPending(nudgeTarget(pending, timeMinutes, KEY_STEP));
+      setPending(nudgePending(pending, timeMinutes, 'later', KEY_STEP));
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      setPending(pending === null ? null : nudgeTarget(pending, timeMinutes, -KEY_STEP));
+      setPending(nudgePending(pending, timeMinutes, 'earlier', KEY_STEP));
     } else if (e.key === 'Enter' && pending !== null) {
       e.preventDefault();
-      onRunTo(pending);
+      choose(pending);
       setPending(null);
     } else if (e.key === 'Escape' && pending !== null) {
       e.stopPropagation();
@@ -87,19 +101,21 @@ export default function DayStrip({ timeMinutes, history, incidents, runTarget, o
       ref={box}
       role="slider"
       tabIndex={0}
-      aria-label="Service day. Arrow keys choose a later time, Enter runs the simulation until then."
+      aria-label="Service day. Arrow keys choose a time, later or earlier. Enter runs the simulation to it, or rewinds the day to it."
       aria-valuemin={DAY_FROM}
       aria-valuemax={DAY_TO}
       aria-valuenow={now}
-      aria-valuetext={`Now ${formatClock(timeMinutes)}${pending !== null ? `, run until ${formatClock(pending)}` : ''}`}
+      aria-valuetext={`Now ${formatClock(timeMinutes)}${pending !== null ? `, ${pending > timeMinutes ? 'run until' : 'rewind to'} ${formatClock(pending)}` : ''}`}
       onPointerMove={(e) => setHoverX(pointerX(e))}
       onPointerLeave={() => setHoverX(null)}
       onClick={(e) => {
-        const t = runTargetFor(minuteAt(e.clientX - (box.current?.getBoundingClientRect().left ?? 0), w), timeMinutes);
-        if (t !== null) onRunTo(t);
+        if (busy) return;
+        const t = targetAt(e.clientX - (box.current?.getBoundingClientRect().left ?? 0));
+        if (t !== null) choose(t);
       }}
       onKeyDown={onKey}
       onBlur={() => setPending(null)}
+      aria-busy={busy || undefined}
       data-reaching={shown !== null ? 'true' : undefined}
     >
       {w > 0 && (
@@ -136,12 +152,12 @@ export default function DayStrip({ timeMinutes, history, incidents, runTarget, o
       )}
       {shownMinute !== null && (
         <span className="tf-strip-tip" style={{ left: Math.min(Math.max(xOf(shownMinute, w), 28), Math.max(28, w - 28)) }}>
-          Run to {formatClock(shown ?? 0)}
+          {shownIsPast ? 'Rewind to' : 'Run to'} {formatClock(shown ?? 0)}
         </span>
       )}
       {goingTo !== null && shownMinute === null && (
         <span className="tf-strip-tip going" style={{ left: Math.min(Math.max(xOf(goingTo, w), 28), Math.max(28, w - 28)) }}>
-          Running to {formatClock(runTarget ?? 0)}
+          {rewind ? `Rewinding to ${formatClock(rewind.target)}, ${Math.round(rewind.progress * 100)}%` : `Running to ${formatClock(runTarget ?? 0)}`}
         </span>
       )}
     </div>

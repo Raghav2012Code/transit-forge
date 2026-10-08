@@ -90,9 +90,19 @@ export type EditOp =
       edges: { id: string; a: string; b: string; kind: RoadKind }[];
     }
   | { type: 'removeRoad'; edgeId: string }
-  | { type: 'setService'; routeId: string; patch: ServicePatch }
-  | { type: 'setFares'; fares: FarePolicy }
+  | { type: 'setService'; routeId: string; patch: ServicePatch; atMin?: number }
+  | { type: 'setFares'; fares: FarePolicy; atMin?: number }
   | { type: 'scheduleIncident'; incident: IncidentConfig };
+
+/**
+ * An edit that fires at a minute of the running day instead of at the start. atMin is absolute
+ * simulation minutes, like an incident's startMin (the day starts at 420).
+ */
+export type TimedOp = Extract<EditOp, { type: 'setService' | 'setFares' }> & { atMin: number };
+
+export function isTimed(op: EditOp): op is TimedOp {
+  return (op.type === 'setService' || op.type === 'setFares') && typeof op.atMin === 'number' && Number.isFinite(op.atMin);
+}
 
 export interface Scenario {
   version: 1;
