@@ -1,111 +1,161 @@
 # TransitForge
 
-TransitForge — browser-based 3D public transportation planning and simulation sandbox.
+[![CI](https://github.com/abivan100-stack/transit-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/abivan100-stack/transit-forge/actions/workflows/ci.yml)
 
-## Stack
+A browser-based 3D public transportation planning and simulation sandbox. Build
+metro, rail and bus lines, run a simulated day, break the network and plan
+against objectives. TypeScript, React, Vite and Three.js, with no game engine.
 
-- TypeScript + React + Vite
-- Three.js (no game engine)
-- HTML/CSS, Web Workers when needed for simulation performance
+![A simulated day running at 20×](docs/media/hero.webp)
 
-## Architecture
+<table>
+  <tr>
+    <td><img src="docs/media/map-light.webp" alt="The city map in the light theme"></td>
+    <td><img src="docs/media/map-dark.webp" alt="The city map in the dark theme"></td>
+  </tr>
+  <tr>
+    <td align="center">Light</td>
+    <td align="center">Dark</td>
+  </tr>
+</table>
 
-Three separated layers:
+## What it is
 
-1. `src/simulation/` — pure TypeScript. City data, zones, graph, routes, demand,
-   routing (Dijkstra/A*), ticks, loads, statistics. No React / Three.js imports.
-2. `src/rendering/` — Three.js only. Consumes simulation state, no sim logic.
-3. `src/ui/` — React dashboard, controls, inspectors. No sim logic inside components
-   beyond calling the simulation API.
+A city of districts, roads and lines. People choose between transit and the car,
+wait on platforms, board, transfer, get stranded or give up, and every number on
+screen traces back to that simulation state. Four modes cover the work:
 
-Supporting folders: `src/types/`, `src/data/`, `src/workers/`.
+- **Simulate** runs the day at 1×, 5× or 20× and shows lines, loads and readings.
+- **Build** edits the network: stations, routes and roads.
+- **Disrupt** schedules and ends incidents, from a station closure to a road
+  closure, and shows rerouting and recovery.
+- **Plan** sets a brief with objectives and constraints and scores your changes
+  against it.
 
-Interface: design tokens and primitives live in `src/index.css`, shell and
-component styles in `src/App.css`, and the committed design direction (palette,
-type, motion, slop audit) is recorded in [`DESIGN.md`](DESIGN.md).
-
-## Controls
-
-| Key | Action |
-| --- | --- |
-| `Space` | play / pause (leaves build · disrupt · plan) |
-| `1` `2` `3` | speed 1× / 5× / 20× |
-| `B` `D` `P` | build · disrupt · plan mode |
-| `A` | cycle the analytics overlay |
-| `[` `]` | hide / show the side panel |
-| `Esc` | back to simulate |
-| `R` | reset the simulated day |
-
-## Run
+## Try it
 
 ```sh
 npm install
 npm run dev
 ```
 
-Build:
+Press `?` in the app for the full list of keys. The ones you will use first:
 
-```sh
-npm run build
+| Key | Action |
+| --- | --- |
+| `Space` | play or pause |
+| `1` `2` `3` | speed 1× / 5× / 20× |
+| `B` `D` `P` | build, disrupt, plan |
+| `Esc` | back to simulate |
+| `/` | search the map or run a command |
+| `T` | switch between light and dark |
+| `[` `]` | hide or show the side panel |
+
+## Two things worth a look
+
+### Why did this trip happen?
+
+Select a vehicle to see its riders, a station to see who is waiting, or open
+Recent trips. A trip card explains the trip in plain statements: the options the
+person had, the transit and road estimates, the fare and the chance they would
+drive, where they waited and how it ended. Stranded and denied-boarding trips are
+marked, since they are the most useful to read.
+
+![A trip card in the side panel](docs/media/trip-card.webp)
+
+### Time machine
+
+Click the past on the day strip and the day is rebuilt from 07:00. "Fork the day
+here" freezes what you have done so far. Change a headway or a fare, or add a
+disruption, then compare the changed day against the day that would have been.
+Both run headless with the same seed, so the two are identical until the minute
+of the fork.
+
+![The comparison of a forked day](docs/media/time-machine.webp)
+
+## How it is built
+
+Three layers, kept apart (`AGENTS.md`):
+
+```mermaid
+flowchart LR
+  subgraph sim["src/simulation: pure TypeScript"]
+    city[City, zones, roads]
+    net[Network, routes, service]
+    tick[Tick: demand, mode choice, vehicles]
+    eval[Headless day runner]
+  end
+  render["src/rendering: Three.js"]
+  ui["src/ui: React"]
+  workers["src/workers: headless runs"]
+  city --> tick
+  net --> tick
+  tick --> render
+  tick --> ui
+  ui -->|edits| net
+  eval --> tick
+  workers --> eval
+  ui --> workers
 ```
 
-## Status
+- `src/simulation/` has no React or Three.js imports. City data, routing
+  (Dijkstra and A*), ticks, loads and statistics live here.
+- `src/rendering/` draws simulation state and holds no simulation logic.
+- `src/ui/` is the dashboard, controls and inspectors, and only calls the
+  simulation API.
+- `src/workers/` runs whole days headless for the fork comparison.
 
-Current version: 1.3.0 (`src/version.ts`).
+Interface rules are in [`DESIGN.md`](DESIGN.md): colour only ever means a line or
+a condition, and selection is ink. Light and dark ship as one design.
 
-- v0.9 disruptions & resilience: 8 incident kinds (station/segment/route/
-  service/delay/road/capacity/bridge) with scheduled→active→recovering→
-  resolved lifecycle, Disrupt mode with map targeting, live rerouting with
-  STRANDED state + 45-min abandon, vehicle hold/park/terminate, boarding
-  guards, replacement shuttles from a 12-bus pool, road closures with car
-  replan + abandon, transparent resilience scores, structural criticality +
-  redundancy analysis, resilience-vs-base compare, status overlay + markers,
-  event timeline. Verified: segment closure → 102 rerouted,
-  network-wide road congestion, full recovery with measured deltas.
-- v1.2 economics: per-mode flat fares (OCU, entry-mode pricing, transfers free)
-  with live steppers, fare locked at boarding, revenue counted from completions
-  only (denied/stranded/cancelled earn nothing), cost recovery + subsidy in
-  stats, Finance section, and status strip, elasticity in mode choice (smooth,
-  bounded, zero-fare baseline bit-identical), per-route revenue/recovery/
-  break-even hints, revenue + cost-recovery objectives, subsidy-cap constraint,
-  setFares scenario op with undo/redo + compare + report coverage (FINANCE
-  section in text/HTML/JSON). Free-transit default preserves all baselines.
-- v1.1.1 vehicle-path fix: vehicle meshes ride the same smoothed curve the
-  route-line tube is drawn from (fraction-of-route mapping, timing unchanged);
-  replacement shuttles deployed mid-day now get path entries so they render
-  on their line.
-- v1.0 planning campaign: objectives + constraints evaluated against live and
-  simulated metrics, 7 procedural briefs with difficulty tiers, ranked city
-  problems with drill-down, rule-based recommendations with Why, intervention
-  summaries, plan save/load/attempts with multi-plan compare, structured
-  reports (JSON/text/printable HTML), tutorial checklist, keyboard shortcuts,
-  Plan mode, criticality overlay, live objective progress, resilience
-  objectives via real disruption sims.
-- v1.1 interface overhaul ("control room" design pass, see `DESIGN.md`):
-  OKLCH token system, Space Grotesk + IBM Plex Mono typography, segmented
-  mode/overlay controls, HUD bar with brand lockup and clock, pinned status
-  strip, viewport corner brackets + vignette, HUD chip stack (mode, active
-  incidents, worst congestion), event toasts, overlay legend matching the real
-  scene ramps, floating selection card, collapsible rail docks, KPI tiles with
-  segmented tick meters, `[` panel toggle, `D` disrupt shortcut.
+## Determinism
+
+The simulation is deterministic: seed `1337`, no `Math.random()` in
+`src/simulation/`, and a golden test that pins the statistics of a day. A change
+that alters results has to be able to explain why. That is what lets the time
+machine rebuild any minute by replay.
+
+## Decisions worth reading
+
+- [`docs/engineering.md`](docs/engineering.md): the three decisions in one page.
+- [`docs/adr/0001`](docs/adr/0001-vehicles-follow-a-display-schedule.md): vehicles
+  are drawn on a display schedule, not at their step positions.
+- [`docs/adr/0002`](docs/adr/0002-a-tick-is-a-time-budget.md): a tick is a time
+  budget, and every stop pays its own dwell.
+- [`DESIGN.md`](DESIGN.md): the design system.
+
+## Run and test
+
+```sh
+npm install
+npm run dev      # development server
+npm run lint     # oxlint
+npm run test     # vitest: determinism, routing, replay, the golden day
+npm run build    # type-check and production build
+```
+
+Node 22.12 or newer. CI runs lint, test and build on every push to `main` and on
+every pull request. Release notes are in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Known limitations
 
-- World geography is compact (~1.2 km across), so absolute travel times read
-  low (a few minutes cross-city). A world-scale pass (×5–6 coordinates with
-  matched camera/fog/building density) should precede any fare/economics work.
+- World geography is compact (about 1.2 km across), so absolute travel times read
+  low: a few minutes cross-city. A world-scale pass should precede any
+  fare or economics work.
 - Vehicles are drawn on each line's display schedule rather than at their
   simulation positions, because the map is compact (`docs/adr/0001`). The
   simulation itself spends each tick as a time budget per vehicle: it stops at
   every station and pays that stop's dwell (`docs/adr/0002`).
+- A fork changes service, fares and disruptions. Structural edits (stations,
+  routes, roads) apply to the whole day and are made in Build mode.
 
-## Test
+## Credits
 
-```sh
-npm run test   # determinism, graph validity + routing, clock advance
-```
+Built on [Raghav2012Code/transit-forge](https://github.com/Raghav2012Code/transit-forge),
+the parent repository, by Raghav Krishna and Abivan.
 
 ## Principle
 
-A metro line must exist in the simulation model. Stations have demand. Routes affect
-travel times. Network edits must be capable of changing simulation results.
+A metro line must exist in the simulation model. Stations have demand. Routes
+affect travel times. Network edits must be capable of changing simulation
+results.
