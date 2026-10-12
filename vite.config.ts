@@ -4,11 +4,17 @@ import { defineConfig } from 'vitest/config'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Two pages: the landing at the root, the simulator under /simulate.
+  appType: 'mpa',
   build: {
     // Three.js alone is about 570 kB minified and cannot be cut further without dropping features;
     // everything else stays well under this.
     chunkSizeWarningLimit: 600,
     rolldownOptions: {
+      input: {
+        landing: 'index.html',
+        simulate: 'simulate/index.html',
+      },
       output: {
         // Three.js is the bulk of the bundle and changes far less often than the app,
         // so it gets its own file: cached across releases and fetched alongside the app code.

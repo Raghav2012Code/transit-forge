@@ -43,6 +43,10 @@ npm install
 npm run dev
 ```
 
+Dev serves two pages: the landing page at `/`, and the simulator at
+`/simulate/`. `npm run build` emits both — the landing at `dist/index.html`,
+the simulator at `dist/simulate/index.html`.
+
 Build:
 
 ```sh

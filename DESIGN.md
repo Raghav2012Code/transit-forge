@@ -247,6 +247,12 @@ The files: `shell.css` (grid, bar, rail, dock, popovers), `map.css` (the
 corners), `reports.css`, `panel.css`, `responsive.css`. `App.css` holds the
 shared pieces.
 
+The landing page (`index.html` + `landing.css`) is the same system in a report's
+clothes: the same tokens and button ranks, its figures set into plates the way
+the map is, and hairline-ruled rows instead of cards. It adds one page-local
+display scale (27–46px) for the headline. The workspace itself lives at
+`/simulate`.
+
 ## Craft layer
 
 - **Components** — every control ships default/hover/active/focus/disabled.

@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#edeff2" media="(prefers-color-scheme: light)" />
@@ -21,7 +23,7 @@
     </script>
     <meta
       name="description"
-      content="TransitForge — build, simulate and stress-test a fictional coastal transit network."
+      content="TransitForge runs a whole transit service day in the browser: lines, stations, demand, fares and breakdowns. Change something and watch the day respond."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -29,10 +31,267 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap"
     />
-    <title>TransitForge</title>
+    <link rel="stylesheet" href="/src/index.css" />
+    <link rel="stylesheet" href="/src/landing.css" />
+    <title>TransitForge — a browser sandbox for transit planning</title>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <a class="lf-skip" href="#main">Skip to content</a>
+
+    <header class="lf-bar">
+      <a class="lf-brand" href="/">
+        <span class="lf-mark" aria-hidden="true">
+          <!-- The route bullet: the same mark as the favicon. -->
+          <svg viewBox="0 0 32 32" width="24" height="24" focusable="false">
+            <circle cx="16" cy="16" r="16" fill="#1b6fc4" />
+            <g stroke="#ffffff" stroke-width="3" stroke-linecap="round" fill="none">
+              <path d="M16 16V5.8" /><path d="M16 16 7.4 20.6" /><path d="M16 16l8.6 4.6" />
+            </g>
+            <g fill="#ffffff">
+              <circle cx="16" cy="5.8" r="2.5" /><circle cx="7.4" cy="20.6" r="2.5" />
+              <circle cx="24.6" cy="20.6" r="2.5" /><circle cx="16" cy="16" r="3.3" />
+            </g>
+          </svg>
+        </span>
+        <span class="lf-wordmark">TransitForge</span>
+      </a>
+
+      <nav class="lf-nav" aria-label="Sections">
+        <a href="#what">What you can do</a>
+        <a href="#day">How it works</a>
+        <a href="#inside">The network</a>
+      </nav>
+
+      <div class="lf-bar-end">
+        <button type="button" class="tf-btn icon ghost" id="lf-theme" aria-label="Switch to dark theme" title="Switch to dark theme (T)">
+          <svg class="lf-sun" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="8" cy="8" r="2.9" /><path d="M8 1.6v1.5M8 12.9v1.5M1.6 8h1.5M12.9 8h1.5M3.5 3.5l1.1 1.1M11.4 11.4l1.1 1.1M12.5 3.5l-1.1 1.1M4.6 11.4l-1.1 1.1" />
+          </svg>
+          <svg class="lf-moon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8Z" />
+          </svg>
+        </button>
+        <a class="tf-btn primary" href="/simulate/">Open the simulator</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="lf-hero lf-wrap" aria-labelledby="hero-h">
+        <div class="lf-hero-copy">
+          <h1 id="hero-h">Run the city before you build it.</h1>
+          <p class="lf-lede">
+            TransitForge runs a whole service day in the browser: lines, stations, demand, fares and
+            breakdowns. Change something and watch the day respond.
+          </p>
+          <p class="lf-actions">
+            <a class="tf-btn primary lf-xl" href="/simulate/">Open the simulator</a>
+            <a class="tf-btn lf-xl" href="#what">See what it does</a>
+          </p>
+          <p class="lf-quiet">
+            Nothing to install and no account. The city is generated from seed 1337, so the same edits
+            always give the same day.
+          </p>
+        </div>
+
+        <figure class="lf-plate">
+          <img
+            id="lf-hero"
+            src="/hero-light.webp"
+            width="1280"
+            height="800"
+            alt="The TransitForge simulator: a coastal city in 3D with six transit lines drawn across it, a route and fare panel on the right, and the service-day strip along the bottom."
+          />
+          <script>
+            // Show the figure that matches the theme already set on <html>.
+            (function () {
+              if (document.documentElement.dataset.theme === 'dark') {
+                document.getElementById('lf-hero').src = '/hero-dark.webp';
+              }
+            })();
+          </script>
+          <figcaption>
+            The seeded city running a full day: six lines, demand from every district, and the day's
+            load in the strip below.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="lf-modes lf-wrap" id="what" aria-labelledby="modes-h">
+        <h2 id="modes-h">Read it, build it, break it, plan it.</h2>
+        <ul class="lf-mode-list">
+          <li class="lf-mode">
+            <span class="lf-mode-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="20" height="20" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8h2.2l1.6-4.4L7.4 12.4l1.7-4.4h1.6l1.3-2.6h1.5" /></svg>
+            </span>
+            <div class="lf-mode-head"><h3>Simulate</h3><kbd>Space</kbd></div>
+            <p>Watch the day run and read the network.</p>
+          </li>
+          <li class="lf-mode">
+            <span class="lf-mode-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="20" height="20" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.4 2.6a3.1 3.1 0 0 0-3.6 4.5L2.6 11.3l2.1 2.1 4.2-4.2a3.1 3.1 0 0 0 4.5-3.6L11.7 7.3 8.7 4.3Z" /></svg>
+            </span>
+            <div class="lf-mode-head"><h3>Build</h3><kbd>B</kbd></div>
+            <p>Draw lines, stations and roads. The clock pauses.</p>
+          </li>
+          <li class="lf-mode">
+            <span class="lf-mode-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="20" height="20" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.4 14.4 13.2H1.6Z" /><path d="M8 6.6v3M8 11.5v.1" /></svg>
+            </span>
+            <div class="lf-mode-head"><h3>Disrupt</h3><kbd>D</kbd></div>
+            <p>Break something and see how the network copes.</p>
+          </li>
+          <li class="lf-mode">
+            <span class="lf-mode-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" width="20" height="20" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.6" /><circle cx="8" cy="8" r="2.1" /><path d="M8 0.8v2M8 13.2v2M0.8 8h2M13.2 8h2" /></svg>
+            </span>
+            <div class="lf-mode-head"><h3>Plan</h3><kbd>P</kbd></div>
+            <p>Pick a brief, build against it, then submit.</p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="lf-features lf-wrap" id="day" aria-label="How the simulation works">
+        <article class="lf-feature">
+          <div class="lf-feature-copy">
+            <h2>The day is the unit</h2>
+            <p>
+              Every run is one service day, 04:00 to 24:00. The strip draws the peak bands, the day's load
+              as a single trace, disruptions as bars and now as a needle. Point at a later hour and the
+              day runs to it.
+            </p>
+          </div>
+          <div class="lf-figure">
+            <svg class="lf-strip" viewBox="0 0 560 104" role="img" aria-label="The service-day strip: peak bands shaded at the morning and evening peaks, the day's load as a trace, an incident bar, and a needle for now.">
+              <rect x="0" y="4" width="560" height="76" fill="var(--plate)" />
+              <rect class="lf-strip-band" x="84" y="4" width="56" height="76" />
+              <rect class="lf-strip-band" x="350" y="4" width="56" height="76" />
+              <path class="lf-strip-area" d="M0,72.6 28,69.2 56,57 84,33.8 112,16.2 140,27 168,45.4 196,48.8 224,50.2 252,48.8 280,47.4 308,42 336,35.2 364,13.4 392,23 420,40.6 448,48.8 476,55.6 504,62.4 532,67.2 560,70.6 V80 H0 Z" />
+              <path class="lf-strip-line" d="M0,72.6 28,69.2 56,57 84,33.8 112,16.2 140,27 168,45.4 196,48.8 224,50.2 252,48.8 280,47.4 308,42 336,35.2 364,13.4 392,23 420,40.6 448,48.8 476,55.6 504,62.4 532,67.2 560,70.6" />
+              <rect class="lf-strip-incident" x="226" y="74" width="26" height="6" />
+              <line x1="0" y1="80" x2="560" y2="80" stroke="var(--rule)" stroke-width="1" />
+              <line class="lf-strip-needle" x1="364" y1="4" x2="364" y2="80" />
+              <circle class="lf-strip-dot" cx="364" cy="13.4" r="3.4" />
+              <g class="lf-strip-ticks">
+                <text x="56" y="97">06</text><text x="140" y="97">09</text><text x="224" y="97">12</text>
+                <text x="308" y="97">15</text><text x="392" y="97">18</text><text x="476" y="97">21</text>
+              </g>
+            </svg>
+            <p class="lf-figure-cap">The service-day strip, as it sits in the dock.</p>
+          </div>
+        </article>
+
+        <article class="lf-feature lf-flip">
+          <div class="lf-feature-copy">
+            <h2>Break it, then watch it recover</h2>
+            <p>
+              Eight kinds of failure, from a station closure to a bridge outage. Vehicles hold at the
+              barrier, riders reroute or strand, replacement buses run the gap, and the network is scored
+              on how well it came back.
+            </p>
+          </div>
+          <div class="lf-figure">
+            <svg class="lf-closure" viewBox="0 0 560 128" role="img" aria-label="A route with a closed segment: two stations shut, a vehicle held before the barrier, and replacement buses running across the gap.">
+              <line class="lf-cl-line" x1="40" y1="54" x2="240" y2="54" />
+              <line class="lf-cl-line" x1="340" y1="54" x2="440" y2="54" />
+              <line class="lf-cl-shut" x1="240" y1="54" x2="340" y2="54" />
+              <path class="lf-cl-detour" d="M240 54 Q290 116 340 54" />
+              <circle class="lf-cl-bus" cx="290" cy="101" r="4.5" />
+              <g class="lf-cl-stations">
+                <circle cx="40" cy="54" r="7" /><circle cx="140" cy="54" r="7" />
+                <circle cx="440" cy="54" r="7" />
+              </g>
+              <g class="lf-cl-closed">
+                <circle cx="240" cy="54" r="7.5" /><circle cx="340" cy="54" r="7.5" />
+              </g>
+              <rect class="lf-cl-vehicle" x="176" y="42" width="30" height="24" rx="4" />
+            </svg>
+            <p class="lf-figure-cap">
+              A segment closure: the vehicle holds, and replacement buses run the closed stretch.
+            </p>
+          </div>
+        </article>
+
+        <article class="lf-feature">
+          <div class="lf-feature-copy">
+            <h2>Every number comes from the run</h2>
+            <p>
+              Occupancy, waits, fares, cost recovery and subsidy are counted from the simulation itself,
+              never scripted in. Open a report and a figure traces back to the state that produced it.
+            </p>
+          </div>
+          <div class="lf-figure">
+            <dl class="lf-readings">
+              <div><dt>Transit share</dt><dd>40.8%</dd></div>
+              <div><dt>Average wait</dt><dd>5.3 min</dd></div>
+              <div><dt>Peak load</dt><dd>21.4%</dd></div>
+              <div><dt>Congestion</dt><dd>0.29</dd></div>
+            </dl>
+            <p class="lf-figure-cap">Readings after a full day on the seeded city.</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="lf-facts lf-wrap" id="inside" aria-labelledby="facts-h">
+        <h2 id="facts-h">The seeded city</h2>
+        <table class="lf-table">
+          <tbody>
+            <tr><th scope="row">Metro and bus lines</th><td>6</td></tr>
+            <tr><th scope="row">Stations and stops</th><td>14</td></tr>
+            <tr><th scope="row">Kinds of disruption</th><td>8</td></tr>
+            <tr><th scope="row">Service day</th><td>04:00 to 24:00</td></tr>
+            <tr><th scope="row">Fares</th><td>free by default</td></tr>
+            <tr><th scope="row">City seed</th><td>1337</td></tr>
+          </tbody>
+        </table>
+        <p class="lf-quiet">
+          These are the shipped defaults. Build a line, close a bridge, change a fare, and the day
+          re-runs from the same seed.
+        </p>
+      </section>
+    </main>
+
+    <footer class="lf-foot">
+      <div class="lf-wrap lf-foot-inner">
+        <div class="lf-foot-brand">
+          <span class="lf-wordmark">TransitForge</span>
+          <p class="lf-fine">Runs entirely in your browser. Nothing is uploaded.</p>
+        </div>
+        <p class="lf-fine lf-foot-note">
+          Version 1.3.0. The city is generated from seed 1337, so the same edits always give the same day.
+        </p>
+        <a class="tf-btn primary" href="/simulate/">Open the simulator</a>
+      </div>
+    </footer>
+
+    <script>
+      // The theme choice carries into the simulator: both pages read the same key.
+      (function () {
+        var root = document.documentElement;
+        var btn = document.getElementById('lf-theme');
+        if (!btn) return;
+        var hero = document.getElementById('lf-hero');
+        function paint() {
+          var dark = root.dataset.theme === 'dark';
+          btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+          btn.setAttribute('title', (dark ? 'Switch to light theme' : 'Switch to dark theme') + ' (T)');
+          if (hero) hero.src = dark ? '/hero-dark.webp' : '/hero-light.webp';
+        }
+        function toggle() {
+          var next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+          root.dataset.theme = next;
+          root.style.colorScheme = next;
+          try { localStorage.setItem('transitforge.theme', next); } catch (e) {}
+          paint();
+        }
+        btn.addEventListener('click', toggle);
+        window.addEventListener('keydown', function (e) {
+          var t = e.target;
+          if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+          if (e.ctrlKey || e.metaKey || e.altKey) return;
+          if (e.key === 't' || e.key === 'T') { e.preventDefault(); toggle(); }
+        });
+        paint();
+      })();
+    </script>
   </body>
 </html>
