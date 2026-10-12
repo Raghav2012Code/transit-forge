@@ -89,8 +89,11 @@ that hash untouched. If it moves, a fix is not inert and is wrong.
 
 - **Boarding ignores travel direction on an open network.** Fixed in the third
   pass below, with the golden hashes deliberately re-recorded.
-- Latent contract items (`routeCumDist` alignment, `stepSimulation`
-  immutability, wall-clock ids) — addressed in the third pass below.
+- Latent contract items `routeCumDist` alignment and `stepSimulation`
+  immutability — addressed in the third pass below. Ids still carry a wall-clock
+  stamp (for uniqueness across sessions) but gained a monotonic counter in the
+  second sweep, so they can no longer collide; the simulation's own results
+  never read them.
 
 ## Checked and found correct
 
