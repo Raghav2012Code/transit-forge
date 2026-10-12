@@ -99,7 +99,7 @@ tools: resize to 1440×900, 768×1024 and 390×844; in each, screenshot light an
 
 ---
 
-## Milestone 2. CI and a live deployment
+## Milestone 2. CI and a live deployment (done; live at transit-forge.vercel.app, and a push to `main` deploys)
 
 **Branch:** `feature/ci-deploy`.
 
