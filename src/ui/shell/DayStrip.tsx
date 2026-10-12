@@ -90,7 +90,7 @@ export default function DayStrip({ timeMinutes, history, incidents, runTarget, o
       aria-label="Service day. Arrow keys choose a later time, Enter runs the simulation until then."
       aria-valuemin={DAY_FROM}
       aria-valuemax={DAY_TO}
-      aria-valuenow={now}
+      aria-valuenow={Math.min(DAY_TO, Math.max(DAY_FROM, now))}
       aria-valuetext={`Now ${formatClock(timeMinutes)}${pending !== null ? `, run until ${formatClock(pending)}` : ''}`}
       onPointerMove={(e) => setHoverX(pointerX(e))}
       onPointerLeave={() => setHoverX(null)}

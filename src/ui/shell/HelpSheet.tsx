@@ -11,16 +11,20 @@ interface Props {
 /** Keyboard shortcuts and a line about the build, one keypress away (?). */
 export default function HelpSheet({ version, seed, onClose }: Props) {
   const panel = useRef<HTMLDivElement>(null);
+  // Kept current in an effect, not during render: a fresh inline onClose from
+  // the parent must not re-run the effect below and yank focus onto the dialog.
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
   useEffect(() => {
     panel.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
-      onClose();
+      closeRef.current();
     };
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="tf-modal-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>

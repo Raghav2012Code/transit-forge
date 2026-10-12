@@ -123,6 +123,70 @@ describe('passenger rerouting', () => {
   });
 });
 
+describe('rerouting regressions', () => {
+  it('strands riders at a closed station instead of rerouting them every tick', () => {
+    let sim = run(1337, 90); // let a queue build
+    const busiest = [...sim.stations].sort((a, b) => b.waiting - a.waiting)[0];
+    expect(busiest.waiting).toBeGreaterThan(0);
+    sim.incidents.push({
+      ...mkIncident({ kind: 'station-closure', targetStationId: busiest.id }),
+      id: 'inc-closed-station',
+      startMin: sim.timeMinutes,
+      status: 'scheduled',
+    });
+    for (let i = 0; i < 12; i++) sim = stepSimulation(sim, 1);
+    // Nobody can board at a closed station: they strand, they do not keep
+    // re-planning from it.
+    expect(sim.passengers.filter((p) => p.state === 'WAITING' && p.atStation === busiest.id)).toHaveLength(0);
+    expect(sim.counters.strandedPeak).toBeGreaterThan(0);
+  });
+
+  it('counts only genuinely waiting riders at a station, never stranded ones', () => {
+    let sim = run(1337, 40);
+    for (const r of sim.routes) {
+      sim.incidents.push({ ...mkIncident({ kind: 'route-suspension', targetRouteId: r.id }), id: `inc-all-${r.id}`, startMin: sim.timeMinutes, status: 'scheduled' });
+    }
+    for (let i = 0; i < 12; i++) sim = stepSimulation(sim, 1);
+    expect(sim.passengers.some((p) => p.state === 'STRANDED')).toBe(true);
+    for (const st of sim.stations) {
+      const counted = sim.passengers.filter(
+        (p) => (p.state === 'WAITING' || p.state === 'TRANSFERRING') && p.atStation === st.id,
+      ).length;
+      expect(st.waiting).toBe(counted);
+    }
+  });
+
+  it('leaves no rider holding a leg on a withdrawn replacement route', () => {
+    let sim = run(1337, 60);
+    const route = sim.routes.find((r) => r.mode === 'metro') ?? sim.routes[0];
+    const a = route.stationIds[0];
+    const b = route.stationIds[route.stationIds.length - 1];
+    sim.incidents.push({
+      ...mkIncident({
+        kind: 'segment-closure',
+        targetRouteId: route.id,
+        segFrom: route.stationIds[1],
+        segTo: route.stationIds[route.stationIds.length - 1],
+        durationMin: 40,
+        recoveryMin: 5,
+        replacement: { fromStationId: a, toStationId: b, buses: 4, headwayMin: 6, capacity: 70 },
+      }),
+      id: 'inc-rep-withdraw',
+      startMin: sim.timeMinutes,
+      status: 'scheduled',
+    });
+    // Run past resolution, so the replacement is withdrawn.
+    for (let i = 0; i < 120; i++) sim = stepSimulation(sim, 1);
+    expect(sim.routes.some((r) => r.id.startsWith('rt-rep'))).toBe(false);
+    const ids = new Set(sim.routes.map((r) => r.id));
+    for (const p of sim.passengers) {
+      if (p.state !== 'WAITING' && p.state !== 'TRANSFERRING') continue;
+      const leg = p.legs[p.legIndex];
+      if (leg) expect(ids.has(leg.routeId)).toBe(true);
+    }
+  });
+});
+
 describe('service disruption', () => {
   it('parks vehicles of suspended routes and terminates riders', () => {
     let sim = run(1337, 60);

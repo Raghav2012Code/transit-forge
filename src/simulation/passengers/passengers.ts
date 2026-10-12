@@ -138,6 +138,10 @@ export function replanFromStation(
 ): boolean {
   const destLeg = p.legs[p.legs.length - 1];
   if (!destLeg) return false;
+  // Standing at a closed station, there is nothing to board: the router allows
+  // the start node, so a replan would succeed and be flagged again next tick,
+  // rerouting forever without moving. Strand instead.
+  if (w.closures.closedStations.has(stationId)) return false;
   const dest = destLeg.alight;
   // Transfers already made before this replan (one per leg boundary ridden
   // so far); the stale spawn-time count must not carry past a reroute.
@@ -343,29 +347,31 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
   // 1b. Disruption validation: passengers whose current leg became unusable
   // replan from where they stand; otherwise they strand in place. Covers both
   // WAITING (current leg) and TRANSFERRING (next leg, e.g. suspended since).
-  if (w.closures.active) {
-    for (const p of w.passengers) {
-      if ((p.state === 'WAITING' || p.state === 'TRANSFERRING') && p.atStation) {
-        const leg = p.legs[p.legIndex];
-        const route = leg ? routeById.get(leg.routeId) : undefined;
-        if (legBlocked(leg, route?.stationIds, w.closures)) {
-          if (replanFromStation(w, p, p.atStation, zoneById)) {
-            p.state = 'WAITING';
-            p.transferLeft = 0;
-            w.counters.rerouted++;
-          } else {
-            p.state = 'STRANDED';
-            p.transferLeft = 0;
-            p.strandedMin = 0;
-          }
+  // A leg whose route no longer exists (replacement withdrawn, route deleted)
+  // is caught even with no incident active, so no one waits on a dead leg.
+  for (const p of w.passengers) {
+    if ((p.state === 'WAITING' || p.state === 'TRANSFERRING') && p.atStation) {
+      const leg = p.legs[p.legIndex];
+      const route = leg ? routeById.get(leg.routeId) : undefined;
+      const orphaned = !leg || !route;
+      if (!orphaned && !w.closures.active) continue;
+      if (legBlocked(leg, route?.stationIds, w.closures)) {
+        if (replanFromStation(w, p, p.atStation, zoneById)) {
+          p.state = 'WAITING';
+          p.transferLeft = 0;
+          w.counters.rerouted++;
+        } else {
+          p.state = 'STRANDED';
+          p.transferLeft = 0;
+          p.strandedMin = 0;
         }
-      } else if (p.state === 'STRANDED' && p.atStation) {
-        if ((w.tick + p.id) % 5 === 0) {
-          if (replanFromStation(w, p, p.atStation, zoneById)) {
-            p.state = 'WAITING';
-            p.strandedMin = 0;
-            w.counters.rerouted++;
-          }
+      }
+    } else if (p.state === 'STRANDED' && p.atStation && w.closures.active) {
+      if ((w.tick + p.id) % 5 === 0) {
+        if (replanFromStation(w, p, p.atStation, zoneById)) {
+          p.state = 'WAITING';
+          p.strandedMin = 0;
+          w.counters.rerouted++;
         }
       }
     }
@@ -428,8 +434,9 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
     const slow = route.mode === 'bus' ? (w.busRouteCongestion[route.id] ?? 1) : 1;
     const speedKph = (plan?.speedKph ?? route.speedKph) / Math.max(1, slow);
     const speedMpm = (speedKph * 1000) / 60;
-    // Service supplied accumulates whether moving or dwelling.
-    w.counters.routeVehHr[vv.routeId] = (w.counters.routeVehHr[vv.routeId] ?? 0) + dtMin / 60;
+    // Service supplied accumulates whether moving or dwelling — but a route
+    // suspended for a disruption is not running, so it bills no vehicle-hours.
+    if (!parked) w.counters.routeVehHr[vv.routeId] = (w.counters.routeVehHr[vv.routeId] ?? 0) + dtMin / 60;
     if (held) {
       // Holding for a disruption (no movement, no boarding this tick).
       vv.dwellLeft = dtMin;
@@ -473,7 +480,7 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
     // Transfers complete during vehicle visits may have changed lists; recount.
     let n = 0;
     for (const q of w.passengers) {
-      if ((q.state === 'WAITING' || q.state === 'TRANSFERRING' || q.state === 'STRANDED') && q.atStation === st.id) n++;
+      if ((q.state === 'WAITING' || q.state === 'TRANSFERRING') && q.atStation === st.id) n++;
     }
     st.waiting = n;
     if (n > st.peakWaiting) st.peakWaiting = n;

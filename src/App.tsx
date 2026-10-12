@@ -448,36 +448,39 @@ export default function App() {
         return;
       }
       if (typing) return;
-      if (e.key === ' ') {
+      // Plain keys only. Ctrl/Alt combinations belong to the browser
+      // (Ctrl+A select-all, Ctrl+F find, Ctrl+P print), never to the app.
+      const plain = !mod && !e.altKey;
+      if (e.key === ' ' && plain) {
         e.preventDefault();
         togglePlay();
-      } else if (e.key === '1') setSpeed(1);
-      else if (e.key === '2') setSpeed(5);
-      else if (e.key === '3') setSpeed(20);
-      else if (e.key === 'b' || e.key === 'B') {
+      } else if (plain && e.key === '1') setSpeed(1);
+      else if (plain && e.key === '2') setSpeed(5);
+      else if (plain && e.key === '3') setSpeed(20);
+      else if (plain && (e.key === 'b' || e.key === 'B')) {
         if (mode === 'build') enterSimulate();
         else enterBuild();
-      } else if (e.key === 'd' || e.key === 'D') {
+      } else if (plain && (e.key === 'd' || e.key === 'D')) {
         if (mode === 'disrupt') enterSimulate();
         else enterDisrupt();
-      } else if (e.key === 'a' || e.key === 'A') {
+      } else if (plain && (e.key === 'a' || e.key === 'A')) {
         setOverlay((o) => (o === 'normal' ? 'accessibility' : 'normal'));
-      } else if (e.key === 'p' || e.key === 'P') {
+      } else if (plain && (e.key === 'p' || e.key === 'P')) {
         if (mode === 'plan') enterSimulate();
         else enterPlan();
-      } else if (e.key === 'i' || e.key === 'I') {
+      } else if (plain && (e.key === 'i' || e.key === 'I')) {
         setInspectMode((v) => !v);
-      } else if (e.key === '/') {
+      } else if (plain && e.key === '/') {
         e.preventDefault();
         setSearchOpen(true);
-      } else if (e.key === 'f' || e.key === 'F') {
+      } else if (plain && (e.key === 'f' || e.key === 'F')) {
         focusSelection();
-      } else if (e.key === '0' || e.key === 'Home') {
+      } else if (plain && (e.key === '0' || e.key === 'Home')) {
         resetCamera();
-      } else if (e.key === '[') {
-        setRailOpen((r) => !r);
-      } else if (e.key === ']') {
-        if (!railOpen) setRailOpen(true);
+      } else if (plain && e.key === '[') {
+        setRailOpen(false);
+      } else if (plain && e.key === ']') {
+        setRailOpen(true);
       } else if (e.key === 'Escape') {
         if (contextMenu) setContextMenu(null);
         else if (searchOpen) setSearchOpen(false);
@@ -490,15 +493,15 @@ export default function App() {
         else if (openTrip) setOpenTrip(null);
         else if (mode === 'simulate' && selection) setSelection(null);
         else enterSimulate();
-      } else if ((e.key === 't' || e.key === 'T') && !mod && !e.altKey) {
+      } else if ((e.key === 't' || e.key === 'T') && plain) {
         toggleTheme();
-      } else if ((e.key === 's' || e.key === 'S') && !mod && !e.altKey) {
+      } else if ((e.key === 's' || e.key === 'S') && plain) {
         setReportsOpen((v) => !v);
-      } else if ((e.key === 'm' || e.key === 'M') && !mod && !e.altKey) {
+      } else if ((e.key === 'm' || e.key === 'M') && plain) {
         toggleMeasure();
-      } else if (e.key === '?') {
+      } else if (e.key === '?' && plain) {
         setHelpOpen(true);
-      } else if (e.key === 'r' || e.key === 'R') {
+      } else if (plain && (e.key === 'r' || e.key === 'R')) {
         resetAll();
       }
     };
@@ -551,7 +554,7 @@ export default function App() {
     toastTimers.current.clear();
   }, []);
 
-  const stats = computeStats(snapshot);
+  const stats = useMemo(() => computeStats(snapshot), [snapshot]);
 
   // Analytics layer: pure functions over sim state (structural ones recompute
   // with the network; live ones refresh with each snapshot).
@@ -1612,6 +1615,7 @@ export default function App() {
           id: `lens-${it.key}`,
           group: 'Lens',
           label: it.key === 'normal' ? 'Show the map with no lens' : `Show ${it.label.toLowerCase()}`,
+          keys: it.key === 'accessibility' ? ['A'] : undefined,
           keywords: `overlay lens map layer ${g.title.toLowerCase()}`,
           run: () => setOverlay(it.key),
         });
@@ -1628,7 +1632,9 @@ export default function App() {
     for (const pr of PRESETS) {
       add({ id: `place-${pr.id}`, group: 'View', label: `Jump to ${pr.label}`, keywords: 'go fly camera place', run: () => applyCameraPreset(pr.id) });
     }
+    add({ id: 'search', group: 'Map', label: 'Search the map or run a command', keys: ['/'], keywords: 'find places commands palette', run: () => setSearchOpen(true) });
     add({ id: 'measure', group: 'Map', label: measureTool ? 'Stop measuring' : 'Measure a distance', keys: ['M'], keywords: 'ruler length', run: toggleMeasure });
+    add({ id: 'inspect', group: 'Map', label: inspectMode ? 'Stop quick inspect' : 'Quick inspect while building', keys: ['I'], keywords: 'select click look', run: () => setInspectMode((v) => !v) });
     add({ id: 'minimap', group: 'Map', label: minimapOpen ? 'Hide the overview map' : 'Show the overview map', keywords: 'minimap', run: toggleMinimap });
 
     add({ id: 'reports', group: 'Workspace', label: reportsOpen ? 'Close reports' : 'Open reports', keys: ['S'], keywords: 'tables numbers statistics data', suggested: true, run: () => setReportsOpen((v) => !v) });

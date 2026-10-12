@@ -275,7 +275,7 @@ export function advanceTraffic(w: TrafficWorld, dtMin: number): void {
         car.s += step;
         remaining = 0;
       } else {
-        remaining -= left / Math.max(1, speedMpm);
+        remaining -= left / Math.max(1e-6, speedMpm);
         st.load = Math.max(0, st.load - 1);
         car.edgeIndex++;
         car.s = 0;

@@ -48,6 +48,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
     items: [
       [['Ctrl', 'Z'], 'Undo'],
       [['Ctrl', 'Shift', 'Z'], 'Redo'],
+      [['Ctrl', 'Y'], 'Redo'],
     ],
   },
 ];

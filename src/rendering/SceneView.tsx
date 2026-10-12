@@ -702,10 +702,14 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const measureGroup = new THREE.Group();
     measureGroup.name = 'measure';
     scene.add(measureGroup);
+    // Per-scene textures, disposed with the scene. The shared building atlas in
+    // buildings.ts is module-level and must not be disposed here.
+    const sceneTextures: THREE.Texture[] = [];
     const measureCanvas = document.createElement('canvas');
     measureCanvas.width = 512 * labelDpr;
     measureCanvas.height = 96 * labelDpr;
     const measureTex = new THREE.CanvasTexture(measureCanvas);
+    sceneTextures.push(measureTex);
     measureTex.generateMipmaps = false;
     measureTex.minFilter = THREE.LinearFilter;
     measureTex.magFilter = THREE.LinearFilter;
@@ -794,6 +798,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       canvas.width = 256 * labelDpr;
       canvas.height = 64 * labelDpr;
       const tex = new THREE.CanvasTexture(canvas);
+      sceneTextures.push(tex);
       // Mipmapping blurs a billboard that's frequently small/distant even
       // further; a flat bilinear sample off the full-resolution canvas
       // stays crisp at any camera distance.
@@ -919,8 +924,10 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     let lastFrame = performance.now();
     const clock = new VisualClock();
     let frame = 0;
-    // Smooth camera commands: eased glide, cancelled by user input.
-    let appliedCamSeq = 0;
+    // Smooth camera commands: eased glide, cancelled by user input. Seeded from
+    // the last command so a scene rebuild does not replay it and yank the camera
+    // off the pose carried across the rebuild.
+    let appliedCamSeq = cameraCmdRef.current?.seq ?? 0;
     let camAnim: { fp: THREE.Vector3; ft: THREE.Vector3; tp: THREE.Vector3; tt: THREE.Vector3; t0: number } | null = null;
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     const cancelCamAnim = () => {
@@ -1159,6 +1166,10 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const boosted = ov === 'load' ? Math.pow(load, 0.6) : load;
           loadColor.copy(baseColor).lerp(hotColor, boosted);
           mat.color.copy(loadColor);
+          // Clear last frame's glow before re-applying: emissive is only set by
+          // the flags below, so without this a deselected station stays lit and
+          // lens flags never clear.
+          mat.emissive.setHex(STATION.glow);
           mat.emissiveIntensity = ov === 'load' ? (light ? 0.1 + 0.6 * load : 0.3 + 1.8 * load) : light ? 0.1 : 0.4;
           let sc = ov === 'load' ? 1 + load * 0.6 : 1;
           if (bottleneckSet?.has(id)) {
@@ -1375,6 +1386,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       controls.removeEventListener('start', cancelCamAnim);
       poseRef.current = { pos: camera.position.toArray(), target: controls.target.toArray() };
       controls.dispose();
+      for (const tex of sceneTextures) tex.dispose();
       scene.traverse((o) => {
         const mesh = o as THREE.Mesh;
         if (mesh.geometry) mesh.geometry.dispose();
