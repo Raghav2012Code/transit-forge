@@ -21,14 +21,15 @@
   flex: none;
   justify-self: start;
 }
+/* The mark paints itself — the route bullet, in the flagship line's blue — so
+   this box only fixes its size. The masthead, the browser tab and the landing
+   page then show the same chip. */
 .tf-brand-mark {
   width: 26px;
   height: 26px;
   display: grid;
   place-items: center;
-  border-radius: var(--r-bullet);
-  background: var(--ink-strong);
-  color: var(--on-ink);
+  flex: none;
 }
 .tf-brand-name {
   display: flex;

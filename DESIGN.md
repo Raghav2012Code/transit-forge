@@ -48,6 +48,16 @@ read off a platform sign: the line's code set in its own colour. Bullet text
 flips from white to ink on light lines, the way a yellow line's bullet is set
 in black on a real sign (`ui/shell/RouteBullet.tsx` picks it by luminance).
 
+**The product's own mark is one bullet, not a logo.** A chip in the flagship
+line's blue carries the interchange glyph in white, and it is the same shape in
+the same blue in four places: the browser tab, the landing page, the workspace
+masthead, and the header of an exported plan report. Its geometry is defined
+once, in `src/brandMark.ts`. The tab's favicon asset and the landing page *mirror*
+that geometry rather than import it — deliberate, and the price of having no
+shared-SVG build step, so a change to the mark means editing those two as well.
+A printed report drops the chip and draws the glyph in the document's own ink,
+because a background colour is not something a printer is obliged to keep.
+
 ## Typography
 
 One family, two widths — a signage system, not a font pairing.

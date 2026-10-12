@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BRAND_BLUE } from '../../brandMark.ts';
 import { generateCity } from '../city/generateCity.ts';
 import { buildNetwork } from '../transport/network.ts';
 import {
@@ -359,8 +360,18 @@ describe('intervention summary and reports', () => {
       expect(text).toContain(section);
     }
     expect(reportToJson(r1)).toContain(r1.verdict);
-    expect(reportToHtml(r1)).toContain('<html>');
-    expect(reportToHtml(r1)).toContain('Finance');
+    const html = reportToHtml(r1);
+    expect(html).toContain('<html>');
+    expect(html).toContain('Finance');
+    // The mark travels with the report — a decorative inline SVG at the head of
+    // the title, in one ink. Nothing has to be fetched for it, and the chip's
+    // colour is gone because a printer need not keep a background.
+    expect(html).toContain('<h1><span');
+    expect(html).toMatch(/<svg[^>]*aria-hidden="true"/);
+    expect(html).not.toContain(BRAND_BLUE);
+    // The machine-readable exports carry no mark at all.
+    expect(reportToJson(r1)).not.toContain('<svg');
+    expect(reportToText(r1)).not.toContain('<svg');
   });
 
   it('evaluates a 1-year horizon plan', () => {

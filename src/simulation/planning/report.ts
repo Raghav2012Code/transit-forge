@@ -1,6 +1,7 @@
 // Structured planning reports built from evaluation results.
 // Export as JSON, plain text, or printable HTML (no dependencies).
 import { formatCost } from '../scenario/scenario.ts';
+import { brandGlyphSvg } from '../../brandMark.ts';
 import type { CompareRow } from '../scenario/compare.ts';
 import type { InterventionSummary } from '../planning/intervention.ts';
 import type { ConstraintResult, Objective, ObjectiveResult, PlanConstraint } from '../planning/objectives.ts';
@@ -138,9 +139,12 @@ export function reportToText(report: PlanReport): string {
 export function reportToHtml(report: PlanReport): string {
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
   const li = (items: string[]) => items.map((x) => `<li>${esc(x)}</li>`).join('');
+  // The mark travels with the document: inlined, in the document's own ink, so a
+  // printed or pasted report still says whose it is without fetching anything.
+  const mark = `<span style="vertical-align:-7px;margin-right:9px">${brandGlyphSvg('#111', 30)}</span>`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(report.title)}</title>` +
     `<style>body{font-family:system-ui,sans-serif;max-width:760px;margin:32px auto;color:#111}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:4px 8px;text-align:left}.pass{color:#15803d}.fail{color:#b91c1c}</style></head><body>` +
-    `<h1>${esc(report.title)}</h1>` +
+    `<h1>${mark}${esc(report.title)}</h1>` +
     `<p>Brief: ${esc(report.briefTitle)} · Horizon: ${report.horizonYears}y · Verdict: <strong class="${report.verdict === 'PASSED' ? 'pass' : 'fail'}">${report.verdict}</strong></p>` +
     `<h2>Problem</h2><ul>${li(report.problem)}</ul>` +
     `<h2>Intervention</h2><ul>${li([...report.intervention.infra, ...report.intervention.service, ...report.intervention.roads])}</ul>` +

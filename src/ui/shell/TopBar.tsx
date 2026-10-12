@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Theme } from '../../rendering/palette.ts';
-import { IconChevron, IconHelp, IconMoon, IconPanel, IconPlan, IconScenario, IconSearch, IconSun } from './icons.tsx';
+import { BrandMark, IconChevron, IconHelp, IconMoon, IconPanel, IconScenario, IconSearch, IconSun } from './icons.tsx';
 import Popover from './Popover.tsx';
 
 interface Props {
@@ -26,7 +26,7 @@ export default function TopBar({ scenarioName, edits, scenarioMenu, onSearch, th
       <div className="tf-bar-left">
         <div className="tf-brand">
           <span className="tf-brand-mark" aria-hidden="true">
-            <IconPlan size={17} />
+            <BrandMark size={26} />
           </span>
           <h1 className="tf-brand-name"><b>TransitForge</b></h1>
         </div>

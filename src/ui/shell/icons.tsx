@@ -1,6 +1,8 @@
 // One icon set: 16px grid, 1.5 stroke, round caps, currentColor.
 // Icon components never carry their own color or size — the CSS decides.
+// The product mark at the foot of this file is the one exception.
 import type { SVGProps } from 'react';
+import { BRAND_BLUE, BRAND_NODES, BRAND_ON, BRAND_SPOKES, BRAND_STROKE, BRAND_VIEW_BOX } from '../../brandMark.ts';
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number };
 
@@ -154,4 +156,23 @@ export const IconCompare = (p: IconProps) => (
 
 export const IconScenario = (p: IconProps) => (
   <Svg {...p}><path d="M2.5 4.2a1 1 0 0 1 1-1h3l1.4 1.6h4.6a1 1 0 0 1 1 1v6.2a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1Z" /></Svg>
+);
+
+/**
+ * The product mark: the route bullet, which is also the browser tab's icon and
+ * the landing page's mark. Unlike the icons above it carries its own colour —
+ * the mark is the flagship line's blue by definition, not one the surrounding
+ * CSS picks, and it has to be identical in the app and in a printed report. The
+ * geometry comes from `brandMark.ts`, so those two cannot drift apart.
+ */
+export const BrandMark = ({ size = 26 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox={BRAND_VIEW_BOX} aria-hidden="true" focusable="false">
+    <circle cx="16" cy="16" r="16" fill={BRAND_BLUE} />
+    <g stroke={BRAND_ON} strokeWidth={BRAND_STROKE} strokeLinecap="round" fill="none">
+      {BRAND_SPOKES.map((d) => <path key={d} d={d} />)}
+    </g>
+    <g fill={BRAND_ON}>
+      {BRAND_NODES.map(([cx, cy, r]) => <circle key={`${cx},${cy}`} cx={cx} cy={cy} r={r} />)}
+    </g>
+  </svg>
 );
