@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CityData } from '../../types/index.ts';
 import type { ScenePalette } from '../palette.ts';
-import { merge } from '../transport/sweep.ts';
+import { merge, nonIndexed } from '../transport/sweep.ts';
 import { RIVER_HALF } from './terrain.ts';
 
 /** A flat slab from a to b, `w` wide, with its top at `top` and `h` thick. */
@@ -10,7 +10,7 @@ function slab(ax: number, az: number, bx: number, bz: number, w: number, top: nu
   const g = new THREE.BoxGeometry(len, h, w);
   g.rotateY(-Math.atan2(bz - az, bx - ax));
   g.translate((ax + bx) / 2, top - h / 2, (az + bz) / 2);
-  return g.toNonIndexed();
+  return nonIndexed(g);
 }
 
 function mesh(g: THREE.BufferGeometry, color: number, shadow = true): THREE.Mesh {

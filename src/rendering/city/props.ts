@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CityData, DistrictKind } from '../../types/index.ts';
 import type { ScenePalette } from '../palette.ts';
-import { merge, tint } from '../transport/sweep.ts';
+import { merge, nonIndexed, tint } from '../transport/sweep.ts';
 import { RIVER_HALF } from './terrain.ts';
 import { hash01 } from './buildings.ts';
 import { xAtZ, type BuildingIndex, type DiscIndex } from './spatial.ts';
@@ -23,7 +23,7 @@ export function buildParks(city: CityData, palette: ScenePalette): THREE.Mesh | 
     const g = new THREE.BoxGeometry(p.w, 0.2, p.d);
     g.rotateY(p.rot);
     g.translate(p.pos.x, 0.1, p.pos.z);
-    return g.toNonIndexed();
+    return nonIndexed(g);
   });
   const mesh = new THREE.Mesh(merge(geos), new THREE.MeshStandardMaterial({ color: palette.scene.park, roughness: 1 }));
   mesh.receiveShadow = true;
@@ -103,7 +103,7 @@ export function buildTrees(
   crown.translate(0, 4.6, 0);
   const trunk = new THREE.CylinderGeometry(0.28, 0.4, 2.6, 5);
   trunk.translate(0, 1.3, 0);
-  const geo = merge([tint(crown.toNonIndexed(), 1), tint(trunk.toNonIndexed(), 0.45)]);
+  const geo = merge([tint(nonIndexed(crown), 1), tint(nonIndexed(trunk), 0.45)]);
   const mesh = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, vertexColors: true }), spots.length);
   mesh.castShadow = true;
   mesh.receiveShadow = true;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Station, TransportMode, TransportRoute, VehicleState } from '../../types/index.ts';
 import { routeCurve } from '../transport/buildNetwork.ts';
 import type { TrackCurve } from '../transport/trackPath.ts';
-import { merge } from '../transport/sweep.ts';
+import { merge, nonIndexed } from '../transport/sweep.ts';
 import { buildSchedule, type Schedule } from './schedule.ts';
 
 export interface RoutePath {
@@ -40,7 +40,7 @@ const COUPLING = 0.4;
 function box(w: number, h: number, d: number, y: number, z: number, rgb: THREE.Color): THREE.BufferGeometry {
   const g = new THREE.BoxGeometry(w, h, d);
   g.translate(0, y + h / 2, z);
-  const out = g.toNonIndexed();
+  const out = nonIndexed(g);
   const n = out.attributes.position.count;
   const col = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {

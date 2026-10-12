@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Station, TransportMode, TransportRoute } from '../../types/index.ts';
 import type { ScenePalette } from '../palette.ts';
 import { buildTrackCurve, type TrackCurve } from './trackPath.ts';
-import { merge, rectProfile, sweep, tint } from './sweep.ts';
+import { merge, nonIndexed, rectProfile, sweep, tint } from './sweep.ts';
 
 /** Height of the running surface for each mode. Buses use the street. */
 export const MODE_Y: Record<TransportMode, number> = {
@@ -41,7 +41,7 @@ function boxAt(w: number, h: number, d: number, x: number, y: number, z: number,
   const g = new THREE.BoxGeometry(w, h, d);
   g.rotateY(yaw);
   g.translate(x, y, z);
-  return tint(g.toNonIndexed(), shade);
+  return tint(nonIndexed(g), shade);
 }
 
 /** Offset (along, across) in a frame turned to `yaw` (local z = along the track). */
@@ -165,7 +165,7 @@ export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]
         const cap = new THREE.BoxGeometry(w * 0.82, 0.8, 1.9);
         cap.rotateY(yaw);
         cap.translate(p.x, deckBottom - 0.4, p.z);
-        piers[m].push(col.toNonIndexed(), cap.toNonIndexed());
+        piers[m].push(nonIndexed(col), nonIndexed(cap));
       }
     }
 
@@ -217,7 +217,7 @@ export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]
       // Forecourt where lines meet: pale paving, not part of the station's own tint.
       const plaza = new THREE.CylinderGeometry(15, 15, 0.16, 28);
       plaza.translate(st.pos.x, 0.5, st.pos.z);
-      plazas.push(plaza.toNonIndexed());
+      plazas.push(nonIndexed(plaza));
     }
     mesh.castShadow = true;
     mesh.receiveShadow = true;

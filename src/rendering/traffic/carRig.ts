@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CarTrip, CityData } from '../../types/index.ts';
 import type { ScenePalette } from '../palette.ts';
-import { merge } from '../transport/sweep.ts';
+import { merge, nonIndexed } from '../transport/sweep.ts';
 
 /** Representative subset of cars as one InstancedMesh (never one object per car). */
 export const MAX_VISIBLE_CARS = 60;
@@ -18,7 +18,7 @@ export function buildCarRig(city: CityData, palette: ScenePalette): CarRig {
   group.name = 'cars';
   // A saloon: body, glass cabin, long axis +x. Vertex colours carry body (1) and glass (dark).
   const part = (w: number, h: number, d: number, x: number, y: number, shade: number) => {
-    const g = new THREE.BoxGeometry(w, h, d).toNonIndexed();
+    const g = nonIndexed(new THREE.BoxGeometry(w, h, d));
     g.translate(x, y + h / 2, 0);
     g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(shade), 3));
     return g;

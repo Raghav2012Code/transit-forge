@@ -95,8 +95,12 @@ export function tint(g: THREE.BufferGeometry, shade: number): THREE.BufferGeomet
   return g;
 }
 
+/** Flat form of `g` for merging: already non-indexed geometry passes through unwarned. */
+export function nonIndexed(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  return g.index ? g.toNonIndexed() : g;
+}
+
 export function merge(geos: THREE.BufferGeometry[]): THREE.BufferGeometry {
-  const nonIndexed = geos.map((g) => (g.index ? g.toNonIndexed() : g));
-  const out = mergeGeometries(nonIndexed, false);
+  const out = mergeGeometries(geos.map(nonIndexed), false);
   return out ?? new THREE.BufferGeometry();
 }
