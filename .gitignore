@@ -28,3 +28,5 @@ dist-ssr
 .openchamber
 .playwright-mcp
 *.local.png
+.vercel
+.env*
