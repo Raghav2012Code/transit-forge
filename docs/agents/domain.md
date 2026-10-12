@@ -24,9 +24,12 @@ This repo is **single-context**: one `CONTEXT.md` at the root, ADRs in
 ├── AGENTS.md
 ├── CONTEXT.md              ← created lazily by /domain-modeling
 ├── DESIGN.md               ← committed interface direction (palette, type, motion)
+├── index.html              ← the landing page
+├── simulate/               ← the workspace, served at /simulate
 ├── docs/
-│   ├── adr/                ← created lazily by /domain-modeling
-│   └── agents/             ← this file, issue-tracker.md, triage-labels.md
+│   ├── adr/                ← the decisions, 0001 onwards
+│   ├── agents/             ← this file, issue-tracker.md, triage-labels.md
+│   └── superpowers/        ← plans and specs
 └── src/
 ```
 
