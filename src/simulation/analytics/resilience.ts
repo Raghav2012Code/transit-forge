@@ -68,12 +68,14 @@ export function capacityLostFor(
     const r = inc.targetRouteId ? byId.get(inc.targetRouteId) : undefined;
     if (r) out.transitCapLost = Math.round(hourlyCapacity(r) * hours * 0.5);
   }
+  let roadKm = 0;
   for (const e of inc.edgeIds ?? []) {
     const edge = roadGraph.edgeById.get(e);
     if (!edge) continue;
-    out.roadKmLost = Math.round((out.roadKmLost + edge.lengthM / 1000) * 10) / 10;
+    roadKm += edge.lengthM / 1000;
     out.roadCapLost += Math.round((roadGraph.capacityPerHr.get(e) ?? 0) * hours);
   }
+  out.roadKmLost = Math.round(roadKm * 10) / 10;
   return out;
 }
 

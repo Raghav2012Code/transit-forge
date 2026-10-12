@@ -9,9 +9,11 @@ export function circleOverlapFraction(r0: number, r1: number, d: number): number
   const r0sq = r0 * r0;
   const r1sq = r1 * r1;
   const dsq = d * d;
+  // acos is only defined on [-1, 1]; a near-tangent pair can round outside it.
+  const acos = (x: number) => Math.acos(Math.max(-1, Math.min(1, x)));
   const a =
-    r0sq * Math.acos((dsq + r0sq - r1sq) / (2 * d * r0)) +
-    r1sq * Math.acos((dsq + r1sq - r0sq) / (2 * d * r1)) -
+    r0sq * acos((dsq + r0sq - r1sq) / (2 * d * r0)) +
+    r1sq * acos((dsq + r1sq - r0sq) / (2 * d * r1)) -
     0.5 * Math.sqrt(Math.max(0, (-d + r0 + r1) * (d + r0 - r1) * (d - r0 + r1) * (d + r0 + r1)));
   return Math.max(0, Math.min(1, a / (Math.PI * r0sq)));
 }

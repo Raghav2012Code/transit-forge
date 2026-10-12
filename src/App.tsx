@@ -451,7 +451,9 @@ export default function App() {
       // Plain keys only. Ctrl/Alt combinations belong to the browser
       // (Ctrl+A select-all, Ctrl+F find, Ctrl+P print), never to the app.
       const plain = !mod && !e.altKey;
-      if (e.key === ' ' && plain) {
+      // Space activates a focused control, so never steal it from one.
+      const onControl = !!t && (t.tagName === 'BUTTON' || t.tagName === 'A' || t.getAttribute('role') === 'button');
+      if (e.key === ' ' && plain && !onControl) {
         e.preventDefault();
         togglePlay();
       } else if (plain && e.key === '1') setSpeed(1);
@@ -630,6 +632,7 @@ export default function App() {
     edgeVC: Object.fromEntries(Object.entries(snapshot.edgeState).map(([id, st]) => [id, st.vc])),
     resilienceScore: null,
     constructionCost: mod.cost,
+    zonePopulation: Object.fromEntries(snapshot.city.zones.map((z) => [z.id, z.population])),
   }), [stats, access, coverage, snapshot, mod]);
   const liveObjectiveResults = useMemo(
     () => (activeBrief ? activeBrief.objectives.map((o) => evaluateObjective(o, liveBundle, readMetric(baselineBundle ?? liveBundle, o.metric, o.targetId))) : []),
@@ -1179,7 +1182,7 @@ export default function App() {
     if (!activeBrief || submitting) return;
     setSubmitting(true);
     await new Promise((r) => setTimeout(r, 30));
-    const key = JSON.stringify({ ops, brief: activeBrief.id, horizon: planHorizon, incident: activeBrief.incident ?? null, seed: SEED });
+    const key = JSON.stringify({ ops, brief: activeBrief.id, horizon: planHorizon, incident: activeBrief.incident ?? null, seed: SEED, difficulty, coverageThreshold, objectives: activeBrief.objectives.map((o) => o.id), constraints: activeBrief.constraints.map((c) => c.id) });
     let ev = evalCache.current.get(key);
     if (!ev) {
       ev = evaluatePlan({
@@ -1245,10 +1248,11 @@ export default function App() {
       constraints: activeBrief?.constraints.map((c) => ({ ...c })) ?? [],
       horizonYears: planHorizon,
       incident: activeBrief?.incident ? { ...activeBrief.incident } : undefined,
+      difficulty,
       createdAt: Date.now(),
       attempts: [],
     };
-    savePlan(plan);
+    if (!savePlan(plan)) pushToast('warn', 'Could not save the plan: browser storage is full');
     setPlans(listPlans());
     setActivePlanId(plan.id);
   }
@@ -1258,6 +1262,7 @@ export default function App() {
     if (!plan) return;
     setActivePlanId(id);
     setBriefId(plan.briefId);
+    if (plan.difficulty) setDifficulty(plan.difficulty);
     setBaselineBundle(null);
     setPlanHorizon(plan.horizonYears);
     setEvaluation(null);
@@ -2278,7 +2283,7 @@ export default function App() {
             name={scenarioMeta.name}
             onName={(n) => setScenarioMeta((s) => ({ ...s, name: n }))}
             onSave={() => {
-              saveScenario({ ...scenarioMeta, seed: SEED, ops, version: 1 });
+              if (!saveScenario({ ...scenarioMeta, seed: SEED, ops, version: 1 })) pushToast('warn', 'Could not save: browser storage is full');
               setSaved(listScenarios());
             }}
             saved={saved}
@@ -2288,11 +2293,11 @@ export default function App() {
               applyOps(s.ops, [], 'scenario');
             }}
             onRename={(s, name) => {
-              saveScenario({ ...s, name });
+              if (!saveScenario({ ...s, name })) pushToast('warn', 'Could not save: browser storage is full');
               setSaved(listScenarios());
             }}
             onDuplicate={(s) => {
-              duplicateScenario(s);
+              if (!duplicateScenario(s)) pushToast('warn', 'Could not save: browser storage is full');
               setSaved(listScenarios());
             }}
             onDelete={(id) => {

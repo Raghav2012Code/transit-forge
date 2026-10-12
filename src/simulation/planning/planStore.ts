@@ -3,6 +3,7 @@ import type { CompareRow } from '../scenario/compare.ts';
 import type { EditOp } from '../scenario/scenario.ts';
 import type { IncidentConfig } from '../incidents/incidents.ts';
 import type { Objective, PlanConstraint } from './objectives.ts';
+import type { Difficulty } from './briefs.ts';
 import { storageRead, storageWrite } from '../scenario/store.ts';
 
 export interface PlanAttempt {
@@ -23,6 +24,8 @@ export interface SavedPlan {
   constraints: PlanConstraint[];
   horizonYears: number;
   incident?: IncidentConfig;
+  /** Difficulty the brief was generated at, so a load restores its constraints. */
+  difficulty?: Difficulty;
   createdAt: number;
   attempts: PlanAttempt[];
 }
@@ -43,20 +46,20 @@ function readEnvelope(): Envelope {
   };
 }
 
-function writeEnvelope(env: Envelope): void {
-  storageWrite(KEY, env);
+function writeEnvelope(env: Envelope): boolean {
+  return storageWrite(KEY, env);
 }
 
 export function listPlans(): SavedPlan[] {
   return readEnvelope().plans;
 }
 
-export function savePlan(p: SavedPlan): void {
+export function savePlan(p: SavedPlan): boolean {
   const env = readEnvelope();
   const idx = env.plans.findIndex((x) => x.id === p.id);
   if (idx < 0) env.plans.push(p);
   else env.plans[idx] = p;
-  writeEnvelope(env);
+  return writeEnvelope(env);
 }
 
 export function deletePlan(id: string): void {
@@ -65,6 +68,10 @@ export function deletePlan(id: string): void {
   writeEnvelope(env);
 }
 
+let planSeq = 0;
+
 export function makePlanId(): string {
-  return `plan-${Date.now().toString(36)}`;
+  // Date.now alone collides for ids made in the same millisecond; the counter
+  // keeps them unique within a session.
+  return `plan-${Date.now().toString(36)}-${(planSeq++).toString(36)}`;
 }

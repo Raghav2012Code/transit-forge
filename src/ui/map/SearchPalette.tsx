@@ -41,7 +41,13 @@ export default function SearchPalette({ entries, commands, onPick, onClose }: Pr
 
   return (
     <div className="tf-modal-scrim tf-palette-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="tf-palette" role="dialog" aria-modal="true" aria-label="Search and commands">
+      <div
+        className="tf-palette"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search and commands"
+        onKeyDown={(e) => { if (e.key === 'Tab') e.preventDefault(); }}
+      >
         <input
           value={query}
           placeholder="Search the map or run a command"

@@ -48,6 +48,8 @@ export interface MetricsBundle {
   edgeVC: Record<string, number>;
   resilienceScore: number | null;
   constructionCost: number;
+  /** Per-zone population, for zone-targeted growth objectives. */
+  zonePopulation?: Record<string, number>;
 }
 
 /** Read one metric from the bundle. Null when unavailable. */
@@ -59,7 +61,7 @@ export function readMetric(b: MetricsBundle, metric: MetricKey, targetId?: strin
     case 'peak-crowding': return s.maxOccupancy;
     case 'transit-share': return s.transitShare;
     case 'car-share': return s.carShare;
-    case 'congestion': return s.avgCongestion;
+    case 'congestion': return s.avgCongestion * 100;
     case 'accessibility': return b.access.cityScore;
     case 'coverage': return b.coverage.pct;
     case 'denied': return s.deniedBoardings;
@@ -68,7 +70,7 @@ export function readMetric(b: MetricsBundle, metric: MetricKey, targetId?: strin
     case 'cost-recovery': return s.costRecovery;
     case 'subsidy': return s.subsidy;
     case 'construction-cost': return b.constructionCost;
-    case 'population': return s.population;
+    case 'population': return targetId ? (b.zonePopulation?.[targetId] ?? null) : s.population;
     case 'jobs': return s.jobs;
     case 'resilience-score': return b.resilienceScore;
     case 'access-zone': {
@@ -96,7 +98,7 @@ export function metricUnit(metric: MetricKey): string {
     case 'avg-travel': case 'avg-wait': return ' min';
     case 'peak-crowding': case 'transit-share': case 'car-share':
     case 'accessibility': case 'coverage': case 'resilience-score':
-    case 'cost-recovery': return '%';
+    case 'cost-recovery': case 'congestion': return '%';
     case 'denied': case 'population': case 'jobs': return '';
     case 'op-cost': case 'revenue': case 'subsidy': return ' OCU';
     case 'construction-cost': return ' ₹';

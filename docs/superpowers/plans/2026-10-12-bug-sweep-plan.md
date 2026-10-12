@@ -105,9 +105,71 @@ that hash untouched. If it moves, a fix is not inert and is wrong.
   compute in `analyticsView` is what makes the lens work before Analyze is
   pressed. Left as is.
 
+## Second sweep — the modules round one did not cover
+
+Round one covered the passenger, incident, traffic and statistics modules, the
+scene, and the keyboard/command layer. This pass covered the rest: planning,
+analytics, economics, growth, service, scenario, the app shell and persistence.
+
+### Fixed
+
+**Planning verdicts**
+- The `congestion` objective metric read a 0–2 V/C **ratio** while every brief
+  targets 75–80 **percent**, so "Peak road congestion < 75%" also passed in a
+  saturated city. `objectives.ts` now reads it as a percentage with a `%` unit.
+- The `su-pop` growth objective compared a **single zone's** projected
+  population against the **city-wide** total, so it always passed. A zone
+  population is now read when the objective names one (`objectives.ts`), the
+  brief names the zone (`briefs.ts`), and both bundles carry per-zone
+  populations (`evaluate.ts`, `App.tsx`).
+- The plan-evaluation cache key omitted difficulty, coverage threshold and the
+  brief's own objective/constraint ids, so changing difficulty returned a stale
+  verdict whose constraint ids no longer matched — a genuine pass reported as a
+  fail. The key now includes all of them.
+
+**Persistence**
+- `storageWrite` swallowed quota errors, so a failed save looked successful and
+  the list showed stale data. It now returns a boolean and the shell raises a
+  warning toast when a save does not persist.
+- `makePlanId` and the scenario-copy id had millisecond resolution, so two ids
+  made in the same millisecond collided (a save overwrote its twin; a copy
+  pushed a duplicate). Both now append a session counter.
+- Loading a saved plan ignored its stored objectives/constraints and re-derived
+  them from the current difficulty. A plan now stores its difficulty and
+  restores it on load.
+
+**Interface**
+- Space is the activation key for a focused control, but the global handler
+  cancelled it, so Space on any focused button toggled the day instead of
+  pressing the button (and on the minimap it did both). Space is now ignored
+  when the event target is a control.
+- The command palette claimed `aria-modal` with no focus trap, so Tab walked the
+  toolbar behind the scrim. Tab is now held inside the palette.
+
+**Analytics**
+- `circleOverlapFraction` fed `acos` a value that near tangency could round
+  outside `[-1, 1]` and leak `NaN` into catchment population. Clamped.
+- `capacityLostFor` rounded the road-km total after every edge, so the reported
+  loss depended on edge order. Summed then rounded once.
+- `systemTheme` would throw where `matchMedia` is absent. Guarded.
+
+### Deferred (low, no live trigger or a product call)
+
+- Bridge criticality share divides road-path use by a transit-pair count
+  (`resilience.ts:212`), so it can exceed 100 and is silently clamped; the fix
+  needs the road OD-pair count.
+- The growth-layout water check samples 0.8× the half-diagonal at three points
+  (`layout.ts:238`); a rotated corner could sit over water. Could not
+  demonstrate a failing seed.
+- `tutorialSteps` mutates a ref during render (`App.tsx:405`); harmless and
+  idempotent under StrictMode.
+- Editing while the map shows Baseline records an op but does not apply it until
+  you switch to Scenario (`App.tsx:1407`).
+- Saved scenarios and plans are never pruned, so storage grows without bound.
+
 ## Verification
 
-- `npm run lint`, `npm run test` (218), `npm run build` green.
+- `npm run lint`, `npm run test` (224), `npm run build` green.
 - Golden hashes unchanged — proof that no undisrupted-day result moved.
 - Browser: console clean, theme switch keeps the camera pose, selection
   emphasis clears when deselected.

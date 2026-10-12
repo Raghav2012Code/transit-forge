@@ -83,6 +83,25 @@ describe('objectives', () => {
     expect(readMetric(b, 'crowd-route', 'rt-m1')).toBe(97);
     expect(readMetric(b, 'road-vc', 're-1')).toBe(90);
   });
+
+  it('reads congestion as a percentage, so a congested city fails the target', () => {
+    const b = bundle();
+    b.stats.avgCongestion = 0.9;
+    expect(readMetric(b, 'congestion')).toBe(90);
+    const congested = evaluateObjective(
+      { id: 'cc', title: 'Peak road congestion < 75%', description: 'x', category: 'congestion', metric: 'congestion', op: '<', target: 75, horizonYears: 5 },
+      b,
+      0.5,
+    );
+    expect(congested.value).toBe(90);
+    expect(congested.passed).toBe(false);
+  });
+
+  it('reads a zone population when the objective names a zone', () => {
+    const b = bundle({ zonePopulation: { z1: 12000 } });
+    expect(readMetric(b, 'population', 'z1')).toBe(12000);
+    expect(readMetric(b, 'population')).toBe(100000);
+  });
 });
 
 describe('constraints', () => {

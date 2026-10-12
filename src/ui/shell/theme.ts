@@ -21,7 +21,8 @@ export function saveTheme(theme: Theme): void {
 }
 
 export function systemTheme(): Theme {
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+  return mq?.matches ? 'dark' : 'light';
 }
 
 /** Tokens, form controls and scrollbars all key off this one attribute. */

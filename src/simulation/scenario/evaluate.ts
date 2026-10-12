@@ -43,6 +43,10 @@ export interface PlanEvaluation {
   horizonYears: number;
 }
 
+function zonesToPop(zones: { id: string; population: number }[]): Record<string, number> {
+  return Object.fromEntries(zones.map((z) => [z.id, z.population]));
+}
+
 function bundleOf(
   stats: SimStats,
   access: AccessibilitySet,
@@ -51,8 +55,9 @@ function bundleOf(
   edgeVC: Record<string, number>,
   resilienceScore: number | null,
   constructionCost: number,
+  zonePopulation: Record<string, number>,
 ): MetricsBundle {
-  return { stats, access, coverage, routePeakOcc, edgeVC, resilienceScore, constructionCost };
+  return { stats, access, coverage, routePeakOcc, edgeVC, resilienceScore, constructionCost, zonePopulation };
 }
 
 /** Shared live/project constraint inputs (same function for UI + submit). */
@@ -101,6 +106,8 @@ export function evaluatePlan(input: {
   let modRoutePeakOcc: Record<string, number> = {};
   let baseEdgeVC: Record<string, number> = {};
   let modEdgeVC: Record<string, number> = {};
+  let baseZonePop: Record<string, number> = {};
+  let modZonePop: Record<string, number> = {};
 
   if (input.horizonYears > 0) {
     const hz = compareHorizons(
@@ -114,6 +121,8 @@ export function evaluatePlan(input: {
     modRoutePeakOcc = hz.mod.routePeakOcc;
     baseEdgeVC = hz.base.edgeVC;
     modEdgeVC = hz.mod.edgeVC;
+    baseZonePop = zonesToPop(hz.base.zones);
+    modZonePop = zonesToPop(hz.mod.zones);
     baseAccess = computeAccessibility({ zones: hz.base.zones, stations: input.baseNet.stations, connections: input.baseNet.connections, routes: input.baseNet.routes });
     modAccess = computeAccessibility({ zones: hz.mod.zones, stations: mod.stations, connections: mod.connections, routes: mod.routes });
     baseCoverage = computeCoverage(hz.base.zones, input.baseNet.stations, threshold);
@@ -127,6 +136,8 @@ export function evaluatePlan(input: {
     modAccess = cmp.modAccess;
     baseCoverage = cmp.baseCoverage;
     modCoverage = cmp.modCoverage;
+    baseZonePop = zonesToPop(input.baseCity.zones);
+    modZonePop = zonesToPop(mod.city.zones);
     // Detailed telemetry only when an objective actually needs it.
     if (input.objectives.some((o) => o.metric === 'crowd-route' || o.metric === 'road-vc')) {
       const baseFull = runHeadlessDetailed(input.seed, input.baseCity, input.baseNet);
@@ -147,8 +158,8 @@ export function evaluatePlan(input: {
     resilienceScoreValue = cmp.mod.metrics.score;
   }
 
-  const baseline = bundleOf(baseStats, baseAccess, baseCoverage, baseRoutePeakOcc, baseEdgeVC, null, 0);
-  const plan = bundleOf(modStats, modAccess, modCoverage, modRoutePeakOcc, modEdgeVC, resilienceScoreValue, mod.cost);
+  const baseline = bundleOf(baseStats, baseAccess, baseCoverage, baseRoutePeakOcc, baseEdgeVC, null, 0, baseZonePop);
+  const plan = bundleOf(modStats, modAccess, modCoverage, modRoutePeakOcc, modEdgeVC, resilienceScoreValue, mod.cost, modZonePop);
   const objectiveResults = input.objectives.map((o) =>
     evaluateObjective(o, plan, readMetric(baseline, o.metric, o.targetId)),
   );

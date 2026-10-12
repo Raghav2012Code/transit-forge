@@ -14,11 +14,14 @@ export function storageRead<T>(key: string, fallback: T): T {
   }
 }
 
-export function storageWrite(key: string, value: unknown): void {
+/** Returns false when the write did not persist (quota full or storage blocked). */
+export function storageWrite(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    return true;
   } catch {
     // Storage full or unavailable: stays session-local.
+    return false;
   }
 }
 
@@ -33,21 +36,21 @@ function readEnvelope(): Envelope {
   return { version: 1, scenarios: parsed.scenarios.filter((s) => s && s.version === 1 && Array.isArray(s.ops)) };
 }
 
-function writeEnvelope(env: Envelope): void {
-  storageWrite(KEY, env);
+function writeEnvelope(env: Envelope): boolean {
+  return storageWrite(KEY, env);
 }
 
 export function listScenarios(): Scenario[] {
   return readEnvelope().scenarios;
 }
 
-export function saveScenario(s: Scenario): void {
+export function saveScenario(s: Scenario): boolean {
   const env = readEnvelope();
   const idx = env.scenarios.findIndex((x) => x.id === s.id);
   const stamped = { ...s, updatedAt: Date.now() };
   if (idx < 0) env.scenarios.push(stamped);
   else env.scenarios[idx] = stamped;
-  writeEnvelope(env);
+  return writeEnvelope(env);
 }
 
 export function deleteScenario(id: string): void {
@@ -56,18 +59,19 @@ export function deleteScenario(id: string): void {
   writeEnvelope(env);
 }
 
-export function duplicateScenario(s: Scenario): Scenario {
+let copySeq = 0;
+
+export function duplicateScenario(s: Scenario): boolean {
   const copy: Scenario = {
     ...s,
-    id: `sc-${Date.now().toString(36)}-copy`,
+    id: `sc-${Date.now().toString(36)}-${(copySeq++).toString(36)}-copy`,
     name: `${s.name} (copy)`,
     ops: s.ops.map((o) => ({ ...o })),
     updatedAt: Date.now(),
   };
   const env = readEnvelope();
   env.scenarios.push(copy);
-  writeEnvelope(env);
-  return copy;
+  return writeEnvelope(env);
 }
 
 /** Serialize one scenario for export / tests (same envelope version). */
