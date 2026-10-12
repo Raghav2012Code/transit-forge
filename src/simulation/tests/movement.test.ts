@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { createSimulation, stepSimulation } from '../index.ts';
-import { LOOP_ROUTES } from '../passengers/passengers.ts';
 import { cycleMin } from '../service/timetable.ts';
 
 function run(ticks: number, onTick: (sim: ReturnType<typeof createSimulation>) => void) {
@@ -35,7 +34,6 @@ describe('vehicle movement', () => {
         prev.set(v.id, v.s);
       }
     });
-    expect(LOOP_ROUTES.size).toBe(0);
   });
 
   it('never carries a rider away from their alight stop', () => {
@@ -46,7 +44,7 @@ describe('vehicle movement', () => {
         if (v.riders.length === 0) continue;
         const route = sim.routes.find((r) => r.id === v.routeId);
         const cum = sim.routeCumDist.get(v.routeId);
-        if (!route || !cum || LOOP_ROUTES.has(v.routeId)) continue;
+        if (!route || !cum) continue;
         // Index of the station the vehicle is at or has just left.
         let at = 0;
         for (let i = 0; i < cum.length; i++) if (cum[i] <= v.s + 1e-6) at = i;

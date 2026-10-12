@@ -3,6 +3,7 @@
 // Deterministic: fixed grid order, Dijkstra ties break deterministically.
 import type { Connection, Station, TransportRoute, Zone } from '../../types/index.ts';
 import { planTrip, walkMin } from '../passengers/passengers.ts';
+import { nearestStationTo } from './accessibility.ts';
 import { coastXAt, riverCentreX, RIVER_HALF_M } from '../city/geography.ts';
 
 export interface GapCandidate {
@@ -88,17 +89,4 @@ export function findTransitGaps(input: GapInput, cellM = 60, top = 8): GapCandid
     if (c.reasons.length === 0) c.reasons.push('Moderate gap');
   }
   return cells.sort((a, b) => b.score - a.score).slice(0, top);
-}
-
-function nearestStationTo(x: number, z: number, stations: Station[]): Station | null {
-  let best: Station | null = null;
-  let bestD = Infinity;
-  for (const s of stations) {
-    const d = Math.hypot(s.pos.x - x, s.pos.z - z);
-    if (d < bestD) {
-      bestD = d;
-      best = s;
-    }
-  }
-  return best;
 }

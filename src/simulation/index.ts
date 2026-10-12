@@ -27,7 +27,6 @@ import {
 import { buildRoadGraph, type RoadGraph } from './traffic/roadGraph.ts';
 import { defaultPlanFor, type ServicePlan } from './service/servicePlan.ts';
 import { cycleMin, phaseOffset, resolvedFleet } from './service/timetable.ts';
-import { LOOP_ROUTES } from './passengers/passengers.ts';
 import {
   closureSignature,
   deriveClosures,
@@ -90,16 +89,12 @@ export interface SimulationState {
 const START_MIN = 7 * 60;
 
 function emptyCounters(routeIds: string[]): TripCounters {
-  const routeBoardings: Record<string, number> = {};
-  for (const id of routeIds) routeBoardings[id] = 0;
-  const routePeakOcc: Record<string, number> = {};
-  for (const id of routeIds) routePeakOcc[id] = 0;
-  const routeDenied: Record<string, number> = {};
-  for (const id of routeIds) routeDenied[id] = 0;
-  const routeVehKm: Record<string, number> = {};
-  for (const id of routeIds) routeVehKm[id] = 0;
-  const routeVehHr: Record<string, number> = {};
-  for (const id of routeIds) routeVehHr[id] = 0;
+  const zeros = (): Record<string, number> => Object.fromEntries(routeIds.map((id) => [id, 0]));
+  const routeBoardings = zeros();
+  const routePeakOcc = zeros();
+  const routeDenied = zeros();
+  const routeVehKm = zeros();
+  const routeVehHr = zeros();
   return {
     generated: 0,
     completed: 0,
@@ -144,7 +139,7 @@ function initVehicles(
     const length = Math.max(1, routeLengths.get(r.id) ?? 1);
     // Fleet sized from the cycle at free speed; congestion degrades the
     // experienced headway live instead of spawning unlimited vehicles.
-    const cycle = cycleMin(length, plan, r.stationIds.length, LOOP_ROUTES.has(r.id));
+    const cycle = cycleMin(length, plan, r.stationIds.length);
     const fleet = Math.min(12, resolvedFleet(plan, cycle, START_MIN));
     for (let i = 0; i < fleet && total < 64; i++) {
       vehicles.push({
@@ -280,10 +275,6 @@ function pushEvents(state: SimulationState, events: IncidentEvent[]): void {
     state.events.push(e);
     while (state.events.length > 200) state.events.shift();
   }
-}
-
-export function stationLoad01(st: Station): number {
-  return Math.min(1, st.waiting / Math.max(1, st.capacityPerHr * 0.25));
 }
 
 export function formatClock(timeMinutes: number): string {

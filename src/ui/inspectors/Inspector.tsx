@@ -3,7 +3,6 @@ import type { SimulationState } from '../../simulation/index.ts';
 import { formatClock } from '../../simulation/index.ts';
 import { stationCatchment } from '../../simulation/analytics/catchment.ts';
 import type { CityProblem } from '../../simulation/planning/problems.ts';
-import { LOOP_ROUTES } from '../../simulation/passengers/passengers.ts';
 import { nextArrivalMin, nextTerminusDeparture, routeEffectiveHeadway } from '../../simulation/service/timetable.ts';
 import type { ReactNode } from 'react';
 import { RouteRef } from '../shell/RouteBullet.tsx';
@@ -26,7 +25,7 @@ function StationDepartures({ sim, stationId }: { sim: SimulationState; stationId
     const cum = sim.routeCumDist.get(r.id) ?? [0];
     const total = Math.max(1, cum[cum.length - 1]);
     const slow = r.mode === 'bus' ? (sim.busRouteCongestion[r.id] ?? 1) : 1;
-    const h = routeEffectiveHeadway(plan, total, r.stationIds.length, slow, sim.timeMinutes, LOOP_ROUTES.has(r.id));
+    const h = routeEffectiveHeadway(plan, total, r.stationIds.length, slow, sim.timeMinutes);
     if (!Number.isFinite(h)) continue;
     const offset = sim.serviceOffsets[r.id] ?? 0;
     const first = sim.stations.find((s) => s.id === r.stationIds[0])?.name ?? '?';
@@ -67,7 +66,7 @@ function nextDepartures(sim: SimulationState, routeId: string, count: number): {
   const cum = sim.routeCumDist.get(routeId) ?? [0];
   const total = Math.max(1, cum[cum.length - 1]);
   const slow = route.mode === 'bus' ? (sim.busRouteCongestion[routeId] ?? 1) : 1;
-  const h = routeEffectiveHeadway(plan, total, route.stationIds.length, slow, sim.timeMinutes, LOOP_ROUTES.has(routeId));
+  const h = routeEffectiveHeadway(plan, total, route.stationIds.length, slow, sim.timeMinutes);
   if (!Number.isFinite(h)) return [];
   const offset = sim.serviceOffsets[routeId] ?? 0;
   const first = sim.stations.find((s) => s.id === route.stationIds[0]);

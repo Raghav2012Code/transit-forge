@@ -83,13 +83,6 @@ export interface PassengerWorld {
   closures: DerivedClosures;
 }
 
-/** Bus routes that loop instead of ping-ponging. Exported for fleet math. */
-/**
- * Routes that run as a loop. None today: the movement model runs every line out
- * and back, as the lines are drawn (B1 was a loop without a closing leg, so its
- * vehicles jumped from the last stop to the first).
- */
-export const LOOP_ROUTES = new Set<string>();
 const MAX_ACTIVE = 12000;
 const WALK_KPH = 5;
 const TRANSFER_MIN = 2;
@@ -106,7 +99,7 @@ export function effHeadway(w: PassengerWorld, route: TransportRoute): number {
   const cum = w.routeCumDist.get(route.id) ?? [0];
   const total = Math.max(1, cum[cum.length - 1]);
   const slow = route.mode === 'bus' ? (w.busRouteCongestion[route.id] ?? 1) : 1;
-  const h = routeEffectiveHeadway(plan, total, route.stationIds.length, slow, w.timeMinutes, LOOP_ROUTES.has(route.id));
+  const h = routeEffectiveHeadway(plan, total, route.stationIds.length, slow, w.timeMinutes);
   if (!Number.isFinite(h)) return Infinity;
   return h * (w.closures.headwayMult.get(route.id) ?? 1);
 }
@@ -599,30 +592,6 @@ function driveVehicle(
   }
 }
 
-/** Station indices whose cum-distance was crossed between oldP and newP. */
-export function crossedStations(
-  cum: number[],
-  oldP: number,
-  newP: number,
-  direction: 1 | -1,
-  loop: boolean,
-): number[] {
-  const out: number[] = [];
-  const inRange = (c: number, a: number, b: number) => (a <= b ? c > a && c <= b : c > b && c <= a);
-  if (loop && ((direction === 1 && newP < oldP) || (direction === -1 && newP > oldP))) {
-    // Wrapped around the loop end.
-    for (let i = 0; i < cum.length; i++) {
-      const c = cum[i];
-      if (direction === 1 ? c > oldP || c <= newP : c < oldP || c >= newP) out.push(i);
-    }
-  } else if (direction === 1) {
-    for (let i = 0; i < cum.length; i++) if (inRange(cum[i], oldP, newP)) out.push(i);
-  } else {
-    for (let i = cum.length - 1; i >= 0; i--) if (inRange(cum[i], newP, oldP)) out.push(i);
-  }
-  return out;
-}
-
 function alightAt(
   w: PassengerWorld,
   vv: VehicleState,
@@ -691,7 +660,7 @@ function transferServiceWait(
   if (idx < 0) return 0;
   const total = Math.max(1, cum[cum.length - 1]);
   const slow = nr.mode === 'bus' ? (w.busRouteCongestion[nr.id] ?? 1) : 1;
-  const h = routeEffectiveHeadway(plan, total, nr.stationIds.length, slow, w.timeMinutes, LOOP_ROUTES.has(nr.id));
+  const h = routeEffectiveHeadway(plan, total, nr.stationIds.length, slow, w.timeMinutes);
   if (!Number.isFinite(h)) return 0;
   const mult = w.closures.headwayMult.get(nr.id) ?? 1;
   const arr = nextArrivalMin(plan, h * mult, w.serviceOffsets[nr.id] ?? 0, cum, idx, w.timeMinutes + TRANSFER_MIN);
@@ -713,11 +682,10 @@ function boardAt(
   // passengers only board vehicles that can actually reach their destination.
   const route = routeById.get(vv.routeId);
   const idx = route ? route.stationIds.indexOf(stationId) : -1;
-  const loop = LOOP_ROUTES.has(vv.routeId);
   const eligible = queue.filter(
     (p) => p.state === 'WAITING' && p.atStation === stationId &&
       p.legs[p.legIndex] && p.legs[p.legIndex].board === stationId && p.legs[p.legIndex].routeId === vv.routeId &&
-      (idx < 0 || legBoardableFrom(p.legs[p.legIndex], route?.stationIds ?? [], idx, vv.direction, w.closures, loop)),
+      (idx < 0 || legBoardableFrom(p.legs[p.legIndex], route?.stationIds ?? [], idx, vv.direction, w.closures)),
   );
   const space = Math.max(0, vv.capacity - vv.riders.length);
   const boarding = eligible.slice(0, space);

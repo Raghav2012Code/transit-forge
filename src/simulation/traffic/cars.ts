@@ -15,7 +15,7 @@ import type {
 import { purposeOf } from '../passengers/demand.ts';
 import { pushTrip, recordOfCar } from '../passengers/tripRecord.ts';
 import { bprRatio, congestionLevel } from './bpr.ts';
-import { findRoadPath, nearestRoadNode, edgeName, type RoadGraph } from './roadGraph.ts';
+import { findRoadPath, nearestRoadNode, type RoadGraph } from './roadGraph.ts';
 import type { DerivedClosures } from '../incidents/incidents.ts';
 
 export interface TrafficWorld {
@@ -320,9 +320,4 @@ export function advanceTraffic(w: TrafficWorld, dtMin: number): void {
   const avgSlow = Object.values(w.busRouteCongestion).reduce((s, x) => s + x, 0) /
     Math.max(1, Object.keys(w.busRoadMap).length);
   w.roadCounters.busDelayMin += Math.max(0, avgSlow - 1) * busVeh * dtMin;
-}
-
-export function edgeDisplayName(w: TrafficWorld, edgeId: string): string {
-  const e = w.roadGraph.edgeById.get(edgeId);
-  return e ? edgeName(e) : edgeId;
 }

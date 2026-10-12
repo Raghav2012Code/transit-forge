@@ -3,7 +3,7 @@ import type { SimulationState } from './index.ts';
 import { costRecoveryPct, subsidyFor } from './economics/fares.ts';
 import { operatingCost } from './service/costs.ts';
 import { routeEffectiveHeadway } from './service/timetable.ts';
-import { LOOP_ROUTES } from './passengers/passengers.ts';
+import { edgeName } from './traffic/roadGraph.ts';
 
 export function computeStats(sim: SimulationState): SimStats {
   const population = sim.city.zones.reduce((s, z) => s + z.population, 0);
@@ -58,9 +58,7 @@ export function computeStats(sim: SimulationState): SimStats {
   }
   const allTrips = Math.max(1, c.completed + rc.completed);
   const worstEdge = sim.roadGraph.edgeById.get(rc.maxVCEdge);
-  const worstName = worstEdge
-    ? `${worstEdge.isBridge ? 'Bridge' : worstEdge.isArterial ? 'Arterial' : 'Local'} ${worstEdge.a.replace(/^rn-/, '').toUpperCase()}–${worstEdge.b.replace(/^rn-/, '').toUpperCase()}`
-    : '—';
+  const worstName = worstEdge ? edgeName(worstEdge) : '—';
 
   return {
     population,
@@ -130,7 +128,7 @@ function serviceStats(sim: SimulationState): Pick<
       const cum = sim.routeCumDist.get(r.id) ?? [0];
       const total = Math.max(1, cum[cum.length - 1]);
       const slow = r.mode === 'bus' ? (sim.busRouteCongestion[r.id] ?? 1) : 1;
-      const h = routeEffectiveHeadway(plan, total, r.stationIds.length, slow, sim.timeMinutes, LOOP_ROUTES.has(r.id));
+      const h = routeEffectiveHeadway(plan, total, r.stationIds.length, slow, sim.timeMinutes);
       if (Number.isFinite(h)) {
         headwaySum += h;
         headwayN++;

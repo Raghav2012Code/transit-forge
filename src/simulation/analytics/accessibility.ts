@@ -32,20 +32,24 @@ export interface AccessibilitySet {
 
 export const MAJOR_KINDS = ['cbd', 'university', 'airport', 'industrial', 'harbor'] as const;
 
-function nearestStation(zones: Zone, stations: Station[]): { id: string | null; walk: number } {
-  let best: string | null = null;
+/** The station nearest a point, or null when there are none. */
+export function nearestStationTo(x: number, z: number, stations: Station[]): Station | null {
+  let best: Station | null = null;
   let bestD = Infinity;
   for (const s of stations) {
-    const d = Math.hypot(s.pos.x - zones.center.x, s.pos.z - zones.center.z);
+    const d = Math.hypot(s.pos.x - x, s.pos.z - z);
     if (d < bestD) {
       bestD = d;
-      best = s.id;
+      best = s;
     }
   }
-  if (!best) return { id: null, walk: Infinity };
-  const st = stations.find((s) => s.id === best);
-  const walk = st ? walkMin(zones.center.x, zones.center.z, st.pos.x, st.pos.z) : Infinity;
-  return { id: best, walk };
+  return best;
+}
+
+function nearestStation(zones: Zone, stations: Station[]): { id: string | null; walk: number } {
+  const st = nearestStationTo(zones.center.x, zones.center.z, stations);
+  if (!st) return { id: null, walk: Infinity };
+  return { id: st.id, walk: walkMin(zones.center.x, zones.center.z, st.pos.x, st.pos.z) };
 }
 
 export function gradeFor(score: number): AccessGrade {

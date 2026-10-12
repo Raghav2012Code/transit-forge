@@ -100,10 +100,3 @@ export function clampHeadway(mode: ServiceMode, v: number): number {
   const lo = mode === 'bus' ? 5 : 3;
   return Math.max(lo, Math.min(30, Math.round(v)));
 }
-
-/** Default service book for a whole network. */
-export function defaultServiceFor(routes: TransportRoute[]): Record<string, ServicePlan> {
-  const out: Record<string, ServicePlan> = {};
-  for (const r of routes) out[r.id] = defaultPlanFor(r);
-  return out;
-}

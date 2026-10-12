@@ -230,11 +230,6 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     mountRef.current?.classList.toggle('tf-measuring', measureActive);
     problemLabelById.current = new Map(problemMarkers.map((m) => [m.selId, m.label]));
   });
-  const rigRef = useRef<{
-    stationMeshById: Map<string, THREE.Mesh>;
-    pickables: THREE.Object3D[];
-    groups: { metro: THREE.Group; rail: THREE.Group; bus: THREE.Group; roads: THREE.Group; buildings: THREE.Group };
-  } | null>(null);
   const selectionRef = useRef<Selection | null>(selection);
   // (mirrored in the commit effect below alongside the other live refs)
   const problemLabelById = useRef(new Map<string, string>());
@@ -315,12 +310,6 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     });
     // Road segments for inspection.
     for (const [, mesh] of city.roadMeshById) pickables.push(mesh);
-    rigRef.current = {
-      stationMeshById: net.stationMeshById,
-      pickables,
-      groups: { metro: net.byMode.metro, rail: net.byMode.rail, bus: net.byMode.bus, roads: city.roads, buildings: city.buildings },
-    };
-
     const ray = new THREE.Raycaster();
     const ptr = new THREE.Vector2();
     const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -1396,7 +1385,6 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       });
       renderer.dispose();
       mount.removeChild(renderer.domElement);
-      rigRef.current = null;
     };
     // Full scene rebuild only on discrete scenario applies (networkKey).
     // Live data flows via simRef, which is stable for the app lifetime.

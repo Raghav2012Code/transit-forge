@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { cameraWedge, frameFor, project } from '../../rendering/map/minimap.ts';
+import { cameraWedge, frameFor, project, unproject } from '../../rendering/map/minimap.ts';
 import type { CameraInfo, Selection } from '../../rendering/SceneView.tsx';
 import type { CityData, Station, TransportRoute } from '../../types/index.ts';
 
@@ -45,11 +45,8 @@ export default function Minimap({ city, routes, stations, cam, selection, onJump
 
   const onClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const sx = ((e.clientX - rect.left) / rect.width) * W;
-    const sy = ((e.clientY - rect.top) / rect.height) * H;
-    const spanX = frame.maxX - frame.minX;
-    const spanZ = frame.maxZ - frame.minZ;
-    onJump(frame.minX + (sx / W) * spanX, frame.minZ + (sy / H) * spanZ);
+    const p = unproject(frame, ((e.clientX - rect.left) / rect.width) * W, ((e.clientY - rect.top) / rect.height) * H);
+    onJump(p.x, p.z);
   };
 
   // Keyboard equivalent of clicking a point: arrow keys nudge the camera

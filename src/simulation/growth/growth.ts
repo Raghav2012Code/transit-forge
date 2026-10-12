@@ -8,12 +8,11 @@
 //   damp     = (1 - developed01)^1.5                          (diminishing returns)
 // Population and jobs clamp at capacity; students/households derive from pop.
 import type { CityData, Station, TransportRoute, Zone } from '../../types/index.ts';
-import type { DistrictKind } from '../../types/index.ts';
 import type { Connection } from '../../types/index.ts';
 import type { RoadEdgeState } from '../../types/index.ts';
 import type { RoadGraph } from '../traffic/roadGraph.ts';
 import { findRoadPath } from '../traffic/roadGraph.ts';
-import { computeAccessibility, type AccessibilitySet } from '../analytics/accessibility.ts';
+import { computeAccessibility, nearestStationTo, type AccessibilitySet } from '../analytics/accessibility.ts';
 import { buildDemandMatrix } from '../passengers/demand.ts';
 import type { DemandMatrix } from '../passengers/demand.ts';
 import { carProbability } from '../traffic/modeChoice.ts';
@@ -195,7 +194,7 @@ export function growZones(
   startYear: number,
   transitShare01: number,
 ): { zones: Zone[]; history: GrowthPoint[]; demand: DemandMatrix } {
-  const cloned: Zone[] = JSON.parse(JSON.stringify(zones)) as Zone[];
+  const cloned: Zone[] = structuredClone(zones);
   const world: GrowthWorld = {
     zones: cloned,
     stations: network.stations,
@@ -294,21 +293,7 @@ export function computeDemandLayers(input: {
 function accessOf(input: { stations: Station[]; zones: Zone[] }, zoneId: string): string {
   const z = input.zones.find((zz) => zz.id === zoneId);
   if (!z) return '';
-  let best = '';
-  let bestD = Infinity;
-  for (const s of input.stations) {
-    const d = Math.hypot(s.pos.x - z.center.x, s.pos.z - z.center.z);
-    if (d < bestD) {
-      bestD = d;
-      best = s.id;
-    }
-  }
-  return best;
-}
-
-/** Small local logit mirroring the mode-choice weights (analytics estimate). */
-export function carShareEstimate(transitMin: number, transfers: number, roadMin: number, destKind: DistrictKind): number {
-  return carProbability(transitMin, transfers, roadMin, destKind);
+  return nearestStationTo(z.center.x, z.center.z, input.stations)?.id ?? '';
 }
 
 export interface Warning {

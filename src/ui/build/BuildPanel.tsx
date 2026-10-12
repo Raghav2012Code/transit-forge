@@ -17,7 +17,6 @@ export interface DraftInfo {
 
 interface Props {
   tool: BuildTool;
-  onTool: (t: BuildTool) => void;
   draft: DraftInfo;
   onName: (name: string) => void;
   onConfirm: () => void;
@@ -30,37 +29,12 @@ interface Props {
   onRedo: () => void;
   opCount: number;
   scenarioCost: string;
-  /** The workbench rail carries the tool picker; show it here only when it does not. */
-  showTools?: boolean;
 }
-
-const TOOLS: { key: BuildTool; label: string }[] = [
-  { key: 'metro', label: 'Metro' },
-  { key: 'station', label: 'Station' },
-  { key: 'bus', label: 'Bus' },
-  { key: 'road', label: 'Road' },
-  { key: 'extend', label: 'Extend' },
-  { key: 'delete', label: 'Delete' },
-];
 
 export default function BuildPanel(p: Props) {
   return (
     <div className="tf-build">
       <h3>Build</h3>
-      {p.showTools !== false && (
-        <div className="tf-tool-grid" role="group" aria-label="Build tools" data-tour="build-tools">
-          {TOOLS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              className={`tf-btn small${p.tool === t.key ? ' active' : ''}`}
-              onClick={() => p.onTool(t.key)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
       <p className="tf-hint">{p.draft.hint}</p>
       {p.tool === 'road' && (
         <div className="tf-speeds" role="group" aria-label="Road type">

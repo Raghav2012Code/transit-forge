@@ -51,8 +51,7 @@ function readEnvelope(): Envelope {
 
 function writeEnvelope(env: Envelope): boolean {
   const plans = env.plans
-    .slice()
-    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    .toSorted((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
     .slice(0, MAX_PLANS)
     .map((p) => (p.attempts.length > MAX_ATTEMPTS ? { ...p, attempts: p.attempts.slice(-MAX_ATTEMPTS) } : p));
   return storageWrite(KEY, { version: 1, plans });

@@ -9,13 +9,6 @@ export interface CameraPose {
   target: [number, number, number];
 }
 
-export interface MapAnchor {
-  x: number;
-  z: number;
-  /** Characteristic radius (district radius, station spacing, …). */
-  radius: number;
-}
-
 export const CAM_MIN_DIST = 60;
 export const CAM_MAX_DIST = 1000;
 

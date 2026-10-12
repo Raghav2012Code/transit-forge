@@ -8,9 +8,6 @@ import type {
   Station,
   TransportRoute,
 } from '../../types/index.ts';
-import { ZONE_ACCESS } from '../passengers/demand.ts';
-import { findShortestPath } from '../transport/graph.ts';
-import { findRoadPath, type RoadGraph } from '../traffic/roadGraph.ts';
 import { defaultPlanFor } from '../service/servicePlan.ts';
 import { capacityLostFor } from '../analytics/resilience.ts';
 import type { SimulationState } from '../index.ts';
@@ -258,15 +255,13 @@ export function legBoardableFrom(
   stationIdx: number,
   direction: 1 | -1,
   closures: DerivedClosures,
-  loop = false,
 ): boolean {
   if (closures.suspendedRoutes.has(leg.routeId)) return false;
   if (closures.closedStations.has(leg.board) || closures.closedStations.has(leg.alight)) return false;
   const n = routeStationIds.length;
   let i = stationIdx;
   for (let steps = 0; steps < n; steps++) {
-    let j = i + direction;
-    if (loop) j = ((j % n) + n) % n;
+    const j = i + direction;
     if (j < 0 || j >= n) return false; // terminus reached without destination
     if (
       closures.closedHops.has(hopKey(leg.routeId, routeStationIds[i], routeStationIds[j])) ||
@@ -302,20 +297,6 @@ export function hopAheadBlocked(
   while (i > 0 && (cum[i - 1] ?? -Infinity) >= s - 1e-6) i--;
   if (i <= 0) return false;
   return closures.closedHops.has(hopKey(routeId, stationIds[i], stationIds[i - 1]));
-}
-
-/** Nearest station index to a position along a route. */
-export function nearestStationIdx(cum: number[], s: number): number {
-  let best = 0;
-  let bestD = Infinity;
-  for (let i = 0; i < cum.length; i++) {
-    const d = Math.abs((cum[i] ?? 0) - s);
-    if (d < bestD) {
-      bestD = d;
-      best = i;
-    }
-  }
-  return best;
 }
 
 /** Nearest OPEN station index (-1 when every station is closed). */
@@ -552,60 +533,3 @@ export function detectThresholdEvents(sim: SimulationState): IncidentEvent[] {
   return events;
 }
 
-// ---- Structural dependency analysis (no simulation needed) ----
-
-/** Share of zone-pair fastest paths relying on each station/route/bridge. */
-export function structuralDependency(base: {
-  zones: { id: string }[];
-  stations: Station[];
-  connections: Connection[];
-  roadGraph: RoadGraph;
-  zoneRoadAccess: Record<string, string>;
-}): {
-  stationShare: Map<string, number>;
-  routeShare: Map<string, number>;
-  bridgeShare: Map<string, number>;
-  pairs: number;
-} {
-  const stationShare = new Map<string, number>();
-  const routeShare = new Map<string, number>();
-  const bridgeShare = new Map<string, number>();
-  let pairs = 0;
-  const access = (zoneId: string): string => {
-    const st = ZONE_ACCESS[zoneId];
-    return st ?? '';
-  };
-  for (const zo of base.zones) {
-    for (const zd of base.zones) {
-      if (zo.id === zd.id) continue;
-      const from = access(zo.id);
-      const to = access(zd.id);
-      if (!from || !to || from === to) continue;
-      const path = findShortestPath(base.connections, from, to);
-      if (path) {
-        pairs++;
-        const seenStations = new Set(path.stationIds);
-        const seenRoutes = new Set(path.routeIds.filter((r): r is string => r !== null));
-        for (const s of seenStations) stationShare.set(s, (stationShare.get(s) ?? 0) + 1);
-        for (const r of seenRoutes) routeShare.set(r, (routeShare.get(r) ?? 0) + 1);
-      }
-      const rn = base.zoneRoadAccess[zo.id];
-      const rm = base.zoneRoadAccess[zd.id];
-      if (rn && rm && rn !== rm) {
-        const rp = findRoadPath(base.roadGraph, rn, rm, (id) => base.roadGraph.freeMin.get(id) ?? 1);
-        if (rp) {
-          for (const e of rp.edgeIds) {
-            const edge = base.roadGraph.edgeById.get(e);
-            if (edge?.isBridge) bridgeShare.set(e, (bridgeShare.get(e) ?? 0) + 1);
-          }
-        }
-      }
-    }
-  }
-  const norm = (m: Map<string, number>) => {
-    const out = new Map<string, number>();
-    for (const [k, v] of m) out.set(k, pairs > 0 ? v / pairs : 0);
-    return out;
-  };
-  return { stationShare: norm(stationShare), routeShare: norm(routeShare), bridgeShare: norm(bridgeShare), pairs };
-}

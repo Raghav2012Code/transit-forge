@@ -1,7 +1,6 @@
 // Per-route service math shared by the ServicePanel and anywhere else that
 // needs derived operating figures from live simulation state.
 import type { SimulationState } from '../index.ts';
-import { LOOP_ROUTES } from '../passengers/passengers.ts';
 import { breakEvenFare, costRecoveryPct } from '../economics/fares.ts';
 import { operatingCost } from './costs.ts';
 import { headwayAt } from './servicePlan.ts';
@@ -46,8 +45,7 @@ export function routeServiceMath(sim: SimulationState, routeId: string): Service
   const length = Math.max(1, cum[cum.length - 1]);
   const slow = route.mode === 'bus' ? (sim.busRouteCongestion[route.id] ?? 1) : 1;
   const effPlan = { ...plan, speedKph: plan.speedKph / Math.max(1, slow) };
-  const loop = LOOP_ROUTES.has(route.id);
-  const cycle = cycleMin(length, effPlan, route.stationIds.length, loop);
+  const cycle = cycleMin(length, effPlan, route.stationIds.length);
   const scheduled = headwayAt(plan, sim.timeMinutes);
   const fleet = plan.fleetSize > 0 ? plan.fleetSize : fleetRequired(cycle, scheduled);
   const assigned = sim.vehicles.filter((vv) => vv.routeId === route.id).length;

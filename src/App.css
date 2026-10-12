@@ -44,12 +44,6 @@
   letter-spacing: -0.01em;
   color: var(--ink-strong);
 }
-.tf-brand-name span {
-  font-family: var(--font-data);
-  font-size: var(--fs-fine);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-faint);
-}
 
 /* ---- segmented controls: the selected cell is solid ink ---- */
 .tf-seg {
@@ -93,7 +87,6 @@
   font-weight: 600;
 }
 .tf-seg-item:disabled { opacity: 0.35; cursor: not-allowed; }
-.tf-seg-item.wide { padding: 0 14px; }
 
 /* a line's colour dot, only where the row names a line */
 .tf-seg-dot {
@@ -184,9 +177,6 @@
   background: var(--ink-strong);
   flex: none;
 }
-.tf-hud-chip.mode-build::before { background: var(--line-amber); }
-.tf-hud-chip.mode-disrupt::before { background: var(--line-red); }
-.tf-hud-chip.mode-plan::before { background: var(--line-green); }
 .tf-hud-chip.alert::before { background: var(--line-red); }
 
 /* measure readout */
@@ -207,8 +197,6 @@
   border-radius: var(--r-sm);
   z-index: 6;
 }
-.tf-viewport.tf-measuring { cursor: crosshair; }
-
 .tf-stat-row.stacked { flex-direction: column; align-items: flex-start; gap: var(--s-2); padding: var(--s-3) 0; }
 .tf-stat-row.stacked dd { max-width: none; text-align: left; }
 .tf-route-list { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-5); }
@@ -456,10 +444,6 @@
   flex: none;
   font-variant-numeric: tabular-nums;
 }
-.tf-bullet.metro { background: var(--line-blue); }
-.tf-bullet.rail { background: var(--line-violet); }
-.tf-bullet.bus { background: var(--line-amber); }
-
 .tf-route-ref {
   display: inline-flex;
   align-items: center;
@@ -693,7 +677,6 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 .tf-dock-body > .tf-compare,
 .tf-dock-body > .tf-scenario,
 .tf-dock-body > .tf-inspector,
-.tf-dock-body > .tf-chart,
 .tf-dock-body > .tf-draft {
   padding: 0;
   border-bottom: none;

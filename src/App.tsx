@@ -126,7 +126,6 @@ import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme
 import type { Theme } from './rendering/palette.ts';
 import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
 import { headwayAt } from './simulation/service/servicePlan.ts';
-import { LOOP_ROUTES } from './simulation/passengers/passengers.ts';
 
 const SEED = 1337;
 const TICKS_PER_SEC: Record<Speed, number> = { 1: 2, 5: 8, 20: 24 };
@@ -975,7 +974,7 @@ export default function App() {
     if (!route || !plan) return;
     const cum = sim.routeCumDist.get(routeId) ?? [0];
     const total = Math.max(1, cum[cum.length - 1]);
-    const cycle = cycleMin(total, plan, route.stationIds.length, LOOP_ROUTES.has(routeId));
+    const cycle = cycleMin(total, plan, route.stationIds.length);
     const h = headwayAt(plan, sim.timeMinutes);
     const desired = plan.fleetSize > 0 ? plan.fleetSize : Number.isFinite(h) ? fleetRequired(cycle, h) : 0;
     const existing = sim.vehicles.filter((vv) => vv.routeId === routeId);
@@ -1121,12 +1120,10 @@ export default function App() {
     return null;
   }
 
-  /** Fill the draft target from the current map selection. */
-  function useSelectionForDraft() {
-    const sel = selection;
-    if (!sel) return;
+  /** Fold a map selection into the current incident draft. */
+  function draftWithSelection(sel: Selection, prev: IncidentDraft): IncidentDraft {
+    const d = { ...prev };
     if (sel.kind === 'station') {
-      const d = { ...incidentDraft };
       if (d.kind === 'station-closure') d.targetStationId = sel.id;
       else if (d.kind === 'segment-closure') {
         if (!d.segFrom) {
@@ -1134,12 +1131,18 @@ export default function App() {
           d.segTo = '';
         } else if (d.segFrom !== sel.id) d.segTo = sel.id;
       }
-      setIncidentDraft(d);
     } else if (sel.kind === 'route') {
-      setIncidentDraft({ ...incidentDraft, targetRouteId: sel.id });
+      d.targetRouteId = sel.id;
     } else if (sel.kind === 'road') {
-      setIncidentDraft({ ...incidentDraft, edgeId: sel.id });
+      d.edgeId = sel.id;
     }
+    return d;
+  }
+
+  /** Fill the draft target from the current map selection. */
+  function useSelectionForDraft() {
+    if (!selection) return;
+    setIncidentDraft((prev) => draftWithSelection(selection, prev));
   }
 
   function resolveIncident(id: string) {
@@ -1932,7 +1935,7 @@ export default function App() {
       }
       let len = 0;
       const seq = tool === 'extend'
-        ? [extendRouteId ? snapshot.routes.find((r) => r.id === extendRouteId)?.stationIds.slice(-1)[0] ?? '' : '', ...ids]
+        ? [extendRouteId ? snapshot.routes.find((r) => r.id === extendRouteId)?.stationIds.at(-1) ?? '' : '', ...ids]
         : ids;
       for (let i = 0; i < seq.length - 1; i++) {
         const a = stationPos.get(seq[i]);
@@ -2146,17 +2149,11 @@ export default function App() {
   }
   const diff = useMemo(() => {
     const baseRouteIds = new Set(baseNet.routes.map((r) => r.id));
-    const modRouteIds = new Set(mod.routes.map((r) => r.id));
-    const baseStationIds = new Set(baseNet.stations.map((s) => s.id));
-    const baseStationPos = new Map(baseNet.stations.map((s) => [s.id, s.pos]));
     return {
       addedRoutes: mod.routes.map((r) => r.id).filter((id) => !baseRouteIds.has(id)),
-      addedStations: mod.stations.map((s) => s.id).filter((id) => !baseStationIds.has(id)),
       removedStations: baseNet.stations
         .filter((s) => !mod.stations.some((m) => m.id === s.id))
         .map((s) => ({ x: s.pos.x, z: s.pos.z })),
-      removedRoutes: [...baseRouteIds].filter((id) => !modRouteIds.has(id)),
-      baseStationPos,
     };
   }, [baseNet, mod]);
 
@@ -2212,21 +2209,7 @@ export default function App() {
             pickKinds: ['station', 'route', 'road'] as Selection['kind'][],
             onPick: (sel: Selection) => {
               setSelection(sel);
-              setIncidentDraft((prev) => {
-                const d = { ...prev };
-                if (sel.kind === 'station') {
-                  if (d.kind === 'station-closure') d.targetStationId = sel.id;
-                  else if (d.kind === 'segment-closure') {
-                    if (!d.segFrom) { d.segFrom = sel.id; d.segTo = ''; }
-                    else if (d.segFrom !== sel.id) d.segTo = sel.id;
-                  }
-                } else if (sel.kind === 'route') {
-                  d.targetRouteId = sel.id;
-                } else if (sel.kind === 'road') {
-                  d.edgeId = sel.id;
-                }
-                return d;
-              });
+              setIncidentDraft((prev) => draftWithSelection(sel, prev));
             },
             onMapClick: () => {},
             onHover: () => {},
@@ -2632,8 +2615,6 @@ export default function App() {
             <div className="tf-rail-body">
               <BuildPanel
                 tool={tool}
-                onTool={(t) => { setTool(t); clearDraft(); }}
-                showTools={false}
                 draft={{
                   stationCount: tool === 'extend' ? extendStations.length : draftStations.length,
                   nodeCount: draftNodes.length,

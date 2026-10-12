@@ -11,10 +11,8 @@ export function oneWayMin(lengthM: number, plan: ServicePlan, stops: number): nu
 }
 
 /** Full cycle: out + back + turnaround at both ends (loop routes turn once). */
-export function cycleMin(lengthM: number, plan: ServicePlan, stops: number, loop = false): number {
-  return loop
-    ? oneWayMin(lengthM, plan, stops) + plan.turnaroundMin
-    : 2 * oneWayMin(lengthM, plan, stops) + 2 * plan.turnaroundMin;
+export function cycleMin(lengthM: number, plan: ServicePlan, stops: number): number {
+  return 2 * oneWayMin(lengthM, plan, stops) + 2 * plan.turnaroundMin;
 }
 
 /** Vehicles needed to hold a headway over a cycle. */
@@ -92,10 +90,9 @@ export function routeEffectiveHeadway(
   stops: number,
   slow: number,
   timeMin: number,
-  loop = false,
 ): number {
   const eff: ServicePlan = { ...plan, speedKph: plan.speedKph / Math.max(1, slow) };
-  const cyc = cycleMin(lengthM, eff, stops, loop);
+  const cyc = cycleMin(lengthM, eff, stops);
   const fleet = plan.fleetSize > 0 ? plan.fleetSize : fleetRequired(cyc, headwayAt(plan, timeMin));
   return effectiveHeadway(plan, cyc, fleet, timeMin);
 }

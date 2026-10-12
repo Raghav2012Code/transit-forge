@@ -68,14 +68,6 @@ export const IconDownload = (p: IconProps) => (
   <Svg {...p}><path d="M8 2.4v7.4M5 7.1 8 10.1l3-3" /><path d="M2.8 12.2v1.4h10.4v-1.4" /></Svg>
 );
 
-export const IconUndo = (p: IconProps) => (
-  <Svg {...p}><path d="M3 7.2h6.4a3.4 3.4 0 0 1 0 6.8H6.2" /><path d="M5.4 4.4 2.6 7.2l2.8 2.8" /></Svg>
-);
-
-export const IconRedo = (p: IconProps) => (
-  <Svg {...p}><path d="M13 7.2H6.6a3.4 3.4 0 0 0 0 6.8h3.2" /><path d="M10.6 4.4l2.8 2.8-2.8 2.8" /></Svg>
-);
-
 export const IconPlus = (p: IconProps) => (
   <Svg {...p}><path d="M8 3.6v8.8M3.6 8h8.8" /></Svg>
 );
@@ -96,10 +88,6 @@ export const IconChevron = (p: IconProps) => (
   <Svg {...p}><path d="M4.4 6.2 8 9.8l3.6-3.6" /></Svg>
 );
 
-export const IconInfo = (p: IconProps) => (
-  <Svg {...p}><circle cx="8" cy="8" r="6.2" /><path d="M8 7.2v4M8 4.9v.1" /></Svg>
-);
-
 export const IconSearch = (p: IconProps) => (
   <Svg {...p}><circle cx="7" cy="7" r="4.2" /><path d="M10.2 10.2 14 14" /></Svg>
 );
@@ -112,9 +100,6 @@ export const IconInspect = (p: IconProps) => (
   <Svg {...p}><path d="M1.8 8S4 4.2 8 4.2 14.2 8 14.2 8 12 11.8 8 11.8 1.8 8 1.8 8Z" /><circle cx="8" cy="8" r="1.8" /></Svg>
 );
 
-export const IconCheck = (p: IconProps) => (
-  <Svg {...p}><path d="M3 8.4 6.4 11.8 13 4.6" /></Svg>
-);
 export const IconPanel = (p: IconProps) => (
   <Svg {...p}><rect x="2" y="2.8" width="12" height="10.4" rx="1.4" /><path d="M10 2.8v10.4" /></Svg>
 );
@@ -151,10 +136,6 @@ export const IconHelp = (p: IconProps) => (
   <Svg {...p}><circle cx="8" cy="8" r="6.2" /><path d="M6.2 6.4a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.9.7-.9 1.4M8 11.6v.1" /></Svg>
 );
 
-export const IconTarget = (p: IconProps) => (
-  <Svg {...p}><circle cx="8" cy="8" r="2.3" /><path d="M8 1.8v2.4M8 11.8v2.4M1.8 8h2.4M11.8 8h2.4" /></Svg>
-);
-
 export const IconFocus = (p: IconProps) => (
   <Svg {...p}><path d="M2.5 5.6v-3h3.1M10.4 2.6h3.1v3M13.5 10.4v3h-3.1M5.6 13.4H2.5v-3" /><circle cx="8" cy="8" r="1.5" /></Svg>
 );
@@ -165,10 +146,6 @@ export const IconReports = (p: IconProps) => (
 
 export const IconMapFold = (p: IconProps) => (
   <Svg {...p}><path d="m2 4 4-1.6L10 4l4-1.6v9.6L10 13.6 6 12l-4 1.6ZM6 2.4V12M10 4v9.6" /></Svg>
-);
-
-export const IconMore = (p: IconProps) => (
-  <Svg {...p}><circle cx="3.6" cy="8" r="1" fill="currentColor" stroke="none" /><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none" /><circle cx="12.4" cy="8" r="1" fill="currentColor" stroke="none" /></Svg>
 );
 
 export const IconCompare = (p: IconProps) => (

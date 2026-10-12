@@ -2,6 +2,7 @@
 // No cross-unit merging: stations, routes, and roads rank within their kind.
 import type { RoadEdgeState, Station, TransportRoute, TripCounters } from '../../types/index.ts';
 import type { RoadGraph } from '../traffic/roadGraph.ts';
+import { edgeName } from '../traffic/roadGraph.ts';
 
 export interface Bottleneck {
   kind: 'station' | 'route' | 'road';
@@ -66,9 +67,7 @@ export function findBottlenecks(input: BottleneckInput): { stations: Bottleneck[
     .map((st) => {
       const e = roadGraph.edgeById.get(st.id);
       const free = roadGraph.freeMin.get(st.id) ?? 0;
-      const label = e
-        ? `${e.isBridge ? 'Bridge' : e.isArterial ? 'Arterial' : 'Local'} ${e.a.replace(/^rn-/, '').toUpperCase()}–${e.b.replace(/^rn-/, '').toUpperCase()}`
-        : st.id;
+      const label = e ? edgeName(e) : st.id;
       return {
         item: {
           kind: 'road' as const,

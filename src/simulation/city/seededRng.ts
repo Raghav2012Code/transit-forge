@@ -11,11 +11,3 @@ export function mulberry32(seed: number): Rng {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-
-export function hashSeed(seed: number, salt: string): number {
-  let h = seed >>> 0;
-  for (let i = 0; i < salt.length; i++) {
-    h = Math.imul(h ^ salt.charCodeAt(i), 2654435761);
-  }
-  return h >>> 0;
-}

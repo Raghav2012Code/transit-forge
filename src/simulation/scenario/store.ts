@@ -41,8 +41,7 @@ function readEnvelope(): Envelope {
 function writeEnvelope(env: Envelope): boolean {
   if (env.scenarios.length > MAX_SCENARIOS) {
     env.scenarios = env.scenarios
-      .slice()
-      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
+      .toSorted((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
       .slice(0, MAX_SCENARIOS);
   }
   return storageWrite(KEY, env);

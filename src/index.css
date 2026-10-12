@@ -17,7 +17,6 @@
 
   /* ---- plate: the map window, set into the page like a figure in a report ---- */
   --plate: oklch(93% 0.005 250);
-  --plate-deep: oklch(90% 0.006 250);
   --plate-surface: oklch(100% 0 0 / 0.95);
   --plate-edge: oklch(80% 0.008 250);
 
@@ -60,7 +59,6 @@
   /* amber as a fill is fine; amber as text needs a darker ink to stay readable */
   --watch-ink: oklch(46% 0.1 70);
   --ok-wash: oklch(48% 0.11 160 / 0.1);
-  --watch-wash: oklch(58% 0.13 70 / 0.12);
   --alert-wash: oklch(51% 0.18 27 / 0.1);
 
   /* ---- type: one family, two widths — a signage system ---- */
@@ -72,7 +70,6 @@
   --fs-lead: 15px;
   --fs-head: 18px;
   --fs-metric: 24px;
-  --fs-display: 30px;
   --lh-tight: 1.15;
   --lh-body: 1.5;
 
@@ -90,7 +87,6 @@
   --r-sm: 2px;
   --r-md: 4px;
   --r-bullet: 999px;
-  --lift: 0 1px 2px oklch(20% 0.01 250 / 0.1);
   --lift-float: 0 8px 24px oklch(20% 0.01 250 / 0.16), 0 1px 3px oklch(20% 0.01 250 / 0.12);
 
   /* ---- motion ---- */
@@ -100,7 +96,6 @@
   --ease: cubic-bezier(0.2, 0.8, 0.25, 1);
 
   /* ---- layout ---- */
-  --hud-h: 54px;
   --status-h: 28px;
   --panel-w: 352px;
 
@@ -142,7 +137,6 @@
   --paper-deep: oklch(10.5% 0.008 250);
 
   --plate: oklch(18% 0.012 250);
-  --plate-deep: oklch(14.5% 0.012 250);
   --plate-surface: oklch(21% 0.012 250 / 0.94);
   --plate-edge: oklch(34% 0.012 250);
 
@@ -163,10 +157,8 @@
   --watch-ink: oklch(80% 0.12 75);
   --alert: oklch(70% 0.17 27);
   --ok-wash: oklch(76% 0.13 160 / 0.16);
-  --watch-wash: oklch(72% 0.13 70 / 0.16);
   --alert-wash: oklch(70% 0.17 27 / 0.16);
 
-  --lift: 0 1px 2px oklch(0% 0 0 / 0.45);
   --lift-float: 0 8px 24px oklch(0% 0 0 / 0.5), 0 1px 3px oklch(0% 0 0 / 0.4);
 
   --mm-river: #1e3a8a;
