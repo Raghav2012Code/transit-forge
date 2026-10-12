@@ -18,12 +18,13 @@ function goldenOf(ticks: number): string {
   return fnv1a(JSON.stringify(computeStats(sim)));
 }
 
-// Pinned after the movement-model rework (PR #4): termini charge turnaround,
-// each stop deducts its own dwell, late boardings extend dwell, and B1 no
-// longer loops (LOOP_ROUTES emptied). Results moved, so the hashes were
-// re-recorded. If this fails, results moved again: find out why before
-// touching the number.
-const GOLDEN: Record<number, string> = { 360: '50d0008e', 1020: 'd5c6da4d' };
+// Re-recorded when boarding became direction-aware: a rider now boards only a
+// vehicle travelling toward their alight stop, instead of riding to the
+// terminus and back on one going the other way. That changes every travel-time
+// and throughput figure, so the hashes moved. Previously pinned after the
+// movement-model rework (PR #4). If this fails, results moved again: find out
+// why before touching the number.
+const GOLDEN: Record<number, string> = { 360: '812f13e9', 1020: '58347a71' };
 
 describe('seed 1337 golden results', () => {
   for (const ticks of [360, 1020]) {

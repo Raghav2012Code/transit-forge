@@ -86,8 +86,18 @@ describe('incident lifecycle', () => {
 
 describe('passenger rerouting', () => {
   it('reroutes waiting passengers around a suspended route', () => {
-    let sim = run(1337, 60); // build up waiting passengers
-    const route = sim.routes.find((r) => r.mode === 'metro') ?? sim.routes[0];
+    let sim = run(1337, 90); // build up waiting passengers
+    // Suspend the route that actually has riders waiting on it, rather than
+    // whichever line happens to be first, so the test is not tied to one line's
+    // load at t=90.
+    const waitingByRoute = new Map<string, number>();
+    for (const p of sim.passengers) {
+      if (p.state !== 'WAITING' || !p.atStation) continue;
+      const leg = p.legs[p.legIndex];
+      if (leg) waitingByRoute.set(leg.routeId, (waitingByRoute.get(leg.routeId) ?? 0) + 1);
+    }
+    expect(waitingByRoute.size).toBeGreaterThan(0);
+    const route = [...sim.routes].sort((a, b) => (waitingByRoute.get(b.id) ?? 0) - (waitingByRoute.get(a.id) ?? 0))[0];
     const before = sim.counters.rerouted;
     sim.incidents.push({
       ...mkIncident({ kind: 'route-suspension', targetRouteId: route.id, startMin: sim.timeMinutes }),

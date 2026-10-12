@@ -87,16 +87,10 @@ that hash untouched. If it moves, a fix is not inert and is wrong.
 
 ## Deferred — needs your call
 
-- **Boarding ignores travel direction on an open network.** `incidents.ts:263`
-  returns true immediately when `!closures.active` ("legacy"), so in normal
-  operation a rider can board a vehicle heading away from their alight stop and
-  ride to the terminus and back. This is a real correctness bug, but fixing it
-  changes normal-operation results and so rewrites the pinned golden hashes.
-  It is the owner's call whether to re-record them.
-- Latent, no live trigger: `routeCumDist` index misalignment if a hop endpoint
-  is missing (`network.ts:150`); `stepSimulation` is documented immutable but
-  mutates its input (`index.ts:267`); `Date.now()` used for scenario and plan
-  ids inside `src/simulation` (`scenario.ts:107`, `planStore.ts:69`).
+- **Boarding ignores travel direction on an open network.** Fixed in the third
+  pass below, with the golden hashes deliberately re-recorded.
+- Latent contract items (`routeCumDist` alignment, `stepSimulation`
+  immutability, wall-clock ids) — addressed in the third pass below.
 
 ## Checked and found correct
 
@@ -153,23 +147,46 @@ analytics, economics, growth, service, scenario, the app shell and persistence.
   loss depended on edge order. Summed then rounded once.
 - `systemTheme` would throw where `matchMedia` is absent. Guarded.
 
-### Deferred (low, no live trigger or a product call)
+### Deferred
 
-- Bridge criticality share divides road-path use by a transit-pair count
-  (`resilience.ts:212`), so it can exceed 100 and is silently clamped; the fix
-  needs the road OD-pair count.
-- The growth-layout water check samples 0.8× the half-diagonal at three points
-  (`layout.ts:238`); a rotated corner could sit over water. Could not
-  demonstrate a failing seed.
-- `tutorialSteps` mutates a ref during render (`App.tsx:405`); harmless and
-  idempotent under StrictMode.
-- Editing while the map shows Baseline records an op but does not apply it until
-  you switch to Scenario (`App.tsx:1407`).
-- Saved scenarios and plans are never pruned, so storage grows without bound.
+All items below are fixed in the third pass.
+
+## Third pass — the items left open
+
+- **Boarding is now direction-aware.** `incidents.ts` no longer short-circuits
+  to `true` when no closure is active, so a rider only boards a vehicle
+  travelling toward their alight stop instead of riding to the terminus and
+  back on one going the other way. That changes normal-operation results, so the
+  golden hashes were deliberately re-recorded (`812f13e9`, `58347a71`) and the
+  reason is written at the constant. A new test (`movement.test.ts`) walks every
+  vehicle every tick and asserts no rider is ever carried away from their stop —
+  it passes with riders actually checked, which is the proof the fix bites. The
+  reroute test now suspends the route that really has riders waiting rather than
+  a line chosen by index.
+- **Bridge criticality** now divides a bridge's road-path use by the road OD-pair
+  count, not the transit-pair count, so the share cannot exceed 100
+  (`resilience.ts`).
+- **Building footprints** are tested at their four true rotated corners against
+  the shoreline, not a shrunken west edge, so a corner cannot sit over the sea
+  (`layout.ts`).
+- **`routeCumDist`** keeps its cumulative array aligned with `stationIds` when a
+  hop endpoint is missing, so later indices cannot drift (`network.ts`).
+- **`stepSimulation`**'s doc and the clock test now state the real contract: tick
+  and time are copied, the rest is advanced in place, and a caller must not reuse
+  the previous object (`index.ts`, `clock.test.ts`).
+- **Tutorial progress** no longer mutates a ref during render; the memo reads a
+  pure list and an effect commits it (`App.tsx`).
+- **Edits always target the scenario**, whatever the map shows, so an edit made
+  while viewing Baseline is applied (and the view follows) rather than recorded
+  and ignored (`App.tsx` `applyOps`).
+- **Stores are bounded**: at most 50 scenarios, 50 plans, and 20 attempts per
+  plan, pruned oldest-first on write (`scenario/store.ts`, `planStore.ts`).
 
 ## Verification
 
-- `npm run lint`, `npm run test` (224), `npm run build` green.
-- Golden hashes unchanged — proof that no undisrupted-day result moved.
+- `npm run lint`, `npm run test` (225), `npm run build` green.
+- Golden hashes deliberately re-recorded for the direction-aware boarding change;
+  the re-record is explained at the constant.
+- New test: no rider is ever carried away from their alight stop.
 - Browser: console clean, theme switch keeps the camera pose, selection
   emphasis clears when deselected.

@@ -251,7 +251,7 @@ export function legBlocked(
 }
 
 /** True when a leg can be boarded here: destination reachable in travel
- * direction without crossing a closure. Open network always boards (legacy). */
+ * direction without crossing a closure. */
 export function legBoardableFrom(
   leg: { board: string; alight: string; routeId: string },
   routeStationIds: string[],
@@ -260,7 +260,6 @@ export function legBoardableFrom(
   closures: DerivedClosures,
   loop = false,
 ): boolean {
-  if (!closures.active) return true;
   if (closures.suspendedRoutes.has(leg.routeId)) return false;
   if (closures.closedStations.has(leg.board) || closures.closedStations.has(leg.alight)) return false;
   const n = routeStationIds.length;

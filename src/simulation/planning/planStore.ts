@@ -31,6 +31,9 @@ export interface SavedPlan {
 }
 
 const KEY = 'transitforge.plans.v1';
+/** Keep the store bounded so it cannot grow until the quota fails. */
+const MAX_PLANS = 50;
+const MAX_ATTEMPTS = 20;
 
 interface Envelope {
   version: 1;
@@ -47,7 +50,12 @@ function readEnvelope(): Envelope {
 }
 
 function writeEnvelope(env: Envelope): boolean {
-  return storageWrite(KEY, env);
+  const plans = env.plans
+    .slice()
+    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    .slice(0, MAX_PLANS)
+    .map((p) => (p.attempts.length > MAX_ATTEMPTS ? { ...p, attempts: p.attempts.slice(-MAX_ATTEMPTS) } : p));
+  return storageWrite(KEY, { version: 1, plans });
 }
 
 export function listPlans(): SavedPlan[] {

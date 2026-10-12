@@ -155,6 +155,7 @@ export function criticalityAnalysis(base: {
   const routeUse = new Map<string, number>();
   const bridgeUse = new Map<string, number>();
   let pairs = 0;
+  let roadPairs = 0;
   const stationName = new Map(base.stations.map((s) => [s.id, s.name]));
   for (const zo of base.zones) {
     for (const zd of base.zones) {
@@ -175,6 +176,7 @@ export function criticalityAnalysis(base: {
       if (rn && rm && rn !== rm) {
         const rp = findRoadPath(base.roadGraph, rn, rm, (id) => base.roadGraph.freeMin.get(id) ?? 1);
         if (rp) {
+          roadPairs++;
           for (const e of rp.edgeIds) {
             if (base.roadGraph.edgeById.get(e)?.isBridge) bridgeUse.set(e, (bridgeUse.get(e) ?? 0) + 1);
           }
@@ -211,7 +213,9 @@ export function criticalityAnalysis(base: {
   const bridgeEntries = [...bridgeUse.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, 3);
   for (const [id, n] of bridgeEntries) {
     const e = base.roadGraph.edgeById.get(id);
-    const share = pairs > 0 ? (n / pairs) * 100 : 0;
+    // Bridge use counts road OD paths, so it is shared against the road-pair
+    // count, not the transit-pair count.
+    const share = roadPairs > 0 ? (n / roadPairs) * 100 : 0;
     items.push({
       kind: 'bridge',
       id,

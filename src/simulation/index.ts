@@ -245,7 +245,10 @@ export function createSimulationFromParts(
   };
 }
 
-/** Advance the clock by dtMinutes. Deterministic; no wall-clock or Math.random. */
+/** Advance the clock by dtMinutes. Deterministic; no wall-clock or Math.random.
+ * The step pipeline advances vehicles, passengers and incidents in place and
+ * returns a state with a fresh tick and time, so a caller must not keep using
+ * the object it passed in. */
 export function stepSimulation(state: SimulationState, dtMinutes = 1): SimulationState {
   // Disruptions first: lifecycle transitions, then effective closures.
   // A changed incident set invalidates cached road paths immediately.

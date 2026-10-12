@@ -150,7 +150,12 @@ export function connectionsForRoute(
   for (let i = 0; i < route.stationIds.length - 1; i++) {
     const a = pos.get(route.stationIds[i]);
     const b = pos.get(route.stationIds[i + 1]);
-    if (!a || !b) continue;
+    if (!a || !b) {
+      // Keep `cum` aligned with `stationIds`: a short array would shift every
+      // later index (hopAheadBlocked, nearestStationIdx, nextArrivalMin).
+      cum.push(length);
+      continue;
+    }
     const d = distM(a, b);
     length += d;
     cum.push(length);

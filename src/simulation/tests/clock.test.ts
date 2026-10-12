@@ -9,7 +9,8 @@ describe('simulation clock', () => {
     const next = stepSimulation(sim, 1);
     expect(next.tick).toBe(1);
     expect(next.timeMinutes).toBe(421);
-    // Original state untouched (immutable step).
+    // tick and time are copied onto the returned state; the pipeline advances
+    // vehicles and passengers in place, so the old object must not be reused.
     expect(sim.tick).toBe(0);
   });
 

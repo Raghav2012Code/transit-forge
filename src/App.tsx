@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import './shell.css';
 import './map.css';
@@ -401,19 +401,24 @@ export default function App() {
   }, [playing, speed]);
 
   // Tutorial progress follows real user actions (persists via dismissal flag).
-  // Marked inside the memo so progress never flickers backwards.
+  // The keys true right now are computed purely here; the memo reads them and
+  // an effect commits them, so no render mutates the ref.
+  const tutorialNow = useCallback((): string[] => {
+    const out: string[] = [];
+    if (playing) out.push('play');
+    if (selection) out.push('select');
+    if (selection?.kind === 'station') out.push('station');
+    if (overlay === 'crowding') out.push('crowding');
+    if (overlay === 'accessibility' || overlay === 'traveltime' || overlay === 'coverage') out.push('analytics');
+    if (mode === 'build') out.push('build');
+    if (ops.some((o) => o.type === 'setService')) out.push('service');
+    if (snapshot.tick > 100) out.push('run');
+    if (compareResult) out.push('compare');
+    return out;
+  }, [playing, selection, overlay, mode, ops, snapshot, compareResult]);
   const tutorialSteps = useMemo(() => {
-    const seen = tutorialSeen.current;
-    if (playing) seen.add('play');
-    if (selection) seen.add('select');
-    if (selection?.kind === 'station') seen.add('station');
-    if (overlay === 'crowding') seen.add('crowding');
-    if (overlay === 'accessibility' || overlay === 'traveltime' || overlay === 'coverage') seen.add('analytics');
-    if (mode === 'build') seen.add('build');
-    if (ops.some((o) => o.type === 'setService')) seen.add('service');
-    if (snapshot.tick > 100) seen.add('run');
-    if (compareResult) seen.add('compare');
-    const has = (k: string) => seen.has(k);
+    const done = new Set([...tutorialSeen.current, ...tutorialNow()]);
+    const has = (k: string) => done.has(k);
     return [
       { label: 'Inspect the city (click a district)', done: has('select') },
       { label: 'Start the simulation (Space)', done: has('play') },
@@ -425,7 +430,10 @@ export default function App() {
       { label: 'Run the simulation past tick 100', done: has('run') },
       { label: 'Compare baseline vs scenario', done: has('compare') },
     ];
-  }, [playing, selection, overlay, mode, ops, snapshot, compareResult]);
+  }, [tutorialNow]);
+  useEffect(() => {
+    for (const k of tutorialNow()) tutorialSeen.current.add(k);
+  }, [tutorialNow]);
 
   // Keyboard shortcuts (ignored while typing; native undo kept in inputs).
   useEffect(() => {
@@ -1409,12 +1417,14 @@ export default function App() {
     lastHistTick.current = 0;
   }
 
-  function applyOps(nextOps: EditOp[], nextRedo: EditOp[], view: 'base' | 'scenario' = viewing) {
+  function applyOps(nextOps: EditOp[], nextRedo: EditOp[], view: 'base' | 'scenario' = 'scenario') {
     setOps(nextOps);
     setRedo(nextRedo);
     setCompareResult(null);
     clearDraft();
     if (view === 'scenario') {
+      // An edit is always an edit of the scenario, whatever the map shows.
+      setViewing('scenario');
       const applied = applyEdits(effBaseCity, baseNet, nextOps);
       resetSimTo(applied.city, applied);
       setNetworkKey((k) => k + 1);

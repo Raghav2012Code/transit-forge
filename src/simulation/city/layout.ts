@@ -234,8 +234,15 @@ export function layoutCity(input: LayoutInput, rand: Rng): Layout {
     opts: { pad?: number; stack?: boolean; free?: boolean } = {},
   ): boolean => {
     if (!opts.free && ownerOf(x, z) !== zi) return false;
-    const rc = Math.hypot(w, d) / 2;
-    if (!onLand(x - rc * 0.8, z) || !onLand(x - rc * 0.8, z - rc) || !onLand(x - rc * 0.8, z + rc)) return false;
+    // Test the true rotated footprint corners. Sampling a shrunken west edge
+    // let a north/south/east corner sit over the sea.
+    const hw = w / 2;
+    const hd = d / 2;
+    const c = Math.cos(rot);
+    const s = Math.sin(rot);
+    for (const [ox, oz] of [[-hw, -hd], [-hw, hd], [hw, -hd], [hw, hd]]) {
+      if (!onLand(x + ox * c - oz * s, z + ox * s + oz * c)) return false;
+    }
     if (!clearOfRiver(x, z, 0) || !clearOfRiverBox(x, z, w, d, rot)) return false;
     if (!clearOfRoads(x, z, w, d, rot, 4)) return false;
     const rect = rectOf(x, z, w, d, rot);

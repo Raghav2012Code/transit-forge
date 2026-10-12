@@ -38,6 +38,34 @@ describe('vehicle movement', () => {
     expect(LOOP_ROUTES.size).toBe(0);
   });
 
+  it('never carries a rider away from their alight stop', () => {
+    let checked = 0;
+    run(240, (sim) => {
+      const byId = new Map(sim.passengers.map((p) => [p.id, p]));
+      for (const v of sim.vehicles) {
+        if (v.riders.length === 0) continue;
+        const route = sim.routes.find((r) => r.id === v.routeId);
+        const cum = sim.routeCumDist.get(v.routeId);
+        if (!route || !cum || LOOP_ROUTES.has(v.routeId)) continue;
+        // Index of the station the vehicle is at or has just left.
+        let at = 0;
+        for (let i = 0; i < cum.length; i++) if (cum[i] <= v.s + 1e-6) at = i;
+        for (const pid of v.riders) {
+          const p = byId.get(pid);
+          const leg = p?.legs[p.legIndex];
+          if (!leg) continue;
+          const alight = route.stationIds.indexOf(leg.alight);
+          if (alight < 0) continue;
+          checked++;
+          // +1 travels toward higher indices, -1 toward lower.
+          if (v.direction === 1) expect(alight).toBeGreaterThanOrEqual(at);
+          else expect(alight).toBeLessThanOrEqual(at);
+        }
+      }
+    });
+    expect(checked).toBeGreaterThan(0);
+  });
+
   it('turns round only at the ends of a line', () => {
     const dir = new Map<string, number>();
     run(240, (sim) => {
