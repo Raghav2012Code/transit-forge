@@ -7,7 +7,7 @@ import './panel.css';
 import './responsive.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
-import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
+import { createSimulation, createSimulationFromParts, formatClock, mintVehicleId, stepSimulation, type SimulationState } from './simulation/index.ts';
 import { computeAccessibility } from './simulation/analytics/accessibility.ts';
 import { computeCoverage } from './simulation/analytics/coverage.ts';
 import { findBottlenecks } from './simulation/analytics/bottlenecks.ts';
@@ -38,6 +38,7 @@ import {
 import { constraintInputs } from './simulation/scenario/evaluate.ts';
 import {
   deployReplacement,
+  createIncidentInSim,
   incidentPresets,
   type IncidentConfig,
 } from './simulation/incidents/incidents.ts';
@@ -55,12 +56,12 @@ import {
 import {
   createScenario,
   formatCost,
-  mergeServicePatch,
   nextRouteId,
   nextStationId,
   paletteColor,
   pushOp,
   redoOp,
+  sanitizeAtMin,
   sanitizeServicePatch,
   undoOp,
   validateRoadNode,
@@ -71,6 +72,7 @@ import {
   type ServicePatch,
 } from './simulation/scenario/scenario.ts';
 import { sanitizeFares, type FarePolicy } from './simulation/economics/fares.ts';
+import { applyFaresOpToSim, applyServiceOpToSim } from './simulation/service/timedEdits.ts';
 import { deleteScenario, duplicateScenario, listScenarios, saveScenario } from './simulation/scenario/store.ts';
 import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
@@ -124,7 +126,7 @@ import type { Command } from './ui/shell/commands.ts';
 import { PRESETS } from './ui/map/places.ts';
 import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme.ts';
 import type { Theme } from './rendering/palette.ts';
-import { cycleMin, fleetRequired, phaseOffset } from './simulation/service/timetable.ts';
+import { cycleMin, fleetRequired } from './simulation/service/timetable.ts';
 import { headwayAt } from './simulation/service/servicePlan.ts';
 
 const SEED = 1337;
@@ -173,7 +175,6 @@ export default function App() {
   const [coverageThreshold, setCoverageThreshold] = useState(500);
   const [history, setHistory] = useState<SeriesPoint[]>([]);
   const lastHistTick = useRef(0);
-  const fleetNonce = useRef(0);
 
   // Scenario + build state. Base city/seed never mutate; ops replay into mod.
   const [mode, setMode] = useState<Mode>('simulate');
@@ -930,21 +931,16 @@ export default function App() {
   // the plan is replaced, offsets recomputed, capacities updated, and the
   // fleet reconciled by adding/removing empty vehicles. The same change is
   // logged as a setService op so scenarios, undo, and compare stay exact.
-  function onServicePatch(routeId: string, patch: ServicePatch) {
+  function onServicePatch(routeId: string, patch: ServicePatch, atMin?: number) {
     const sim = simRef.current;
     const route = sim.routes.find((r) => r.id === routeId);
-    const current = sim.service[routeId];
-    if (!route || !current) return;
-    const mode = route.mode === 'metro' || route.mode === 'rail' ? route.mode : 'bus';
-    const next = mergeServicePatch(current, sanitizeServicePatch(patch, mode));
-    sim.service[routeId] = next;
-    sim.serviceOffsets[routeId] = phaseOffset(sim.seed, routeId, next);
-    for (const vv of sim.vehicles) {
-      if (vv.routeId === routeId) vv.capacity = next.vehicleCapacity;
-    }
+    if (!route) return;
+    const at = sanitizeAtMin(atMin ?? Math.floor(sim.timeMinutes));
+    if (!applyServiceOpToSim(sim, routeId, patch)) return;
     reconcileFleet(sim, routeId);
     if (viewing === 'base') setViewing('scenario');
-    const r = pushOp(ops, redo, { type: 'setService', routeId, patch: sanitizeServicePatch(patch, mode) });
+    const mode = route.mode === 'metro' || route.mode === 'rail' ? route.mode : 'bus';
+    const r = pushOp(ops, redo, { type: 'setService', routeId, patch: sanitizeServicePatch(patch, mode), atMin: at });
     setOps(r.ops);
     setRedo(r.redo);
     setCompareResult(null);
@@ -956,12 +952,12 @@ export default function App() {
   // fare; trips already underway keep theirs) and are logged as a setFares op
   // so scenarios, undo, and compare stay exact. Like service edits, this does
   // not reset the day.
-  function onFarePolicy(fares: FarePolicy) {
+  function onFarePolicy(fares: FarePolicy, atMin?: number) {
     const sim = simRef.current;
-    const next = sanitizeFares(fares);
-    sim.fares = next;
+    const at = sanitizeAtMin(atMin ?? Math.floor(sim.timeMinutes));
+    applyFaresOpToSim(sim, fares);
     if (viewing === 'base') setViewing('scenario');
-    const r = pushOp(ops, redo, { type: 'setFares', fares: next });
+    const r = pushOp(ops, redo, { type: 'setFares', fares: sanitizeFares(fares), atMin: at });
     setOps(r.ops);
     setRedo(r.redo);
     setCompareResult(null);
@@ -980,9 +976,8 @@ export default function App() {
     const existing = sim.vehicles.filter((vv) => vv.routeId === routeId);
     if (existing.length < desired) {
       for (let i = existing.length; i < desired; i++) {
-        fleetNonce.current++;
         sim.vehicles.push({
-          id: `veh-${routeId}-${i}-n${fleetNonce.current}`,
+          id: `veh-${routeId}-${i}-n${mintVehicleId(sim)}`,
           routeId,
           s: 0,
           direction: 1,
@@ -1085,17 +1080,13 @@ export default function App() {
       }
     }
     const id = `inc-${sim.nextIncidentId}`;
-    sim.nextIncidentId++;
-    sim.incidents.push({
-      ...cfg,
-      id,
-      status: 'scheduled',
-      activeTicks: 0,
-      baselineWaiting: 0,
-      recovered90: false,
-      strandedPeakDuringIncident: 0,
-    });
-    sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
+    cfg.id = id;
+    const r = pushOp(ops, redo, { type: 'scheduleIncident', incident: { ...cfg } });
+    setOps(r.ops);
+    setRedo(r.redo);
+    createIncidentInSim(sim, cfg);
+    const n = parseInt(id.slice(4), 10);
+    if (Number.isFinite(n)) sim.nextIncidentId = Math.max(sim.nextIncidentId, n + 1);
     setSelectedIncidentId(id);
     setIncidentDraft(EMPTY_DRAFT);
     setSnapshot({ ...sim });
@@ -1151,6 +1142,8 @@ export default function App() {
     if (!inc) return;
     if (inc.status === 'scheduled') {
       sim.incidents = sim.incidents.filter((i) => i.id !== id);
+      setOps(ops.filter((o) => !(o.type === 'scheduleIncident' && o.incident.id === id)));
+      setRedo([]);
       sim.events.push({ t: sim.timeMinutes, text: `${inc.label} — cancelled before start`, level: 'info' });
     } else if (inc.status === 'active') {
       // End now: recovery window starts immediately.
@@ -1361,9 +1354,13 @@ export default function App() {
     if (!p) return;
     const cfg = p.build(Math.round(sim.timeMinutes + 5));
     const id = `inc-${sim.nextIncidentId}`;
-    sim.nextIncidentId++;
-    sim.incidents.push({ ...cfg, id, status: 'scheduled', activeTicks: 0, baselineWaiting: 0, recovered90: false, strandedPeakDuringIncident: 0 });
-    sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
+    cfg.id = id;
+    const r = pushOp(ops, redo, { type: 'scheduleIncident', incident: { ...cfg } });
+    setOps(r.ops);
+    setRedo(r.redo);
+    createIncidentInSim(sim, cfg);
+    const n = parseInt(id.slice(4), 10);
+    if (Number.isFinite(n)) sim.nextIncidentId = Math.max(sim.nextIncidentId, n + 1);
     setSelectedIncidentId(id);
     setSnapshot({ ...sim });
   }
@@ -2547,7 +2544,7 @@ export default function App() {
                   problems={problems}
                   onSelectRoute={(id) => { setSelection({ kind: 'route', id }); announceSelection({ kind: 'route', id }); }}
                   onLocateProblem={onLocateProblem}
-                  fares={<FaresPanel fares={snapshot.fares} onFares={onFarePolicy} />}
+                  fares={<FaresPanel fares={snapshot.fares} nowMin={snapshot.timeMinutes} onFares={onFarePolicy} />}
                   recentTrips={recentTripRows}
                   onOpenTrip={(id, kind) => setOpenTrip({ id, kind })}
                 />

@@ -1,5 +1,6 @@
 // Service Planning panel: edit a route's operating plan and see the
 // consequences derived from live simulation state (no hard-coded estimates).
+import { useState } from 'react';
 import type { SimulationState } from '../../simulation/index.ts';
 import type { ServicePatch } from '../../simulation/scenario/scenario.ts';
 import { clampHeadway } from '../../simulation/service/servicePlan.ts';
@@ -13,7 +14,7 @@ interface Props {
   sim: SimulationState;
   /** The route being edited: the one selected on the map. */
   routeId: string;
-  onPatch: (routeId: string, patch: ServicePatch) => void;
+  onPatch: (routeId: string, patch: ServicePatch, atMin?: number) => void;
 }
 
 const QUICK_HEADWAYS: Record<string, number[]> = {
@@ -35,12 +36,13 @@ export default function ServicePanel({ sim, routeId, onPatch }: Props) {
   const math = routeId ? routeServiceMath(sim, routeId) : null;
   const route = sim.routes.find((r) => r.id === routeId);
   const plan = sim.service[routeId];
+  const [effFrom, setEffFrom] = useState(() => Math.floor(sim.timeMinutes));
   if (!math || !route || !plan) return null;
   const mode = route.mode === 'road' ? 'bus' : route.mode;
   const quick = QUICK_HEADWAYS[mode] ?? QUICK_HEADWAYS.bus;
   const caps = CAPACITY_OPTIONS[mode] ?? CAPACITY_OPTIONS.bus;
 
-  const patch = (p: ServicePatch) => onPatch(route.id, p);
+  const patch = (p: ServicePatch) => onPatch(route.id, p, effFrom);
   // What-if preview for a different peak headway (same math, proposed value).
   const preview = (h: number) => {
     const eff = effectiveHeadway({ ...plan, peakHeadwayMin: h }, math.cycle, math.fleet, sim.timeMinutes);
@@ -50,6 +52,13 @@ export default function ServicePanel({ sim, routeId, onPatch }: Props) {
 
   return (
     <Dock title="Service plan" meta={`${plan.peakHeadwayMin} min at peak`}>
+      <label className="tf-namelabel">
+        Effective from (min)
+        <input type="number" min={0} max={1439} value={effFrom} onChange={(e) => {
+          const v = Math.floor(Number(e.target.value));
+          setEffFrom(Number.isFinite(v) ? Math.min(1439, Math.max(0, v)) : 0);
+        }} />
+      </label>
       <h5>Time between vehicles</h5>
       <dl>
         <Stepper label="Peak" value={plan.peakHeadwayMin} display={`${plan.peakHeadwayMin} min`}
