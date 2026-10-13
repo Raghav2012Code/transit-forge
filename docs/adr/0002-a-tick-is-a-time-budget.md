@@ -7,14 +7,14 @@ Accepted. Changes simulation results.
 ## Context
 
 Each one-minute tick moved a vehicle its full distance, served every station it
-crossed, then applied a single dwell. On the compact map a metro covers about
-530 m a tick and stations are 90 to 150 m apart, so it crossed several stations
-and paid for one stop. Fleet sizing (`cycleMin`) assumes a stop at every station,
-so the fleet was sized for a slower line than the one that ran. Terminus
-turnaround (a setting in the service plan) was used only for sizing, never in
-movement. B1 was a "loop" with no closing leg, so its vehicles jumped from the
-last stop to the first. People who reached a platform while a vehicle was
-dwelling there could not board, because boarding happened only at arrival.
+crossed, then applied a single dwell. A metro covers about 530 m a tick and, at
+world scale, stations are 450 to 750 m apart, so a tick could reach more than one
+platform while paying for a single stop. Fleet sizing (`cycleMin`) assumes a stop
+at every station, so the fleet was sized for a slower line than the one that ran.
+Terminus turnaround (a setting in the service plan) was used only for sizing,
+never in movement. B1 was a "loop" with no closing leg, so its vehicles jumped
+from the last stop to the first. People who reached a platform while a vehicle
+was dwelling there could not board, because boarding happened only at arrival.
 
 ## Decision
 
@@ -30,9 +30,8 @@ tick. A vehicle never skips a station.
   its per-boarding time.
 - A held or parked vehicle behaves as before; a closed hop ahead stops a vehicle
   mid-tick.
-- `LOOP_ROUTES` is empty: every line runs out and back, as drawn. B1 is out and
-  back. The loop code in sizing and boarding stays, unused, for a loop with a real
-  closing leg.
+- Every line runs out and back, as drawn; B1 is out and back. A loop route with a
+  real closing leg would need its own handling again.
 
 ## Consequences
 
@@ -41,4 +40,5 @@ tick. A vehicle never skips a station.
 - Waits and boardings shift: cycles are longer, headways are what the plan says.
   Run-length tests that passed on luck of timing were not changed.
 - B1 now runs out and back, so its sizing doubles to match.
-- The display schedule (ADR 0001) stays: the map is still compact.
+- The display schedule (ADR 0001) stays: a one-minute step still covers about a
+  fifth of a metro line.

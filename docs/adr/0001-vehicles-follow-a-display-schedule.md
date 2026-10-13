@@ -7,11 +7,11 @@ Accepted.
 ## Context
 
 The simulation advances in one-minute steps and moves vehicles at real speeds
-(a metro at 32 km/h covers 530 m a minute) over a map about a kilometre across.
-A metro line is 520 m long, so one step carries a vehicle most of the way down
-its line and the next step carries it back. Drawn at the simulation's positions
-a train is a flicker, and the first stop it reaches is whichever one the step
-happened to land on.
+(a metro at 32 km/h covers about 530 m a minute) over a city about 6 km by
+4.2 km, where a metro line runs 2.6-2.8 km. One step still covers 530 m — about
+a fifth of a metro line — so drawn at the simulation's positions a train would
+jump a fifth of its line at a time rather than run, and the platform it appears
+to reach is whichever one the step happened to land on.
 
 Changing the step, or the speeds, would change every result in the simulation
 (boardings, waits, transit share, the analytics built on them). The speeds and
