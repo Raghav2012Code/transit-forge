@@ -9,7 +9,9 @@ One constant is the ruler for the whole world: `WORLD_SCALE` in
 river, zones, roads, stations — by the same factor. Speeds, headways, dwells,
 street widths and building envelopes are intentionally not scaled, so enlarging
 the world lengthens trips in real minutes without enlarging the things that stand
-in it. Bumping the constant is the only change a future scale pass needs.
+in it. Bumping the constant rescales the world; the pieces that are not derived
+from it (the shadow frustum's reach, the camera's near/far ratio) are tuned
+alongside it, so a scale pass also means rechecking those few.
 
 ## A tick is a time budget
 

@@ -138,5 +138,9 @@ describe('city layout', () => {
     expect(tallest('cbd')).toBeGreaterThan(60);
     expect(tallest('suburban')).toBeLessThan(12);
     expect(tallest('cbd')).toBeGreaterThan(tallest('residential'));
+    // The tall-tower core must span the district, not collapse to one block:
+    // its falloff distance scales with the world.
+    const tallCbd = city.buildings.filter((b) => b.district === 'cbd' && b.h > 80).length;
+    expect(tallCbd).toBeGreaterThan(10);
   });
 });

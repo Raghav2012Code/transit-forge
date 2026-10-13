@@ -14,7 +14,7 @@ const BEACH = 12; // keep lots this far from the shoreline
 const S = WORLD_SCALE;
 
 export function riverXAt(river: Vec3[], z: number): number {
-  if (river.length === 0) return 120;
+  if (river.length === 0) return 120 * S;
   if (z <= river[0].z) return river[0].x;
   for (let i = 1; i < river.length; i++) {
     if (z <= river[i].z) {
@@ -342,7 +342,7 @@ export function layoutCity(input: LayoutInput, rand: Rng): Layout {
               placePark(zi, centre.x, centre.z, bw - 6, bd - 6, rot);
               break;
             }
-            const core = Math.exp(-((distC / 80) ** 2));
+            const core = Math.exp(-((distC / (80 * S)) ** 2));
             const tallest = () => 26 + (112 - 26) * core * (0.4 + 0.6 * rand()) + rand() * 12;
             const mode = rand();
             if (mode < 0.45) {

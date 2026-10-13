@@ -18,10 +18,11 @@ import { WORLD_SCALE } from '../simulation/city/geography.ts';
 
 /** Positions multiply by this; object sizes and material detail do not. */
 const S = WORLD_SCALE;
-/** Shadow reach: ~2x the compact map so the whole view is covered, with the map
- *  size doubled to match so texels stay as sharp per metre as before. */
-const SHADOW_REACH_MAX = 1560;
-const SHADOW_REACH_MIN = 340;
+/** Shadow reach scales with the world so the view is covered, with the shadow
+ *  map size doubled so texels stay as sharp per metre at normal zoom (at the
+ *  widest overview they soften slightly). */
+const SHADOW_REACH_MAX = 780 * S;
+const SHADOW_REACH_MIN = 170 * S;
 
 export interface Layers {
   metro: boolean;
@@ -891,7 +892,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const len = sim0.routeLengths.get(r.id) ?? 0;
           // Space cones by distance, not by fraction, so they stay as dense per
           // metre as the line grows with the world.
-          const count = Math.max(3, Math.round(len / 250));
+          const count = Math.max(3, Math.round(len / 170));
           for (let i = 0; i < count; i++) {
             const t = (i + 0.5) / count;
             const mesh = new THREE.Mesh(coneGeo, mat);

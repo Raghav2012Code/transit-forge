@@ -151,8 +151,8 @@ every pull request. Release notes are in [`CHANGELOG.md`](CHANGELOG.md).
 
 - World geography is real-scale: one `WORLD_SCALE` constant
   (`src/simulation/city/geography.ts`) multiplies every position by 5, so the city
-  spans about 4.6 km by 4.2 km. Metro lines run 2.6–2.8 km (roughly six minutes
-  end to end), suburban rail 6.4 km and buses 1.8–4.1 km. Speeds, headways,
+  spans about 6 km east-west by 4.2 km north-south. Metro lines run 2.6-2.8 km (roughly six minutes
+  end to end), suburban rail 6.4 km and buses 1.7-4.1 km. Speeds, headways,
   street widths and building envelopes are deliberately left unscaled, so travel
   times are believable without changing the service model.
 - Vehicles are drawn on each line's display schedule rather than at their

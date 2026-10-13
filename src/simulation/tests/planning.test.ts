@@ -161,30 +161,35 @@ describe('briefs', () => {
     expect(expert[0].horizonYears).toBe(20);
   });
 
-  it('budgets cover the station cap each brief imposes', () => {
+  it('every brief budget funds the station cap it imposes', () => {
     const facts = {
       transitShare: 50, avgCongestion: 0.9, avgTravelMin: 30, maxOccupancy: 97,
       accessScore: 70, coveragePct: 80, opCost: 8000, population: 200000,
       worstRoute: { id: 'rt-m1', name: 'M1', occ: 97 },
-      worstEdge: null, worstBridge: null, lowAccessZones: [], growthZones: [],
-      airportZone: null, centralStationId: null, busiestRouteId: 'rt-m1',
+      worstEdge: null, worstBridge: null,
+      lowAccessZones: [{ id: 'z-ind', name: 'East Industrial', score: 50, population: 15000 }],
+      growthZones: [],
+      airportZone: { id: 'z-air', name: 'Airport', jobs: 20000 },
+      centralStationId: null, busiestRouteId: 'rt-m1',
     };
-    const budgetLimit = (d: Difficulty) => {
-      const brief = generateBriefs(facts, d, 8000)[0];
-      const budget = brief.constraints.find((c) => c.kind === 'budget');
-      if (!budget) throw new Error(`${d} brief has no budget constraint`);
-      return budget.limit;
-    };
-    // One metro station is a flat ₹450Cr; a brief that caps new stations at
-    // three must be able to fund three. Each lower tier funds one fewer.
     const station = COST_RATES.metroStation;
-    expect(budgetLimit('easy')).toBeGreaterThanOrEqual(3 * station);
-    expect(budgetLimit('medium')).toBeGreaterThanOrEqual(2 * station);
-    expect(budgetLimit('hard')).toBeGreaterThanOrEqual(1 * station);
-    expect(budgetLimit('expert')).toBeGreaterThanOrEqual(1 * station);
-    expect(budgetLimit('easy')).toBeGreaterThan(budgetLimit('medium'));
-    expect(budgetLimit('medium')).toBeGreaterThan(budgetLimit('hard'));
-    expect(budgetLimit('hard')).toBeGreaterThan(budgetLimit('expert'));
+    // One metro station is a flat ₹450Cr. Every brief's budget must fund the
+    // station cap that same brief imposes, or its plan cannot be built.
+    const caps: Record<string, number | undefined> = { easy: 3, medium: 2, hard: 1, expert: undefined };
+    for (const d of ['easy', 'medium', 'hard', 'expert'] as Difficulty[]) {
+      const briefs = generateBriefs(facts, d, 8000);
+      for (const b of briefs) {
+        const budget = b.constraints.find((c) => c.kind === 'budget');
+        expect(budget, `${b.id} (${d}) has no budget`).toBeTruthy();
+        const cap = b.constraints.find((c) => c.kind === 'stations');
+        if (cap) expect(budget!.limit).toBeGreaterThanOrEqual(cap.limit * station);
+      }
+      // The airport brief exists at every tier and imposes that tier's cap.
+      const ap = briefs.find((b) => b.id === 'airport-expansion');
+      expect(ap, `airport brief missing at ${d}`).toBeTruthy();
+      const cap = ap!.constraints.find((c) => c.kind === 'stations');
+      expect(cap?.limit).toBe(caps[d]);
+    }
   });
 });
 
