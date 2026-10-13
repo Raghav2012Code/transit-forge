@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createSimulation, stepSimulation } from '../index.ts';
+import { createSimulation, createSimulationFromParts, stepSimulation } from '../index.ts';
 import {
+  createIncidentInSim,
+  deployReplacement,
   deriveClosures,
   incidentPresets,
   legBlocked,
@@ -432,5 +434,82 @@ describe('presets', () => {
       expect(cfg.startMin).toBe(500);
       expect(cfg.durationMin).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('createIncidentInSim', () => {
+  const cfg = (): IncidentConfig => ({
+    id: '',
+    kind: 'route-suspension',
+    label: 'hand-made suspension',
+    targetRouteId: 'rt-m1',
+    startMin: 500,
+    durationMin: 45,
+    recoveryMin: 10,
+    severity01: 0.9,
+  });
+
+  it('mints sequential inc-N ids and schedules correctly', () => {
+    const sim = createSimulation(1337);
+    const a = createIncidentInSim(sim, cfg());
+    const b = createIncidentInSim(sim, cfg());
+    expect(a.id).toBe('inc-1');
+    expect(b.id).toBe('inc-2');
+    expect(sim.nextIncidentId).toBe(3);
+    for (const inc of [a, b]) {
+      expect(inc.status).toBe('scheduled');
+      expect(inc.activeTicks).toBe(0);
+      expect(inc.baselineWaiting).toBe(0);
+      expect(inc.recovered90).toBe(false);
+      expect(inc.strandedPeakDuringIncident).toBe(0);
+    }
+    expect(sim.incidents.slice(-2)).toEqual([a, b]);
+    const last = sim.events[sim.events.length - 1];
+    expect(last.t).toBe(sim.timeMinutes);
+    expect(last.level).toBe('info');
+    expect(last.text).toBe('hand-made suspension — scheduled for 08:20');
+  });
+
+  it('preserves a provided id without bumping the counter', () => {
+    const sim = createSimulation(1337);
+    const before = sim.nextIncidentId;
+    const inc = createIncidentInSim(sim, { ...cfg(), id: 'inc-hand-7' });
+    expect(inc.id).toBe('inc-hand-7');
+    expect(sim.nextIncidentId).toBe(before);
+  });
+
+  it('deep-equals what rebuild-from-ops seeds for the same config', () => {
+    const live = createSimulation(1337);
+    const withId = { ...cfg(), id: 'inc-hand-7' };
+    const created = createIncidentInSim(live, withId);
+    const rebuilt = createSimulationFromParts(1337, generateCity(1337), { ...buildNetwork(), incidents: [withId] });
+    expect(rebuilt.incidents).toHaveLength(1);
+    expect(created).toEqual(rebuilt.incidents[0]);
+  });
+
+  it('mints unique shuttle ids across sequential deployments', () => {
+    const sim = createSimulation(1337);
+    const route = sim.routes.find((r) => r.mode === 'metro') ?? sim.routes[0];
+    const ends = [route.stationIds[0], route.stationIds[route.stationIds.length - 1]];
+    const mkCfg = (id: string): IncidentConfig => ({
+      id,
+      kind: 'segment-closure',
+      label: `closure ${id}`,
+      targetRouteId: route.id,
+      segFrom: ends[0],
+      segTo: ends[1],
+      startMin: sim.timeMinutes,
+      durationMin: 30,
+      recoveryMin: 5,
+      severity01: 0.8,
+      replacement: { fromStationId: ends[0], toStationId: ends[1], buses: 2, headwayMin: 6, capacity: 70 },
+    });
+    deployReplacement(sim, createIncidentInSim(sim, mkCfg('inc-shuttle-a')));
+    deployReplacement(sim, createIncidentInSim(sim, mkCfg('inc-shuttle-b')));
+    const shuttles = sim.vehicles.filter((v) => v.routeId.startsWith('rt-rep-'));
+    expect(shuttles).toHaveLength(4);
+    const ids = shuttles.map((v) => v.id);
+    expect(new Set(ids).size).toBe(4);
+    for (const id of ids) expect(id).toMatch(/-n\d+$/);
   });
 });

@@ -66,6 +66,12 @@ export function sanitizeServicePatch(
   return out;
 }
 
+/** Sanitize an edit effective time: undefined stays undefined, else floor + clamp to 0..1440. */
+export function sanitizeAtMin(m: number | undefined): number | undefined {
+  if (m === undefined) return undefined;
+  return Math.max(0, Math.min(1440, Math.floor(m)));
+}
+
 export type EditOp =
   | { type: 'addStation'; station: { id: string; name: string; x: number; z: number; capacityPerHr: number } }
   | { type: 'removeStation'; stationId: string }
@@ -90,8 +96,8 @@ export type EditOp =
       edges: { id: string; a: string; b: string; kind: RoadKind }[];
     }
   | { type: 'removeRoad'; edgeId: string }
-  | { type: 'setService'; routeId: string; patch: ServicePatch }
-  | { type: 'setFares'; fares: FarePolicy }
+  | { type: 'setService'; routeId: string; patch: ServicePatch; atMin?: number }
+  | { type: 'setFares'; fares: FarePolicy; atMin?: number }
   | { type: 'scheduleIncident'; incident: IncidentConfig };
 
 export interface Scenario {

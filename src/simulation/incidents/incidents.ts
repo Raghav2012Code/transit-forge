@@ -10,6 +10,7 @@ import type {
 } from '../../types/index.ts';
 import { defaultPlanFor } from '../service/servicePlan.ts';
 import { capacityLostFor } from '../analytics/resilience.ts';
+import { mintVehicleId } from '../index.ts';
 import type { SimulationState } from '../index.ts';
 
 export type IncidentConfig = Omit<
@@ -23,6 +24,32 @@ export type IncidentConfig = Omit<
   | 'result'
   | 'strandedPeakDuringIncident'
 >;
+
+/** HH:MM clock. Local copy of formatClock in ../index.ts, which imports this
+ * module — a value import there would be a runtime cycle. */
+function formatClockLocal(timeMinutes: number): string {
+  const h = Math.floor(timeMinutes / 60) % 24;
+  const m = Math.floor(timeMinutes % 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/** Schedule a hand-made incident into the live sim. Produces exactly what
+ * rebuild-from-ops seeds for the same config (same id, same fields). */
+export function createIncidentInSim(sim: SimulationState, cfg: IncidentConfig): Incident {
+  const id = cfg.id.length > 0 ? cfg.id : `inc-${sim.nextIncidentId++}`;
+  const inc: Incident = {
+    ...cfg,
+    id,
+    status: 'scheduled',
+    activeTicks: 0,
+    baselineWaiting: 0,
+    recovered90: false,
+    strandedPeakDuringIncident: 0,
+  };
+  sim.incidents.push(inc);
+  sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClockLocal(cfg.startMin)}`, level: 'info' });
+  return inc;
+}
 
 export interface DerivedClosures {
   /** True while at least one incident is active. */
@@ -372,7 +399,7 @@ export function deployReplacement(sim: SimulationState, inc: Incident): Incident
   }
   for (let i = 0; i < rep.buses; i++) {
     sim.vehicles.push({
-      id: `veh-${routeId}-${i}`,
+      id: `veh-${routeId}-${i}-n${mintVehicleId(sim)}`,
       routeId,
       s: (i / Math.max(1, rep.buses)) * distM,
       direction: i % 2 === 0 ? 1 : -1,

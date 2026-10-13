@@ -94,7 +94,7 @@ function refreshStationLinks(stations: Station[], routes: TransportRoute[]): voi
   }
 }
 
-export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): ModifiedNetwork {
+export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[], asOfMin = Infinity): ModifiedNetwork {
   const warnings: string[] = [];
   let cost = 0;
   const stations: Station[] = base.stations.map((s) => ({ ...s, routeIds: [...s.routeIds], modes: [...s.modes] }));
@@ -297,6 +297,8 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
   for (const r of routes) service[r.id] = defaultPlanFor(r);
   for (const op of ops) {
     if (op.type !== 'setService') continue;
+    // Not yet effective at asOfMin: skipped silently (not validated either).
+    if ((op.atMin ?? -Infinity) > asOfMin) continue;
     const r = routes.find((x) => x.id === op.routeId);
     if (!r) {
       warnings.push(`Service edit for unknown route ${op.routeId}, skipped`);
@@ -310,10 +312,10 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
     service[r.id] = mergeServicePatch(service[r.id], sanitizeServicePatch(op.patch, mode));
   }
 
-  // Fare policy: last setFares op wins (sanitized, never throws).
+  // Fare policy: last effective setFares op wins (sanitized, never throws).
   let fares: FarePolicy = { ...DEFAULT_FARES };
   for (const op of ops) {
-    if (op.type === 'setFares') fares = sanitizeFares(op.fares);
+    if (op.type === 'setFares' && (op.atMin ?? -Infinity) <= asOfMin) fares = sanitizeFares(op.fares);
   }
 
   // Scheduled incidents: validated against the final network, never throw.

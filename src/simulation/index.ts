@@ -50,6 +50,8 @@ export interface SimulationState {
   routeLengths: Map<string, number>;
   routeCumDist: Map<string, number[]>;
   vehicles: VehicleState[];
+  /** Monotonic counter backing `mintVehicleId` (vehicle ids carry `-n${k}`). */
+  nextVehicleId: number;
   passengers: Passenger[];
   demand: DemandMatrix;
   rng: number;
@@ -130,6 +132,7 @@ function initVehicles(
   routes: TransportRoute[],
   routeLengths: Map<string, number>,
   service: Record<string, ServicePlan>,
+  mint: () => number,
 ): VehicleState[] {
   const vehicles: VehicleState[] = [];
   let total = 0;
@@ -143,7 +146,7 @@ function initVehicles(
     const fleet = Math.min(12, resolvedFleet(plan, cycle, START_MIN));
     for (let i = 0; i < fleet && total < 64; i++) {
       vehicles.push({
-        id: `veh-${r.id}-${i}`,
+        id: `veh-${r.id}-${i}-n${mint()}`,
         routeId: r.id,
         s: ((i + 0.5) / Math.max(1, fleet)) * length,
         direction: i % 2 === 0 ? 1 : -1,
@@ -163,6 +166,11 @@ export function createSimulation(seed = 1337): SimulationState {
   const city = generateCity(seed);
   const net = buildNetwork();
   return createSimulationFromParts(seed, city, net);
+}
+
+/** Mint the next vehicle-id suffix from simulation state (deterministic). */
+export function mintVehicleId(sim: SimulationState): number {
+  return sim.nextVehicleId++;
 }
 
 /** Build a simulation from explicit city + network parts (base or scenario-modified). */
@@ -193,6 +201,25 @@ export function createSimulationFromParts(
     const plan = service[r.id];
     if (plan) serviceOffsets[r.id] = phaseOffset(seed, r.id, plan);
   }
+  let nextVehicleId = 1;
+  const vehicles = initVehicles(net.routes, net.routeLengths, service, () => nextVehicleId++);
+  const incidents: Incident[] = (net.incidents ?? []).map((cfg, i) => ({
+    ...cfg,
+    id: cfg.id || `inc-sched-${i}`,
+    status: 'scheduled' as const,
+    activeTicks: 0,
+    baselineWaiting: 0,
+    recovered90: false,
+    strandedPeakDuringIncident: 0,
+  }));
+  // Hand-made ops may seed real `inc-N` ids (e.g. a rebuilt day replaying
+  // logged ops); bump the mint counter past them so fresh incidents never
+  // collide. `inc-sched-*` ids never collide with the `inc-N` scheme.
+  let nextIncidentId = 1;
+  for (const inc of incidents) {
+    const m = /^inc-(\d+)$/.exec(inc.id);
+    if (m) nextIncidentId = Math.max(nextIncidentId, Number(m[1]) + 1);
+  }
   return {
     seed,
     tick: 0,
@@ -203,7 +230,8 @@ export function createSimulationFromParts(
     connections: net.connections.map((c) => ({ ...c })),
     routeLengths: new Map(net.routeLengths),
     routeCumDist: new Map(net.routeCumDist),
-    vehicles: initVehicles(net.routes, net.routeLengths, service),
+    vehicles,
+    nextVehicleId,
     passengers: [],
     demand: buildDemandMatrix(city.zones),
     rng: (seed ^ 0x51ab) | 0,
@@ -222,19 +250,11 @@ export function createSimulationFromParts(
     service,
     fares: net.fares ? { ...net.fares } : { ...DEFAULT_FARES },
     serviceOffsets,
-    incidents: (net.incidents ?? []).map((cfg, i) => ({
-      ...cfg,
-      id: cfg.id || `inc-sched-${i}`,
-      status: 'scheduled' as const,
-      activeTicks: 0,
-      baselineWaiting: 0,
-      recovered90: false,
-      strandedPeakDuringIncident: 0,
-    })),
+    incidents,
     events: [],
     closures: emptyClosures(),
     closureSig: '',
-    nextIncidentId: 1,
+    nextIncidentId,
     emergencyBusesFree: 12,
     eventFlags: {},
   };

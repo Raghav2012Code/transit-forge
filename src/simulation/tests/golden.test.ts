@@ -24,7 +24,14 @@ function goldenOf(ticks: number): string {
 // and throughput figure, so the hashes moved. Previously pinned after the
 // movement-model rework (PR #4). If this fails, results moved again: find out
 // why before touching the number.
-const GOLDEN: Record<number, string> = { 360: '812f13e9', 1020: '58347a71' };
+// Re-recorded when vehicle ids moved into sim state (ticket #7): the fleet now
+// mints `veh-<route>-<i>-n<k>` from `nextVehicleId`, and the reliability draws
+// hash the vehicle id (tripDelayMin/tripCancelled in passengers.ts), so delay /
+// cancel draws — and every travel-time and throughput figure — moved. The sim
+// is still fully deterministic (two fresh sims produce identical results).
+// Previously pinned after direction-aware boarding. If this fails, results
+// moved again: find out why before touching the number.
+const GOLDEN: Record<number, string> = { 360: 'f880a6d8', 1020: 'bdd699b3' };
 
 describe('seed 1337 golden results', () => {
   for (const ticks of [360, 1020]) {
