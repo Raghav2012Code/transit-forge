@@ -169,8 +169,8 @@ hemisphere light keeps the shaded sides readable.
   stripe and a cab band, so a train never disappears into its own line. Metro
   runs three cars, rail four, a bus is one body.
 - **Vehicles run the schedule, not the raw step.** The simulation moves a
-  vehicle in one-minute steps at real speeds across a compact map, so a metro
-  covers most of its line in one step. Drawn as is, that is a flicker. The
+  vehicle in one-minute steps at real speeds, so a metro jumps about 530 m — a
+  fifth of its line — in a single step. Drawn as is, that is a flicker. The
   renderer therefore replays each line's service (`vehicles/schedule.ts`): the
   simulation's own fleet and peak headway fix the cycle, so the spacing is the
   headway; each vehicle accelerates, runs, brakes and holds at every platform

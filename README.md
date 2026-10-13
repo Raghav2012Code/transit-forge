@@ -149,13 +149,17 @@ every pull request. Release notes are in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Known limitations
 
-- World geography is compact (about 1.2 km across), so absolute travel times read
-  low: a few minutes cross-city. A world-scale pass should precede any
-  fare or economics work.
+- World geography is real-scale: one `WORLD_SCALE` constant
+  (`src/simulation/city/geography.ts`) multiplies every position by 5, so the city
+  spans about 4.6 km by 4.2 km. Metro lines run 2.6–2.8 km (roughly six minutes
+  end to end), suburban rail 6.4 km and buses 1.8–4.1 km. Speeds, headways,
+  street widths and building envelopes are deliberately left unscaled, so travel
+  times are believable without changing the service model.
 - Vehicles are drawn on each line's display schedule rather than at their
-  simulation positions, because the map is compact (`docs/adr/0001`). The
-  simulation itself spends each tick as a time budget per vehicle: it stops at
-  every station and pays that stop's dwell (`docs/adr/0002`).
+  simulation positions, because a one-minute step at real speed is a flicker on
+  the map (`docs/adr/0001`). The simulation itself spends each tick as a time
+  budget per vehicle: it stops at every station and pays that stop's dwell
+  (`docs/adr/0002`).
 - A fork changes service, fares and disruptions. Structural edits (stations,
   routes, roads) apply to the whole day and are made in Build mode.
 

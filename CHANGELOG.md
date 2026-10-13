@@ -2,6 +2,18 @@
 
 Newest first. Version is read from `src/version.ts`.
 
+## 1.5.0
+
+- **World scale.** The city is now real-scale: one `WORLD_SCALE` constant
+  (`src/simulation/city/geography.ts`) multiplies every position by 5, so the
+  city spans about 4.6 km by 4.2 km. Metro lines run 2.6–2.8 km (about six
+  minutes one way), suburban rail 6.4 km and buses 1.8–4.1 km; the airport runway
+  is 1090 m and the harbour piers 390 m. What deliberately did not scale: speeds,
+  headways, dwells, street widths and building envelopes. Every trip is longer in
+  real minutes, so travel-time and throughput figures move; the golden day was
+  re-recorded and a fleet-sanity test pins that no route is truncated by the
+  vehicle caps at this scale.
+
 ## 1.4.0
 
 - **Time machine.** Click the past on the day strip and the day is rebuilt from
