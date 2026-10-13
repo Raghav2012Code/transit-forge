@@ -18,13 +18,13 @@ function goldenOf(ticks: number): string {
   return fnv1a(JSON.stringify(computeStats(sim)));
 }
 
-// Re-recorded when boarding became direction-aware: a rider now boards only a
-// vehicle travelling toward their alight stop, instead of riding to the
-// terminus and back on one going the other way. That changes every travel-time
-// and throughput figure, so the hashes moved. Previously pinned after the
-// movement-model rework (PR #4). If this fails, results moved again: find out
-// why before touching the number.
-const GOLDEN: Record<number, string> = { 360: '812f13e9', 1020: '58347a71' };
+// Re-recorded for the world-scale pass: positions (city bounds, coast, river,
+// zones, roads, stations) multiply by WORLD_SCALE=5 while speeds, headways and
+// dwells do not, so every trip is longer in real minutes and every travel-time
+// and throughput figure moves. Confirmed deterministic (two runs, same hash).
+// Previously re-recorded when boarding became direction-aware. If this fails,
+// results moved again: find out why before touching the number.
+const GOLDEN: Record<number, string> = { 360: '8d540c86', 1020: '2ca715b3' };
 
 describe('seed 1337 golden results', () => {
   for (const ticks of [360, 1020]) {

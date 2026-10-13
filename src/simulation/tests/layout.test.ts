@@ -1,9 +1,35 @@
 import { describe, expect, it } from 'vitest';
 import { generateCity } from '../city/generateCity.ts';
-import { coastXAt, riverXAt, roadSegments } from '../city/layout.ts';
+import { coastXAt, roadSegments } from '../city/layout.ts';
+import { RIVER_HALF_M } from '../city/geography.ts';
 import type { Building } from '../../types/index.ts';
 
 const city = generateCity(1337);
+
+// A spatial index, so the pair-wise checks below stay linear-ish on a real-scale
+// city (tens of thousands of buildings) instead of O(n^2).
+const CELL = 100;
+const buckets = new Map<string, Building[]>();
+for (const b of city.buildings) {
+  const k = `${Math.floor(b.pos.x / CELL)},${Math.floor(b.pos.z / CELL)}`;
+  const list = buckets.get(k);
+  if (list) list.push(b);
+  else buckets.set(k, [b]);
+}
+function near(x: number, z: number): Building[] {
+  const out: Building[] = [];
+  const i0 = Math.floor((x - CELL) / CELL);
+  const i1 = Math.floor((x + CELL) / CELL);
+  const j0 = Math.floor((z - CELL) / CELL);
+  const j1 = Math.floor((z + CELL) / CELL);
+  for (let i = i0; i <= i1; i++) {
+    for (let j = j0; j <= j1; j++) {
+      const list = buckets.get(`${i},${j}`);
+      if (list) out.push(...list);
+    }
+  }
+  return out;
+}
 
 /** Point inside a building's footprint, grown by `pad`. */
 function inside(b: Building, x: number, z: number, pad = 0): boolean {
@@ -46,10 +72,20 @@ describe('city layout', () => {
   });
 
   it('keeps every building on land and off the river', () => {
+    // Clearance is enforced perpendicular to the river's own segments, so the
+    // test measures the same thing (a horizontal |x - riverXAt(z)| proxy breaks
+    // where the river meanders).
+    const distToRiver = (x: number, z: number): number => {
+      let best = Infinity;
+      for (let i = 1; i < city.river.length; i++) {
+        best = Math.min(best, segDist(x, z, city.river[i - 1], city.river[i]));
+      }
+      return best;
+    };
     for (const b of city.buildings) {
       for (const [x, z] of corners(b)) {
         expect(x).toBeGreaterThan(coastXAt(z));
-        expect(Math.abs(x - riverXAt(city.river, z))).toBeGreaterThan(13);
+        expect(distToRiver(x, z)).toBeGreaterThan(RIVER_HALF_M);
       }
     }
   });
@@ -64,10 +100,9 @@ describe('city layout', () => {
   });
 
   it('never stands one building inside another except a tower on its podium', () => {
-    for (let i = 0; i < city.buildings.length; i++) {
-      const a = city.buildings[i];
-      for (let j = i + 1; j < city.buildings.length; j++) {
-        const b = city.buildings[j];
+    for (const a of city.buildings) {
+      for (const b of near(a.pos.x, a.pos.z)) {
+        if (b === a) continue;
         if (Math.hypot(a.pos.x - b.pos.x, a.pos.z - b.pos.z) > 90) continue;
         const bInA = corners(b, -0.3).every(([x, z]) => inside(a, x, z));
         const aInB = corners(a, -0.3).every(([x, z]) => inside(b, x, z));
@@ -88,7 +123,7 @@ describe('city layout', () => {
       for (let s = 0; s <= len; s += 6) {
         const x = st.a.x + ((st.b.x - st.a.x) * s) / len;
         const z = st.a.z + ((st.b.z - st.a.z) * s) / len;
-        for (const b of city.buildings) {
+        for (const b of near(x, z)) {
           if (Math.abs(b.pos.x - x) < 80 && Math.abs(b.pos.z - z) < 80) expect(inside(b, x, z)).toBe(false);
         }
       }

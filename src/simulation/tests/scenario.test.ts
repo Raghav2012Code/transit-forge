@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateCity } from '../city/generateCity.ts';
+import { CITY_BOUNDS, riverCentreX } from '../city/geography.ts';
 import { buildNetwork, validateNetwork } from '../transport/network.ts';
 import { applyEdits } from '../scenario/applyEdits.ts';
 import { buildCompareRows, runHeadless } from '../scenario/compare.ts';
@@ -97,8 +98,8 @@ describe('scenario edits', () => {
     ]);
     expect(metro.cost).toBeGreaterThan(bus.cost);
     expect(validateStationPlacement(0, 0)).toBeNull();
-    expect(validateStationPlacement(-400, 0)).not.toBeNull();
-    expect(validateStationPlacement(120, 0)).not.toBeNull();
+    expect(validateStationPlacement(CITY_BOUNDS.x + 100, 0)).not.toBeNull();
+    expect(validateStationPlacement(riverCentreX(0), 0)).not.toBeNull();
   });
 });
 
