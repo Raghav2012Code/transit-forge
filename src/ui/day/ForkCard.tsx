@@ -19,6 +19,8 @@ interface Props {
   changes: number;
   running: boolean;
   error: string | null;
+  /** Whole-day caveat when post-fork edits are structural; null when the branches truly match until the fork. */
+  wholeDayWarning: string | null;
   result: ForkResult | null;
   onFork: () => void;
   onCompare: () => void;
@@ -38,7 +40,7 @@ const completed = (r: DayResult) => r.series.map((p) => p.completed);
  * The time machine's side panel: fork the day at the current minute, change something, and compare the
  * two days. Both days are the same simulation up to the fork, so any difference is what you changed.
  */
-export default function ForkCard({ fork, changes, running, error, result, onFork, onCompare, onDiscard }: Props) {
+export default function ForkCard({ fork, changes, running, error, wholeDayWarning, result, onFork, onCompare, onDiscard }: Props) {
   return (
     <Dock title="Time machine" meta={fork ? `forked ${formatClock(fork.atMin)}` : undefined}>
       {!fork ? (
@@ -63,6 +65,7 @@ export default function ForkCard({ fork, changes, running, error, result, onFork
         </>
       )}
       {error && <p className="tf-hint tf-warn">{error}</p>}
+      {wholeDayWarning && <p className="tf-hint tf-warn">{wholeDayWarning}</p>}
       {result && (
         <>
           <table className="tf-compare-table tf-fork-table">

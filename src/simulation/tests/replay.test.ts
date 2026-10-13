@@ -4,7 +4,7 @@ import { generateCity } from '../city/generateCity.ts';
 import { buildNetwork } from '../transport/network.ts';
 import { applyEdits } from '../scenario/applyEdits.ts';
 import type { EditOp } from '../scenario/scenario.ts';
-import { advanceReplay, advanceReplayFor, replayProgress01, startReplay } from '../replay.ts';
+import { advanceReplay, advanceReplayFor, postForkWholeDayOps, replayProgress01, startReplay } from '../replay.ts';
 import { computeStats } from '../statistics.ts';
 
 const SEED = 1337;
@@ -92,5 +92,27 @@ describe('replay', () => {
     }
     expect(rounds).toBeGreaterThan(1);
     expect(fingerprint(r.sim)).toBe(fingerprint(straight(createSimulation(SEED), 600)));
+  });
+});
+
+describe('postForkWholeDayOps', () => {
+  const timed: EditOp = { type: 'setService', routeId: 'rt-m1', patch: { peakHeadwayMin: 4 }, atMin: 540 };
+  const untimed: EditOp = { type: 'setService', routeId: 'rt-m1', patch: { peakHeadwayMin: 4 } };
+  const fares: EditOp = { type: 'setFares', fares: { metro: 5, rail: 5, bus: 5 }, atMin: 600 };
+  const incident: EditOp = {
+    type: 'scheduleIncident',
+    incident: { id: 'x', kind: 'route-suspension', label: 'x', targetRouteId: 'rt-m1', startMin: 500, durationMin: 30, recoveryMin: 5, severity01: 0.5 },
+  };
+  const structural: EditOp = { type: 'removeRoute', routeId: 'rt-b9' };
+
+  it('passes timed interventions and incidents, flags the rest', () => {
+    const ops: EditOp[] = [timed, incident, fares, structural, untimed];
+    expect(postForkWholeDayOps(ops, 0)).toEqual([structural, untimed]);
+  });
+
+  it('only looks past the fork point, and undo past it yields none', () => {
+    const ops: EditOp[] = [structural, timed];
+    expect(postForkWholeDayOps(ops, 1)).toEqual([]);
+    expect(postForkWholeDayOps(ops, 99)).toEqual([]);
   });
 });

@@ -2,6 +2,7 @@
 // exactly by running a fresh simulation forward to it. The work is done in chunks so a caller can
 // spread it over frames; chunking never changes the result.
 import { stepSimulation, type SimulationState } from './index.ts';
+import { isTimed, type EditOp } from './scenario/scenario.ts';
 
 export interface Replay {
   sim: SimulationState;
@@ -44,4 +45,13 @@ export function advanceReplayFor(
 export function replayProgress01(r: Replay): number {
   const span = r.targetMin - r.startMin;
   return span <= 0 ? 1 : Math.min(1, Math.max(0, (r.sim.timeMinutes - r.startMin) / span));
+}
+
+/**
+ * Post-fork ops that are NOT timed interventions or incidents: they fold into
+ * the branch whole-day, so the two branches differ before the fork minute.
+ * `baseOpCount` is the op-log length at the fork; undo past it yields none.
+ */
+export function postForkWholeDayOps(ops: EditOp[], baseOpCount: number): EditOp[] {
+  return ops.slice(Math.max(0, baseOpCount)).filter((op) => op.type !== 'scheduleIncident' && !isTimed(op));
 }

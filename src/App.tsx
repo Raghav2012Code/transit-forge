@@ -8,7 +8,7 @@ import './responsive.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
 import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
-import { advanceReplayFor, replayProgress01, startReplay } from './simulation/replay.ts';
+import { advanceReplayFor, postForkWholeDayOps, replayProgress01, startReplay } from './simulation/replay.ts';
 import { runDayInWorker } from './workers/client.ts';
 import ForkCard, { type ForkResult } from './ui/day/ForkCard.tsx';
 import { dayStartOf, rewindFloor } from './ui/shell/dayStrip.ts';
@@ -43,7 +43,9 @@ import { constraintInputs } from './simulation/scenario/evaluate.ts';
 import {
   deployReplacement,
   incidentPresets,
+  liveIncidentConfigs,
   type IncidentConfig,
+  type LiveIncident,
 } from './simulation/incidents/incidents.ts';
 import { criticalityAnalysis, type CriticalItem } from './simulation/analytics/resilience.ts';
 import type { CompareRow } from './simulation/scenario/compare.ts';
@@ -163,7 +165,7 @@ export default function App() {
   const [selection, setSelectionRaw] = useState<Selection | null>(null);
   // The trip whose card is open in the side panel, if any.
   // Incidents added by hand during the day, so a rebuilt day can bring them back (see scheduleLiveIncident).
-  const [liveIncidents, setLiveIncidents] = useState<{ cfg: IncidentConfig; createdAtMin: number }[]>([]);
+  const [liveIncidents, setLiveIncidents] = useState<LiveIncident[]>([]);
   // Set while a rewind is rebuilding the day: where to, and how far along.
   const [rewind, setRewind] = useState<{ target: number; progress: number } | null>(null);
   const rewindFrame = useRef(0);
@@ -1392,9 +1394,9 @@ export default function App() {
     setRewind(null);
   }
 
-  /** A fresh day built the way the current view's day was: this view's network, its timed edits, and the incidents added by hand. */
-  function freshDay(createdBy?: number): SimulationState {
-    const live = liveIncidents.filter((l) => createdBy === undefined || l.createdAtMin <= createdBy).map((l) => l.cfg);
+  /** A fresh day built the way the current view's day was: this view's network, its timed edits, and the hand-made incidents created at or before `asOfMin` (all of them without one). */
+  function freshDay(asOfMin?: number): SimulationState {
+    const live = liveIncidentConfigs(liveIncidents, asOfMin);
     if (viewing === 'base') return createSimulationFromParts(SEED, effBaseCity, { ...baseNet, incidents: live });
     return createSimulationFromParts(SEED, mod.city, { ...mod, incidents: [...mod.incidents, ...live] });
   }
@@ -1408,7 +1410,7 @@ export default function App() {
     if (rewind) return;
     setPlaying(false);
     clearRunTarget();
-    const replay = startReplay(freshDay(), target);
+    const replay = startReplay(freshDay(target), target);
     const points: SeriesPoint[] = [];
     let lastTick = 0;
     const frame = () => {
@@ -1451,6 +1453,12 @@ export default function App() {
   const forkChanges = fork
     ? Math.max(0, ops.length - fork.baseOps.length) + liveIncidents.filter((l) => l.createdAtMin > fork.atMin).length
     : 0;
+
+  /** Post-fork ops that apply whole-day: the branches differ before the fork minute. */
+  const forkWholeDay = fork ? postForkWholeDayOps(ops, fork.baseOps.length) : [];
+  const forkWholeDayWarning = fork && forkWholeDay.length > 0
+    ? `Structural edits since the fork apply to the whole day, so the two branches differ before ${formatClock(fork.atMin)}.`
+    : null;
 
   /**
    * Run both days to the end, each in its own worker: the day as it stood at the fork, and the day with
@@ -2656,6 +2664,7 @@ export default function App() {
                       changes={forkChanges}
                       running={forkRunning}
                       error={forkError}
+                      wholeDayWarning={forkWholeDayWarning}
                       result={forkResult}
                       onFork={forkHere}
                       onCompare={compareFork}
