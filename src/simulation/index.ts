@@ -38,8 +38,6 @@ import {
 } from './incidents/incidents.ts';
 import type { Incident, IncidentEvent } from '../types/index.ts';
 import { DEFAULT_FARES, type FarePolicy } from './economics/fares.ts';
-import { applyFares, applyServicePatch } from './service/live.ts';
-import type { TimedOp } from './scenario/scenario.ts';
 
 export interface SimulationState {
   seed: number;
@@ -76,8 +74,6 @@ export interface SimulationState {
   fares: FarePolicy;
   /** Deterministic departure phase per route (0 for synced routes). */
   serviceOffsets: Record<string, number>;
-  /** Service and fare edits waiting for their minute, in order. */
-  pendingTimed: TimedOp[];
   /** Disruption incidents (live + scheduled + resolved history). */
   incidents: Incident[];
   /** Timeline of simulation events (bounded). */
@@ -195,7 +191,6 @@ export function createSimulationFromParts(
     service?: Record<string, ServicePlan>;
     incidents?: IncidentConfig[];
     fares?: FarePolicy;
-    timed?: TimedOp[];
   },
   serviceOverrides?: Record<string, ServicePlan>,
 ): SimulationState {
@@ -241,7 +236,6 @@ export function createSimulationFromParts(
     service,
     fares: net.fares ? { ...net.fares } : { ...DEFAULT_FARES },
     serviceOffsets,
-    pendingTimed: (net.timed ?? []).map((op) => ({ ...op })),
     incidents: (net.incidents ?? []).map((cfg, i) => ({
       ...cfg,
       id: cfg.id || `inc-sched-${i}`,
@@ -265,13 +259,6 @@ export function createSimulationFromParts(
  * returns a state with a fresh tick and time, so a caller must not keep using
  * the object it passed in. */
 export function stepSimulation(state: SimulationState, dtMinutes = 1): SimulationState {
-  // Timed edits fire at the first step where the clock has reached them. A live edit made between
-  // steps at the same minute lands in exactly the same place, so live, headless and replay agree.
-  while (state.pendingTimed.length > 0 && state.pendingTimed[0].atMin <= state.timeMinutes) {
-    const op = state.pendingTimed.shift()!;
-    if (op.type === 'setService') applyServicePatch(state, op.routeId, op.patch);
-    else applyFares(state, op.fares);
-  }
   // Disruptions first: lifecycle transitions, then effective closures.
   // A changed incident set invalidates cached road paths immediately.
   const lifecycleEvents = updateIncidentLifecycle(state);

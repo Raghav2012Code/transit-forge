@@ -431,21 +431,6 @@ export function removeReplacement(sim: SimulationState, inc: Incident): void {
 
 // ---- Presets (generated from live infrastructure, never hard-coded ids) ----
 
-/** A hand-made disruption plus the absolute minute it was created at. */
-export interface LiveIncident {
-  cfg: IncidentConfig;
-  createdAtMin: number;
-}
-
-/**
- * Configs for rebuilding a day as of a minute: only incidents created at or
- * before it. Without a bound, all of them. Rewinding past an incident's
- * creation must not resurrect it, so rewinds always pass their target.
- */
-export function liveIncidentConfigs(live: LiveIncident[], asOfMin?: number): IncidentConfig[] {
-  return live.filter((l) => asOfMin === undefined || l.createdAtMin <= asOfMin).map((l) => l.cfg);
-}
-
 export interface IncidentPreset {
   key: string;
   label: string;

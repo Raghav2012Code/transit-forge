@@ -54,10 +54,5 @@ The simulation is deterministic: seed 1337, no `Math.random()` in
 `src/simulation/`, and a golden test that pins the statistics of a day. A change
 that moves results has to explain why, as ADR 0002 does.
 
-That discipline is what makes the time machine possible. Because the same seed
-and the same edits give the same day, any minute can be rebuilt by replay, and a
-fork can run both of its branches headless in a web worker. A live edit, a
-replayed edit and a headless edit all pass through one function at the first step
-where the clock reaches the edit's minute, so they agree by construction. The
-journey inspector rests on the same idea: it records the decision a trip made at
+The journey inspector rests on the same idea: it records the decision a trip made at
 the moment it was made, and adds no random draw to do it.
