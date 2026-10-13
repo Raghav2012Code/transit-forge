@@ -888,7 +888,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             mat = new THREE.MeshBasicMaterial({ color: r.color });
             coneMatByRoute.set(r.id, mat);
           }
-          for (const t of [0.3, 0.55, 0.8]) {
+          const len = sim0.routeLengths.get(r.id) ?? 0;
+          // Space cones by distance, not by fraction, so they stay as dense per
+          // metre as the line grows with the world.
+          const count = Math.max(3, Math.round(len / 250));
+          for (let i = 0; i < count; i++) {
+            const t = (i + 0.5) / count;
             const mesh = new THREE.Mesh(coneGeo, mat);
             mesh.userData.routeId = r.id;
             dirGroup.add(mesh);
