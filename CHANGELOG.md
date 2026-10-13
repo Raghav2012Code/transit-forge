@@ -2,6 +2,10 @@
 
 Newest first. Version is read from `src/version.ts`.
 
+## 1.5.1
+
+- **Time machine removed.** Rewind, fork-and-compare and their timed-edit machinery are gone: the day strip runs forward only again, service and fare edits apply at the start of the day through the op log, and the headless worker runner (`src/workers/`) goes with them. Live service and fare editing, hand-made disruptions, the journey inspector and all planning features are unchanged.
+
 ## 1.5.0
 
 - **World scale.** The city is now real-scale: one `WORLD_SCALE` constant

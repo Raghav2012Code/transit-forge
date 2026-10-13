@@ -61,9 +61,7 @@ Press `?` in the app for the full list of keys. The ones you will use first:
 | `T` | switch between light and dark |
 | `[` `]` | hide or show the side panel |
 
-## Two things worth a look
-
-### Why did this trip happen?
+## Why did this trip happen?
 
 Select a vehicle to see its riders, a station to see who is waiting, or open
 Recent trips. A trip card explains the trip in plain statements: the options the
@@ -72,16 +70,6 @@ drive, where they waited and how it ended. Stranded and denied-boarding trips ar
 marked, since they are the most useful to read.
 
 ![A trip card in the side panel](docs/media/trip-card.webp)
-
-### Time machine
-
-Click the past on the day strip and the day is rebuilt from 07:00. "Fork the day
-here" freezes what you have done so far. Change a headway or a fare, or add a
-disruption, then compare the changed day against the day that would have been.
-Both run headless with the same seed, so the two are identical until the minute
-of the fork.
-
-![The comparison of a forked day](docs/media/time-machine.webp)
 
 ## How it is built
 
@@ -97,15 +85,12 @@ flowchart LR
   end
   render["src/rendering: Three.js"]
   ui["src/ui: React"]
-  workers["src/workers: headless runs"]
   city --> tick
   net --> tick
   tick --> render
   tick --> ui
   ui -->|edits| net
   eval --> tick
-  workers --> eval
-  ui --> workers
 ```
 
 - `src/simulation/` has no React or Three.js imports. City data, routing
@@ -113,7 +98,6 @@ flowchart LR
 - `src/rendering/` draws simulation state and holds no simulation logic.
 - `src/ui/` is the dashboard, controls and inspectors, and only calls the
   simulation API.
-- `src/workers/` runs whole days headless for the fork comparison.
 
 Interface rules are in [`DESIGN.md`](DESIGN.md): colour only ever means a line or
 a condition, and selection is ink. Light and dark ship as one design.
@@ -122,8 +106,7 @@ a condition, and selection is ink. Light and dark ship as one design.
 
 The simulation is deterministic: seed `1337`, no `Math.random()` in
 `src/simulation/`, and a golden test that pins the statistics of a day. A change
-that alters results has to be able to explain why. That is what lets the time
-machine rebuild any minute by replay.
+that alters results has to be able to explain why.
 
 ## Decisions worth reading
 
@@ -140,7 +123,7 @@ machine rebuild any minute by replay.
 npm install
 npm run dev      # development server
 npm run lint     # oxlint
-npm run test     # vitest: determinism, routing, replay, the golden day
+npm run test     # vitest: determinism, routing, the golden day
 npm run build    # type-check and production build
 ```
 
@@ -160,9 +143,6 @@ every pull request. Release notes are in [`CHANGELOG.md`](CHANGELOG.md).
   the map (`docs/adr/0001`). The simulation itself spends each tick as a time
   budget per vehicle: it stops at every station and pays that stop's dwell
   (`docs/adr/0002`).
-- A fork changes service, fares and disruptions. Structural edits (stations,
-  routes, roads) apply to the whole day and are made in Build mode.
-
 ## Licence
 
 Apache License 2.0. See [`LICENSE`](LICENSE).
