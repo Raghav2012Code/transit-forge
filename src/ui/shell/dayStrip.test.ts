@@ -7,8 +7,11 @@ import {
   incidentSpans,
   minuteAt,
   minuteOfDay,
+  nudgePending,
+  nudgeRewind,
   nudgeTarget,
   peakBands,
+  rewindTargetFor,
   runTargetFor,
   tracePoints,
   xOf,
@@ -122,5 +125,61 @@ describe('run until', () => {
 
   it('has nothing to offer once the day is over', () => {
     expect(nudgeTarget(null, 1438, 30)).toBeNull();
+  });
+});
+
+describe('rewinding the day strip', () => {
+  const NOW = 12 * 60; // 12:00 on the first day
+
+  it('offers a minute that has passed, and not one still to come', () => {
+    expect(rewindTargetFor(10 * 60, NOW)).toBe(10 * 60);
+    expect(rewindTargetFor(14 * 60, NOW)).toBeNull();
+    expect(rewindTargetFor(12 * 60, NOW)).toBeNull();
+  });
+
+  it('cannot go before the day began (07:00 on day one)', () => {
+    expect(rewindTargetFor(6 * 60, NOW)).toBeNull();
+    expect(rewindTargetFor(7 * 60, NOW)).toBe(7 * 60);
+  });
+
+  it('can reach the early hours of a later day', () => {
+    const day2 = 1440 + 12 * 60;
+    expect(rewindTargetFor(5 * 60, day2)).toBe(1440 + 5 * 60);
+    expect(rewindTargetFor(3 * 60, day2)).toBeNull();
+  });
+
+  it('and the future is still a run-to, not a rewind', () => {
+    expect(runTargetFor(10 * 60, NOW)).toBeNull();
+    expect(runTargetFor(14 * 60, NOW)).toBe(14 * 60);
+  });
+
+  it('steps back on the grid and stops at the start of the day', () => {
+    expect(nudgeRewind(null, NOW, 30)).toBe(11 * 60 + 30);
+    expect(nudgeRewind(11 * 60 + 30, NOW, 30)).toBe(11 * 60);
+    expect(nudgeRewind(7 * 60 + 15, NOW, 30)).toBe(7 * 60);
+    expect(nudgeRewind(7 * 60, NOW, 30)).toBe(7 * 60);
+  });
+
+  it('steps forward again and drops the target on reaching now', () => {
+    expect(nudgeRewind(11 * 60, NOW, -30)).toBe(11 * 60 + 30);
+    expect(nudgeRewind(11 * 60 + 30, NOW, -30)).toBeNull();
+  });
+
+  it('puts a target on the grid when now is between grid points', () => {
+    expect(nudgeRewind(null, 12 * 60 + 3, 30)).toBe(11 * 60 + 30);
+  });
+
+  it('gives nothing to step back to at the very start of the day', () => {
+    expect(nudgeRewind(null, 7 * 60, 30)).toBeNull();
+  });
+
+  it('nudgePending walks through the past and the future from now', () => {
+    expect(nudgePending(null, NOW, 'earlier', 30)).toBe(11 * 60 + 30);
+    expect(nudgePending(null, NOW, 'later', 30)).toBe(12 * 60 + 35);
+    expect(nudgePending(11 * 60 + 30, NOW, 'later', 30)).toBeNull();
+    expect(nudgePending(11 * 60, NOW, 'later', 30)).toBe(11 * 60 + 30);
+    expect(nudgePending(12 * 60 + 35, NOW, 'earlier', 30)).toBe(12 * 60 + 5);
+    expect(nudgePending(12 * 60 + 5, NOW, 'earlier', 30)).toBeNull();
+    expect(nudgePending(11 * 60 + 30, NOW, 'earlier', 30)).toBe(11 * 60);
   });
 });

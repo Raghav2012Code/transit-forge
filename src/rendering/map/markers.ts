@@ -3,6 +3,7 @@
 // resolve to ground positions here so SceneView only places pooled meshes.
 import type { CityProblem } from '../../simulation/planning/problems.ts';
 import type { EditOp } from '../../simulation/scenario/scenario.ts';
+import { formatClock } from '../../simulation/index.ts';
 
 export type MarkerTone = 'warn' | 'bad' | 'info' | 'good';
 
@@ -112,9 +113,9 @@ export function changeMarkers(
       out.push({ id: key('rt'), x: at.x, z: at.z, tone: 'bad', label: `Removed route ${routeName(op.routeId)}`, selKind: 'route', selId: op.routeId, change: 'removed-route' });
     } else if (op.type === 'setService') {
       const at = anchors.routeMid.get(op.routeId) ?? anchors.centroid;
-      out.push({ id: key('sv'), x: at.x, z: at.z, tone: 'info', label: `Service changed: ${routeName(op.routeId)}`, selKind: 'route', selId: op.routeId, change: 'service' });
+      out.push({ id: key('sv'), x: at.x, z: at.z, tone: 'info', label: `Service changed: ${routeName(op.routeId)}${op.atMin === undefined ? '' : ` from ${formatClock(op.atMin)}`}`, selKind: 'route', selId: op.routeId, change: 'service' });
     } else if (op.type === 'setFares') {
-      out.push({ id: key('fare'), x: anchors.centroid.x, z: anchors.centroid.z, tone: 'info', label: 'Fares changed network-wide', selKind: 'zone', selId: '', change: 'fares' });
+      out.push({ id: key('fare'), x: anchors.centroid.x, z: anchors.centroid.z, tone: 'info', label: `Fares changed network-wide${op.atMin === undefined ? '' : ` from ${formatClock(op.atMin)}`}`, selKind: 'zone', selId: '', change: 'fares' });
     }
   });
   return out;

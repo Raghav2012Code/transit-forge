@@ -23,6 +23,8 @@ interface Props {
   incidents: Incident[];
   runTarget: number | null;
   onRunTo: (absoluteMinute: number) => void;
+  onRewindTo: (absoluteMinute: number) => void;
+  rewind: { target: number; progress: number } | null;
   /** Omit both to leave the reports button out. */
   reportsOpen?: boolean;
   onReports?: () => void;
@@ -61,6 +63,8 @@ export default function DayBar(p: Props) {
         incidents={p.incidents}
         runTarget={p.runTarget}
         onRunTo={p.onRunTo}
+        onRewindTo={p.onRewindTo}
+        rewind={p.rewind}
       />
       <dl className="tf-readings">
         {readings.map((r) => (

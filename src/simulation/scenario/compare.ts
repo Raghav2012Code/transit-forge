@@ -5,6 +5,7 @@ import type { NetworkData } from '../transport/network.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
 import { createSimulationFromParts, stepSimulation } from '../index.ts';
 import { computeStats } from '../statistics.ts';
+import { samplePoint, type SeriesPoint } from '../analytics/series.ts';
 import { formatCost } from './scenario.ts';
 import { computeAccessibility, type AccessibilitySet } from '../analytics/accessibility.ts';
 import { computeCoverage, type CoverageSet } from '../analytics/coverage.ts';
@@ -34,6 +35,29 @@ export function runHeadlessDetailed(
   const edgeVC: Record<string, number> = {};
   for (const id in sim.edgeState) edgeVC[id] = sim.edgeState[id].vc;
   return { stats: computeStats(sim), routePeakOcc: { ...sim.counters.routePeakOcc }, edgeVC };
+}
+
+/**
+ * Run one whole day, to `endMin`, sampling the chart series on the way (the same cadence as the live
+ * day). Timed edits in `net.timed` fire as the clock reaches them, so this is the live day, headless.
+ */
+export function runDay(
+  seed: number,
+  city: CityData,
+  net: Parameters<typeof createSimulationFromParts>[2],
+  endMin: number,
+): { stats: SimStats; series: SeriesPoint[] } {
+  let sim = createSimulationFromParts(seed, city, net);
+  const series: SeriesPoint[] = [];
+  let last = 0;
+  while (sim.timeMinutes < endMin) {
+    sim = stepSimulation(sim, 1);
+    if (sim.tick - last >= 5) {
+      last = sim.tick;
+      series.push(samplePoint(sim));
+    }
+  }
+  return { stats: computeStats(sim), series };
 }
 
 export interface ResilienceSide {

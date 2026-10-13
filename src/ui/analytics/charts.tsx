@@ -68,3 +68,47 @@ export function Bars({ values, color }: { values: { label: string; value: number
     </div>
   );
 }
+
+/**
+ * Two series on one subject, drawn on one shared scale so the gap between them is the real gap.
+ * The first is solid ink and the second is dashed and lighter: told apart by weight and dash, not hue.
+ */
+export function PairLine({
+  a,
+  b,
+  aLabel,
+  bLabel,
+  height = 64,
+}: {
+  a: number[];
+  b: number[];
+  aLabel: string;
+  bLabel: string;
+  height?: number;
+}) {
+  const max = Math.max(0.001, ...a, ...b);
+  const pts = (values: number[]) =>
+    values.map((v, i) => `${(i / Math.max(1, values.length - 1)) * W},${height - 4 - (v / max) * (height - 10)}`).join(' ');
+  return (
+    <figure className="tf-series">
+      <figcaption>
+        <span className="tf-series-key" style={{ borderTopColor: SERIES.primary, borderTopStyle: 'solid' }} aria-hidden="true" />
+        {aLabel}
+        <span className="tf-series-key" style={{ borderTopColor: SERIES.secondary, borderTopStyle: 'dashed', marginLeft: 12 }} aria-hidden="true" />
+        {bLabel}
+      </figcaption>
+      <svg
+        className="tf-chart"
+        width="100%"
+        height={height}
+        viewBox={`0 0 ${W} ${height}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`${aLabel} against ${bLabel}`}
+      >
+        <polyline points={pts(a)} fill="none" stroke={SERIES.primary} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
+        <polyline points={pts(b)} fill="none" stroke={SERIES.secondary} strokeWidth="1.6" strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+      </svg>
+    </figure>
+  );
+}

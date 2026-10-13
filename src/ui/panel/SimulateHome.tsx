@@ -17,6 +17,8 @@ interface Props {
   onLocateProblem: (p: CityProblem) => void;
   /** The network-wide fares panel. */
   fares: ReactNode;
+  /** Fork and compare the day. */
+  timeMachine: ReactNode;
   /** The last finished trips, newest first. */
   recentTrips: TripRow[];
   onOpenTrip: (id: number, kind: TripKind) => void;
@@ -27,7 +29,7 @@ interface Props {
  * look. Lines lead to their service plans, problems lead to the map, and the
  * one network-wide lever (fares) sits last.
  */
-export default function SimulateHome({ routes, peakHeadway, boardings, problems, onSelectRoute, onLocateProblem, fares, recentTrips, onOpenTrip }: Props) {
+export default function SimulateHome({ routes, peakHeadway, boardings, problems, onSelectRoute, onLocateProblem, fares, timeMachine, recentTrips, onOpenTrip }: Props) {
   const top = problems.slice(0, 5);
   return (
     <div className="tf-home">
@@ -37,6 +39,8 @@ export default function SimulateHome({ routes, peakHeadway, boardings, problems,
           Click a station, line, vehicle or district to see it here. Drag to orbit, right-drag to pan, scroll to zoom.
         </p>
       </section>
+
+      {timeMachine}
 
       <Dock title="Lines" meta={String(routes.length)}>
         <ul className="tf-line-list">

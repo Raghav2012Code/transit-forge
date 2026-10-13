@@ -12,7 +12,7 @@ import { crossesRiver } from '../city/geography.ts';
 import { connectionsForRoute, type NetworkData } from '../transport/network.ts';
 import { defaultPlanFor } from '../service/servicePlan.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
-import { COST_RATES, mergeServicePatch, sanitizeServicePatch, type EditOp, type RoadKind } from './scenario.ts';
+import { COST_RATES, isTimed, mergeServicePatch, sanitizeServicePatch, type EditOp, type RoadKind, type TimedOp } from './scenario.ts';
 import { DEFAULT_FARES, sanitizeFares, type FarePolicy } from '../economics/fares.ts';
 import type { IncidentConfig } from '../incidents/incidents.ts';
 
@@ -31,6 +31,8 @@ export interface ModifiedNetwork {
   fares: FarePolicy;
   /** Scheduled incidents from scheduleIncident ops (validated). */
   incidents: IncidentConfig[];
+  /** Service and fare edits that fire at a minute of the day, in order. Left out of `service` and `fares`. */
+  timed: TimedOp[];
 }
 
 /** Validate an incident config against a network; returns problem strings. */
@@ -296,7 +298,7 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
   const service: Record<string, ServicePlan> = {};
   for (const r of routes) service[r.id] = defaultPlanFor(r);
   for (const op of ops) {
-    if (op.type !== 'setService') continue;
+    if (op.type !== 'setService' || isTimed(op)) continue;
     const r = routes.find((x) => x.id === op.routeId);
     if (!r) {
       warnings.push(`Service edit for unknown route ${op.routeId}, skipped`);
@@ -313,8 +315,30 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
   // Fare policy: last setFares op wins (sanitized, never throws).
   let fares: FarePolicy = { ...DEFAULT_FARES };
   for (const op of ops) {
-    if (op.type === 'setFares') fares = sanitizeFares(op.fares);
+    if (op.type === 'setFares' && !isTimed(op)) fares = sanitizeFares(op.fares);
   }
+
+  const order = new Map<TimedOp, number>();
+  // Timed edits fire during the day (see stepSimulation). Validated against the final network, in
+  // order of time, with the order given breaking ties.
+  const timed: TimedOp[] = [];
+  ops.forEach((op, index) => {
+    if (!isTimed(op)) return;
+    if (op.type === 'setService') {
+      const r = routes.find((x) => x.id === op.routeId);
+      if (!r) {
+        warnings.push(`Timed service edit for unknown route ${op.routeId}, skipped`);
+        return;
+      }
+      if (r.mode === 'road') {
+        warnings.push(`Timed service edit for non-transit route ${op.routeId}, skipped`);
+        return;
+      }
+    }
+    timed.push(op);
+    order.set(op, index);
+  });
+  timed.sort((a, b) => a.atMin - b.atMin || (order.get(a) ?? 0) - (order.get(b) ?? 0));
 
   // Scheduled incidents: validated against the final network, never throw.
   const incidents: IncidentConfig[] = [];
@@ -342,5 +366,6 @@ export function applyEdits(city: CityData, base: NetworkData, ops: EditOp[]): Mo
     service,
     fares,
     incidents,
+    timed,
   };
 }

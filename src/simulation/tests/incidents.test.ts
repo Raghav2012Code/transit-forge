@@ -4,9 +4,11 @@ import {
   deriveClosures,
   incidentPresets,
   legBlocked,
+  liveIncidentConfigs,
   removeReplacement,
   segmentHopKeys,
   type IncidentConfig,
+  type LiveIncident,
 } from '../incidents/incidents.ts';
 import { criticalityAnalysis, redundancyFor, resilienceScore } from '../analytics/resilience.ts';
 import { applyEdits } from '../scenario/applyEdits.ts';
@@ -432,5 +434,26 @@ describe('presets', () => {
       expect(cfg.startMin).toBe(500);
       expect(cfg.durationMin).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('liveIncidentConfigs', () => {
+  const cfg = (id: string): IncidentConfig => ({
+    id, kind: 'route-suspension', label: id, targetRouteId: 'rt-m1',
+    startMin: 500, durationMin: 30, recoveryMin: 5, severity01: 0.5,
+  });
+  const live: LiveIncident[] = [
+    { cfg: cfg('a'), createdAtMin: 480 },
+    { cfg: cfg('b'), createdAtMin: 600 },
+  ];
+
+  it('returns everything without a bound', () => {
+    expect(liveIncidentConfigs(live).map((c) => c.id)).toEqual(['a', 'b']);
+  });
+
+  it('keeps only incidents created at or before the minute (rewinds must not resurrect later ones)', () => {
+    expect(liveIncidentConfigs(live, 480).map((c) => c.id)).toEqual(['a']);
+    expect(liveIncidentConfigs(live, 599).map((c) => c.id)).toEqual(['a']);
+    expect(liveIncidentConfigs(live, 600).map((c) => c.id)).toEqual(['a', 'b']);
   });
 });
