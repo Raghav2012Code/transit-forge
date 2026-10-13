@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { CAM_MAX_DIST, CAM_MIN_DIST, zoomPose, type CameraPose } from './camera.ts';
+import { WORLD_SCALE } from '../../simulation/city/geography.ts';
+
+const S = WORLD_SCALE;
 
 const dist = (p: CameraPose) =>
   Math.hypot(p.pos[0] - p.target[0], p.pos[1] - p.target[1], p.pos[2] - p.target[2]);
 
-const pose: CameraPose = { pos: [330, 290, 330], target: [40, 0, 0] };
+// A pose at the world's scale, so the zoom factor lands inside the (scaled)
+// control limits and is not clamped.
+const pose: CameraPose = { pos: [330 * S, 290 * S, 330 * S], target: [40 * S, 0, 0] };
 
 describe('zoomPose', () => {
   it('moves along the line of sight and keeps the target', () => {
@@ -13,7 +18,7 @@ describe('zoomPose', () => {
     expect(dist(z)).toBeCloseTo(dist(pose) * 0.5, 5);
     // Same direction: the offset vector is only scaled.
     const k = 0.5;
-    expect(z.pos[0] - 40).toBeCloseTo((pose.pos[0] - 40) * k, 5);
+    expect(z.pos[0] - 40 * S).toBeCloseTo((pose.pos[0] - 40 * S) * k, 5);
     expect(z.pos[1]).toBeCloseTo(pose.pos[1] * k, 5);
     expect(z.pos[2]).toBeCloseTo(pose.pos[2] * k, 5);
   });

@@ -14,6 +14,14 @@ import type { CameraCmd } from './map/camera.ts';
 import { resolveClick, type CycleCandidate, type CycleState } from './map/selectionCycle.ts';
 import type { MapMarker } from './map/markers.ts';
 import { getPalette, type Theme } from './palette.ts';
+import { WORLD_SCALE } from '../simulation/city/geography.ts';
+
+/** Positions multiply by this; object sizes and material detail do not. */
+const S = WORLD_SCALE;
+/** Shadow reach: ~2x the compact map so the whole view is covered, with the map
+ *  size doubled to match so texels stay as sharp per metre as before. */
+const SHADOW_REACH_MAX = 1560;
+const SHADOW_REACH_MIN = 340;
 
 export interface Layers {
   metro: boolean;
@@ -259,15 +267,15 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     scene.background = new THREE.Color(SCENE.background);
     scene.fog = new THREE.Fog(SCENE.background, P.lighting.fogNear, P.lighting.fogFar);
 
-    const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.5, 4000);
-    camera.position.set(330, 290, 330);
+    const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.5 * S, 4000 * S);
+    camera.position.set(330 * S, 290 * S, 330 * S);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(40, 0, 0);
+    controls.target.set(40 * S, 0, 0);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 60;
-    controls.maxDistance = 1000;
+    controls.minDistance = 60 * S;
+    controls.maxDistance = 1000 * S;
     controls.maxPolarAngle = Math.PI * 0.47;
     if (lastThemeRef.current !== theme && poseRef.current) {
       camera.position.fromArray(poseRef.current.pos);
@@ -279,16 +287,16 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     scene.add(new THREE.HemisphereLight(0xffffff, SCENE.land, P.lighting.hemi));
     const sun = new THREE.DirectionalLight(0xfff6ea, P.lighting.sun);
     // One sun, low enough that towers throw long shadows across the blocks.
-    sun.position.set(-260, 420, 300);
-    sun.target.position.set(100, 0, 0);
+    sun.position.set(-260 * S, 420 * S, 300 * S);
+    sun.target.position.set(100 * S, 0, 0);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(4096, 4096);
-    sun.shadow.camera.left = -760;
-    sun.shadow.camera.right = 760;
-    sun.shadow.camera.top = 760;
-    sun.shadow.camera.bottom = -760;
-    sun.shadow.camera.near = 50;
-    sun.shadow.camera.far = 1400;
+    sun.shadow.mapSize.set(8192, 8192);
+    sun.shadow.camera.left = -760 * S;
+    sun.shadow.camera.right = 760 * S;
+    sun.shadow.camera.top = 760 * S;
+    sun.shadow.camera.bottom = -760 * S;
+    sun.shadow.camera.near = 50 * S;
+    sun.shadow.camera.far = 1400 * S;
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.6;
     scene.add(sun, sun.target);
@@ -705,7 +713,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const measureSprite = new THREE.Sprite(
       new THREE.SpriteMaterial({ map: measureTex, transparent: true, depthTest: false }),
     );
-    measureSprite.scale.set(64, 12, 1);
+    measureSprite.scale.set(64 * S, 12 * S, 1);
     measureSprite.visible = false;
     measureGroup.add(measureSprite);
     let lastMeasureKey = '';
@@ -795,7 +803,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-      sprite.scale.set(34, 8.5, 1);
+      sprite.scale.set(34 * S, 8.5 * S, 1);
       const draw = () => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
@@ -1255,7 +1263,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         // are pooled sprites (perf §32).
         {
           const dist = camera.position.distanceTo(controls.target);
-          const tier = dist > 650 ? 0 : dist > 300 ? 1 : 2;
+          const tier = dist > 650 * S ? 0 : dist > 300 * S ? 1 : 2;
           labelGroup.visible = layersRef.current.labels;
           if (labelGroup.visible) {
             // Greedy placement in priority order: a label that would sit on
@@ -1346,12 +1354,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       controls.update();
       // Spend the shadow map where the camera looks: zoomed in, texels shrink.
       {
-        const reach = Math.min(780, Math.max(170, camera.position.distanceTo(controls.target) * 1.05));
+        const reach = Math.min(SHADOW_REACH_MAX, Math.max(SHADOW_REACH_MIN, camera.position.distanceTo(controls.target) * 1.05));
         const texel = (2 * reach) / sun.shadow.mapSize.x;
         const tx = Math.round(controls.target.x / texel) * texel;
         const tz = Math.round(controls.target.z / texel) * texel;
         sun.target.position.set(tx, 0, tz);
-        sun.position.set(tx - 260, 420, tz + 300);
+        sun.position.set(tx - 260 * S, 420 * S, tz + 300 * S);
         const sc = sun.shadow.camera;
         if (sc.right !== reach) {
           sc.left = -reach;

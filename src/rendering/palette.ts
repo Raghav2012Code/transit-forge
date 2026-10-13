@@ -3,6 +3,11 @@
 //
 // Everything the scene paints that is not a line colour or a condition comes
 // from here. Hex values are the sRGB of the matching oklch tokens in index.css.
+import { WORLD_SCALE } from '../simulation/city/geography.ts';
+
+/** Fog distances are positions in the world, so they scale with it. */
+const S = WORLD_SCALE;
+
 export type Theme = 'light' | 'dark';
 
 export interface ScenePalette {
@@ -95,7 +100,7 @@ const LIGHT: ScenePalette = {
     measureText: '#1b2026',
     measureEdge: '#1b6fc4',
   },
-  lighting: { ambient: 0.35, hemi: 1.15, sun: 2.3, fogNear: 1100, fogFar: 2300 },
+  lighting: { ambient: 0.35, hemi: 1.15, sun: 2.3, fogNear: 1100 * S, fogFar: 2300 * S },
 };
 
 const DARK: ScenePalette = {
@@ -141,7 +146,7 @@ const DARK: ScenePalette = {
     measureText: '#dbe4ff',
     measureEdge: '#6ea8fe',
   },
-  lighting: { ambient: 0.3, hemi: 0.8, sun: 1.7, fogNear: 900, fogFar: 2000 },
+  lighting: { ambient: 0.3, hemi: 0.8, sun: 1.7, fogNear: 900 * S, fogFar: 2000 * S },
 };
 
 export function getPalette(theme: Theme): ScenePalette {

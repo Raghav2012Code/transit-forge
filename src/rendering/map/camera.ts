@@ -2,6 +2,11 @@
 // tilt variants. No THREE dependency — poses are plain tuples and SceneView
 // converts them. All distances are clamped to the controls' limits so a
 // preset can never wedge the camera somewhere unreachable.
+import { WORLD_SCALE } from '../../simulation/city/geography.ts';
+
+/** Camera distances are positions in the world, so they scale with it. */
+const S = WORLD_SCALE;
+
 export type TiltName = 'top' | 'perspective' | 'street';
 
 export interface CameraPose {
@@ -9,8 +14,8 @@ export interface CameraPose {
   target: [number, number, number];
 }
 
-export const CAM_MIN_DIST = 60;
-export const CAM_MAX_DIST = 1000;
+export const CAM_MIN_DIST = 60 * S;
+export const CAM_MAX_DIST = 1000 * S;
 
 function clampDist(d: number): number {
   return Math.min(CAM_MAX_DIST, Math.max(CAM_MIN_DIST, d));
@@ -22,7 +27,7 @@ export function poseFor(target: { x: number; z: number }, dist: number, tilt: Ti
   if (tilt === 'top') return { pos: [target.x, d, target.z + 0.01], target: [target.x, 0, target.z] };
   if (tilt === 'street') {
     return {
-      pos: [target.x + d * 0.85, Math.max(18, d * 0.22), target.z + d * 0.4],
+      pos: [target.x + d * 0.85, Math.max(18 * S, d * 0.22), target.z + d * 0.4],
       target: [target.x, 0, target.z],
     };
   }
@@ -34,7 +39,7 @@ export function poseFor(target: { x: number; z: number }, dist: number, tilt: Ti
 
 /** Frame a set of ground points: centroid target, spread-derived distance. */
 export function focusPoints(points: { x: number; z: number }[], tilt: TiltName = 'perspective'): CameraPose {
-  if (points.length === 0) return poseFor({ x: 40, z: 0 }, 480, tilt);
+  if (points.length === 0) return poseFor({ x: 40 * S, z: 0 }, 480 * S, tilt);
   let cx = 0;
   let cz = 0;
   for (const p of points) {
@@ -45,7 +50,7 @@ export function focusPoints(points: { x: number; z: number }[], tilt: TiltName =
   cz /= points.length;
   let spread = 0;
   for (const p of points) spread = Math.max(spread, Math.hypot(p.x - cx, p.z - cz));
-  return poseFor({ x: cx, z: cz }, spread * 1.9 + 90, tilt);
+  return poseFor({ x: cx, z: cz }, spread * 1.9 + 90 * S, tilt);
 }
 
 export type PresetId = 'overview' | 'cbd' | 'airport' | 'university' | 'harbor' | 'industrial' | 'central';
@@ -61,11 +66,11 @@ export function cameraPreset(id: PresetId, input: PresetInput, tilt: TiltName = 
     const pts = input.zones.map((z) => ({ x: z.center.x, z: z.center.z }));
     return focusPoints(pts, tilt);
   }
-  if (id === 'central' && input.central) return poseFor(input.central, 150, tilt);
+  if (id === 'central' && input.central) return poseFor(input.central, 150 * S, tilt);
   const kind = id === 'cbd' ? 'cbd' : id === 'airport' ? 'airport' : id === 'university' ? 'university' : id === 'harbor' ? 'harbor' : 'industrial';
   const zone = input.zones.find((z) => z.kind === kind);
   if (!zone) return focusPoints(input.zones.map((z) => ({ x: z.center.x, z: z.center.z })), tilt);
-  return poseFor(zone.center, zone.radius * 2.4 + 80, tilt);
+  return poseFor(zone.center, zone.radius * 2.4 + 80 * S, tilt);
 }
 
 /**
