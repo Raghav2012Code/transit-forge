@@ -146,7 +146,13 @@ describe('rerouting regressions', () => {
       startMin: sim.timeMinutes,
       status: 'scheduled',
     });
-    for (let i = 0; i < 12; i++) sim = stepSimulation(sim, 1);
+    // Step until the queue at the closed station has drained into STRANDED.
+    // At world scale a reroute takes longer, so settle rather than assume a
+    // window that was calibrated to the compact map.
+    for (let i = 0; i < 240; i++) {
+      sim = stepSimulation(sim, 1);
+      if (!sim.passengers.some((p) => p.state === 'WAITING' && p.atStation === busiest.id)) break;
+    }
     // Nobody can board at a closed station: they strand, they do not keep
     // re-planning from it.
     expect(sim.passengers.filter((p) => p.state === 'WAITING' && p.atStation === busiest.id)).toHaveLength(0);
@@ -187,8 +193,10 @@ describe('rerouting regressions', () => {
       startMin: sim.timeMinutes,
       status: 'scheduled',
     });
-    // Run past resolution, so the replacement is withdrawn.
-    for (let i = 0; i < 120; i++) sim = stepSimulation(sim, 1);
+    // Run past resolution, so the replacement is withdrawn, then let riders
+    // left at the ends replan off the removed route (rides are longer at world
+    // scale, so allow a generous window).
+    for (let i = 0; i < 400; i++) sim = stepSimulation(sim, 1);
     expect(sim.routes.some((r) => r.id.startsWith('rt-rep'))).toBe(false);
     const ids = new Set(sim.routes.map((r) => r.id));
     for (const p of sim.passengers) {

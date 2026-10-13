@@ -42,17 +42,39 @@ export interface BriefFacts {
   busiestRouteId: string | null;
 }
 
+// Construction ceilings per difficulty. Recalibrated for the world-scale pass:
+// one metro station is a flat ₹450Cr (COST_RATES.metroStation), so a ceiling must
+// fund the station cap its brief imposes or the plan fails before the player
+// moves. The pre-scale ceilings (150/100/70/45 Cr) were a tenth of a single
+// station. Each tier covers one fewer station than the one above: easy = 3
+// stations + track, medium = 2, hard = 1, expert = a track-only link between
+// existing stations or a service change.
 const BUDGET: Record<Difficulty, number> = {
-  easy: 150_00_00_000,
-  medium: 100_00_00_000,
-  hard: 70_00_00_000,
-  expert: 45_00_00_000,
+  easy: 15_00_00_00_000, // 1500 Cr
+  medium: 10_00_00_00_000, // 1000 Cr
+  hard: 7_00_00_00_000, // 700 Cr
+  expert: 4_50_00_00_000, // 450 Cr
 };
+
+/**
+ * The station cap a brief may impose tracks its budget: a tier only allows as
+ * many new stations as its ceiling can fund, so a brief can never demand a plan
+ * the player cannot afford. Expert funds track or a service change, so it
+ * imposes no station cap.
+ */
+const STATION_CAP: Record<Difficulty, number | null> = { easy: 3, medium: 2, hard: 1, expert: null };
 
 const HORIZON: Record<Difficulty, number> = { easy: 5, medium: 5, hard: 10, expert: 20 };
 
 function budgetConstraint(d: Difficulty): PlanConstraint {
   return { id: `budget-${d}`, label: `Construction budget < ${BUDGET[d] / 1_00_00_000}Cr`, kind: 'budget', limit: BUDGET[d] };
+}
+
+/** The new-station cap for this difficulty, as a constraint list (empty at expert). */
+function stationConstraints(d: Difficulty): PlanConstraint[] {
+  const cap = STATION_CAP[d];
+  if (cap === null) return [];
+  return [{ id: 'stations-cap', label: `At most ${cap} new station${cap === 1 ? '' : 's'}`, kind: 'stations', limit: cap }];
 }
 
 function opConstraint(d: Difficulty, baseOpCost: number): PlanConstraint {
@@ -120,7 +142,7 @@ export function generateBriefs(facts: BriefFacts, difficulty: Difficulty, opCost
         { id: 'ap-access', title: `${a.name} accessibility > 65`, description: 'Fast airport access.', category: 'accessibility', metric: 'access-zone', targetId: a.id, op: '>', target: 65, horizonYears: horizon },
         { id: 'ap-car', title: 'Car share < 45%', description: 'Cut airport car dependency.', category: 'mode-share', metric: 'car-share', op: '<', target: 45, horizonYears: horizon },
       ],
-      constraints: [budgetConstraint(difficulty), { id: 'stations-cap', label: 'At most 3 new stations', kind: 'stations', limit: 3 }],
+      constraints: [budgetConstraint(difficulty), ...stationConstraints(difficulty)],
       focus: [{ kind: 'zone', id: a.id }],
     });
   }
@@ -201,7 +223,7 @@ export function generateBriefs(facts: BriefFacts, difficulty: Difficulty, opCost
         { id: 'ua-access', title: `${worst.name} accessibility > 60`, description: 'Lift the worst district.', category: 'accessibility', metric: 'access-zone', targetId: worst.id, op: '>', target: 60, horizonYears: horizon },
         { id: 'ua-city', title: 'City accessibility > 70', description: 'Raise the whole network.', category: 'accessibility', metric: 'accessibility', op: '>', target: 70, horizonYears: horizon },
       ],
-      constraints: [budgetConstraint(difficulty), { id: 'stations-cap', label: 'At most 3 new stations', kind: 'stations', limit: 3 }],
+      constraints: [budgetConstraint(difficulty), ...stationConstraints(difficulty)],
       focus: [{ kind: 'zone', id: worst.id }],
     });
   }

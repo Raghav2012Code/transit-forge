@@ -5,7 +5,7 @@ import type { CityData, DistrictKind, Vec3, Zone } from '../../types/index.ts';
 import { mulberry32 } from './seededRng.ts';
 import { distM as dist2D } from '../transport/network.ts';
 import { initGrowthState } from '../growth/landUse.ts';
-import { riverCentreX } from './geography.ts';
+import { riverCentreX, WORLD_SCALE } from './geography.ts';
 import { coastXAt, layoutCity, riverXAt, roadSegments } from './layout.ts';
 
 interface ZoneSpec {
@@ -34,13 +34,15 @@ const ZONE_SPECS: ZoneSpec[] = [
 
 const LAYOUTS = new Map<number, ReturnType<typeof layoutCity>>();
 
+const S = WORLD_SCALE;
+
 export function generateCity(seed: number): CityData {
   const zones: Zone[] = ZONE_SPECS.map((s) => ({
     id: s.id,
     name: s.name,
     kind: s.kind,
-    center: { x: s.x, y: 0, z: s.z },
-    radius: s.radius,
+    center: { x: s.x * S, y: 0, z: s.z * S },
+    radius: s.radius * S,
     population: s.population,
     jobs: s.jobs,
     students: 0,
@@ -56,36 +58,39 @@ export function generateCity(seed: number): CityData {
   }));
   for (const z of zones) initGrowthState(z);
 
-  // River polyline (north -> south) at x ~= 120 with gentle meander.
+  // River polyline (north -> south) at x ~= 120 with gentle meander. Sampled
+  // finely enough that the drawn polyline tracks the analytic centreline, so
+  // the placement rules and the drawn river agree at world scale.
   const river: Vec3[] = [];
-  for (let i = 0; i <= 20; i++) {
-    const z = -420 + (i / 20) * 840;
+  for (let i = 0; i <= 120; i++) {
+    const z = -420 * S + (i / 120) * 840 * S;
     const x = riverCentreX(z);
     river.push({ x, y: 0, z });
   }
 
   // Bridges carry the three east-west arterials over the river.
   const bridges = [-300, 0, 300].map((z, i) => {
-    const x = riverXAt(river, z);
+    const zz = z * S;
+    const x = riverXAt(river, zz);
     return {
       id: ['br-north', 'br-central', 'br-south'][i],
-      a: { x: x - 50, y: 0, z },
-      b: { x: x + 50, y: 0, z },
+      a: { x: x - 50 * S, y: 0, z: zz },
+      b: { x: x + 50 * S, y: 0, z: zz },
     };
   });
 
   // Major roads: deformed grid arterials + ring, as data (meshes derived).
   const roadNodes = [
-    { id: 'rn-w1', pos: { x: -300, y: 0, z: -300 } },
-    { id: 'rn-w2', pos: { x: -300, y: 0, z: 0 } },
-    { id: 'rn-w3', pos: { x: -300, y: 0, z: 300 } },
-    { id: 'rn-c1', pos: { x: 0, y: 0, z: -300 } },
+    { id: 'rn-w1', pos: { x: -300 * S, y: 0, z: -300 * S } },
+    { id: 'rn-w2', pos: { x: -300 * S, y: 0, z: 0 } },
+    { id: 'rn-w3', pos: { x: -300 * S, y: 0, z: 300 * S } },
+    { id: 'rn-c1', pos: { x: 0, y: 0, z: -300 * S } },
     { id: 'rn-c2', pos: { x: 0, y: 0, z: 0 } },
-    { id: 'rn-c3', pos: { x: 0, y: 0, z: 300 } },
-    { id: 'rn-e1', pos: { x: 300, y: 0, z: -300 } },
-    { id: 'rn-e2', pos: { x: 300, y: 0, z: 0 } },
-    { id: 'rn-e3', pos: { x: 300, y: 0, z: 300 } },
-    { id: 'rn-a1', pos: { x: 520, y: 0, z: 0 } },
+    { id: 'rn-c3', pos: { x: 0, y: 0, z: 300 * S } },
+    { id: 'rn-e1', pos: { x: 300 * S, y: 0, z: -300 * S } },
+    { id: 'rn-e2', pos: { x: 300 * S, y: 0, z: 0 } },
+    { id: 'rn-e3', pos: { x: 300 * S, y: 0, z: 300 * S } },
+    { id: 'rn-a1', pos: { x: 520 * S, y: 0, z: 0 } },
   ];
   const edgePairs: [string, string, boolean, boolean][] = [
     ['rn-w1', 'rn-c1', true, false],
@@ -129,7 +134,7 @@ export function generateCity(seed: number): CityData {
 
   // Shoreline, north to south.
   const coast: Vec3[] = [];
-  for (let z = -660; z <= 660; z += 20) coast.push({ x: coastXAt(z), y: 0, z });
+  for (let z = -660 * S; z <= 660 * S; z += 20 * S) coast.push({ x: coastXAt(z), y: 0, z });
 
   return { zones, roadNodes, roadEdges, buildings, river, bridges, coast, streets, parks, landmarks };
 }

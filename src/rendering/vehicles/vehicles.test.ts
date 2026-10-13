@@ -101,7 +101,18 @@ describe('vehicles ride the drawn route line', () => {
     expect(rig.segmentsByRoute.has(shuttle.id)).toBe(true);
     expect(rig.meshById.has(v.id)).toBe(true);
     updateVehicles(rig, [v], [rt, shuttle], 2);
-    expect(rig.meshById.get(v.id)?.userData.init).toBe(true);
+    const mesh = rig.meshById.get(v.id);
+    expect(mesh?.userData.init).toBe(true);
+    // And it rides the shuttle's own alignment, not the line it replaced.
+    const curve = rig.segmentsByRoute.get(shuttle.id)?.curve;
+    if (!curve || !mesh) throw new Error('shuttle setup failed');
+    const flat = mesh.position.clone();
+    flat.y = curve.pts[0].y;
+    let best = Infinity;
+    for (let i = 0; i + 1 < curve.pts.length; i++) {
+      best = Math.min(best, new THREE.Line3(curve.pts[i], curve.pts[i + 1]).closestPointToPoint(flat, true, new THREE.Vector3()).distanceTo(flat));
+    }
+    expect(best).toBeLessThan(1e-6);
   });
 
   it('freezes vehicles on suspended routes where they are', () => {

@@ -37,6 +37,20 @@ export function routeCurve(route: TransportRoute, byId: Map<string, Station>): T
   return buildTrackCurve(pts, MODE_Y[route.mode]);
 }
 
+/**
+ * Where a viaduct is carried on piers: every 26 m, clear of the stations
+ * (which carry their own columns). Spacing is physical metres, so a longer
+ * span gets proportionally more piers, never a gap or a double.
+ */
+export function pierArcs(curve: TrackCurve): number[] {
+  const arcs: number[] = [];
+  for (let s = 24; s < curve.length - 20; s += 26) {
+    if (curve.knots.some((k) => Math.abs(k - s) < 24)) continue;
+    arcs.push(s);
+  }
+  return arcs;
+}
+
 function boxAt(w: number, h: number, d: number, x: number, y: number, z: number, yaw: number, shade: number): THREE.BufferGeometry {
   const g = new THREE.BoxGeometry(w, h, d);
   g.rotateY(yaw);
@@ -153,8 +167,7 @@ export function buildNetworkMeshes(stations: Station[], routes: TransportRoute[]
 
       // Piers every ~26 m, clear of the stations (which carry their own columns).
       const deckBottom = y0 - DECK_T;
-      for (let s = 24; s < curve.length - 20; s += 26) {
-        if (curve.knots.some((k) => Math.abs(k - s) < 24)) continue;
+      for (const s of pierArcs(curve)) {
         const p = curve.pointAtArc(s);
         const t = curve.tangentAtArc(s);
         const yaw = Math.atan2(t.x, t.z);

@@ -3,10 +3,10 @@ import type { CityData } from '../../types/index.ts';
 import type { ScenePalette } from '../palette.ts';
 import { TrackCurve } from '../transport/trackPath.ts';
 import { merge, rectProfile, sweep } from '../transport/sweep.ts';
-import { RIVER_HALF_M } from '../../simulation/city/geography.ts';
+import { RIVER_HALF_M, WORLD_SCALE } from '../../simulation/city/geography.ts';
 
 /** Half-extent of the plate the city stands on (north-south, east, west). */
-export const PLATE = { z: 660, east: 700, west: -700 } as const;
+export const PLATE = { z: 660 * WORLD_SCALE, east: 700 * WORLD_SCALE, west: -700 * WORLD_SCALE } as const;
 /** The width the rules enforce is the width drawn. */
 export const RIVER_HALF = RIVER_HALF_M;
 const SLAB = 16;

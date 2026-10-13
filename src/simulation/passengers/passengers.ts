@@ -177,6 +177,15 @@ function finishJourney(
   if (st) st.alightedDay++;
 }
 
+/**
+ * Whether a replan finished the journey on the spot. Read through a call so the
+ * caller's control-flow narrowing on `p.state` does not hide the mutation
+ * `replanFromStation` makes to it.
+ */
+function isArrived(p: Passenger): boolean {
+  return p.state === 'ARRIVED';
+}
+
 /** Full transit plan: legs plus estimated ride time (excludes waiting). */
 export function planTrip(
   connections: Connection[],
@@ -341,30 +350,41 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
   // replan from where they stand; otherwise they strand in place. Covers both
   // WAITING (current leg) and TRANSFERRING (next leg, e.g. suspended since).
   // A leg whose route no longer exists (replacement withdrawn, route deleted)
-  // is caught even with no incident active, so no one waits on a dead leg.
+  // is caught even with no incident active, so no one waits on a dead leg. A
+  // passenger who has not yet recorded a station falls back to the leg's own
+  // board stop, so an orphaned leg can never be left stranded unreachable.
   for (const p of w.passengers) {
-    if ((p.state === 'WAITING' || p.state === 'TRANSFERRING') && p.atStation) {
+    if (p.state === 'WAITING' || p.state === 'TRANSFERRING') {
       const leg = p.legs[p.legIndex];
       const route = leg ? routeById.get(leg.routeId) : undefined;
+      const at = p.atStation ?? leg?.board ?? null;
+      if (!at) continue;
       const orphaned = !leg || !route;
-      if (!orphaned && !w.closures.active) continue;
-      if (legBlocked(leg, route?.stationIds, w.closures)) {
-        if (replanFromStation(w, p, p.atStation, zoneById)) {
+      const blocked = orphaned || (w.closures.active && legBlocked(leg, route?.stationIds, w.closures));
+      if (!blocked) continue;
+      if (replanFromStation(w, p, at, zoneById)) {
+        // A replan from a station that is already the leg's destination finishes
+        // the journey; leave it ARRIVED so it is recorded and cleared, not reset
+        // to WAITING on a dead leg (which would re-complete it every tick).
+        if (!isArrived(p)) {
           p.state = 'WAITING';
           p.transferLeft = 0;
+          p.atStation = at;
           w.counters.rerouted++;
-        } else {
-          p.state = 'STRANDED';
-          p.transferLeft = 0;
-          p.strandedMin = 0;
         }
+      } else {
+        p.state = 'STRANDED';
+        p.transferLeft = 0;
+        p.strandedMin = 0;
       }
     } else if (p.state === 'STRANDED' && p.atStation && w.closures.active) {
       if ((w.tick + p.id) % 5 === 0) {
         if (replanFromStation(w, p, p.atStation, zoneById)) {
-          p.state = 'WAITING';
-          p.strandedMin = 0;
-          w.counters.rerouted++;
+          if (!isArrived(p)) {
+            p.state = 'WAITING';
+            p.strandedMin = 0;
+            w.counters.rerouted++;
+          }
         }
       }
     }

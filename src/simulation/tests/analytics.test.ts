@@ -101,6 +101,16 @@ describe('bottlenecks and gaps', () => {
       expect(c.population).toBeGreaterThanOrEqual(0);
     }
   });
+
+  it('scans the whole city, not a fixed corner of it', () => {
+    // The scan grid follows the city bounds. If it were still pinned to the old
+    // compact-map box (x in [-450, 600], z in [-450, 450]) no candidate could
+    // land past it; a city-wide grid reaches the far districts.
+    const gaps = findTransitGaps({ ...accessInput }, 120, 8);
+    expect(gaps.length).toBeGreaterThan(0);
+    const reach = Math.max(...gaps.map((g) => Math.max(Math.abs(g.x), Math.abs(g.z))));
+    expect(reach).toBeGreaterThan(600);
+  });
 });
 
 describe('impact, score, and series', () => {

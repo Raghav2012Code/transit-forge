@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateCity } from '../city/generateCity.ts';
-import { coastXAt, crossesRiver, riverCentreX, RIVER_HALF_M } from '../city/geography.ts';
+import { CITY_BOUNDS, coastXAt, crossesRiver, riverCentreX, RIVER_HALF_M, WORLD_SCALE } from '../city/geography.ts';
+import { buildNetwork } from '../transport/network.ts';
 import { validateRoadNode, validateStationPlacement } from '../scenario/scenario.ts';
 
 describe('geography is one thing', () => {
@@ -26,7 +27,7 @@ describe('geography is one thing', () => {
   it('accepts a station on dry land beside neither', () => {
     expect(validateStationPlacement(coastXAt(0) + 40, 0)).toBeNull();
     expect(validateStationPlacement(riverCentreX(100) + RIVER_HALF_M + 20, 100)).toBeNull();
-    expect(validateStationPlacement(700, 0)).toBe('Outside city bounds');
+    expect(validateStationPlacement(CITY_BOUNDS.x + 100, 0)).toBe('Outside city bounds');
   });
 
   it('lets a road cross the river but not run into the sea', () => {
@@ -37,8 +38,23 @@ describe('geography is one thing', () => {
 
   it('knows which segments are bridges', () => {
     const c = riverCentreX(0);
-    expect(crossesRiver(c - 60, 0, c + 60, 0)).toBe(true);
-    expect(crossesRiver(c + 30, 0, c + 90, 0)).toBe(false);
-    expect(crossesRiver(c - 90, 0, c - 30, 0)).toBe(false);
+    const h = RIVER_HALF_M;
+    // A segment that spans the river is a bridge; one wholly on either bank is not.
+    expect(crossesRiver(c - (h + 25), 0, c + (h + 25), 0)).toBe(true);
+    expect(crossesRiver(c + (h + 15), 0, c + (h + 75), 0)).toBe(false);
+    expect(crossesRiver(c - (h + 75), 0, c - (h + 15), 0)).toBe(false);
+  });
+
+  it('scales a station-to-station distance by the world constant', () => {
+    // The station specs are hand-authored at compact scale and multiplied by
+    // WORLD_SCALE; central (0,0) and mid-north (-20,-140) are 141.4 m apart on
+    // the compact map, so they must be WORLD_SCALE x that in the real world.
+    const net = buildNetwork();
+    const byId = new Map(net.stations.map((s) => [s.id, s.pos]));
+    const a = byId.get('st-central');
+    const b = byId.get('st-mid-north');
+    expect(a && b).toBeTruthy();
+    const d = Math.hypot(a!.x - b!.x, a!.z - b!.z);
+    expect(d).toBeCloseTo(WORLD_SCALE * Math.hypot(20, 140), 6);
   });
 });

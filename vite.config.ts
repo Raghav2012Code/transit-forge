@@ -28,10 +28,10 @@ export default defineConfig({
     },
   },
   test: {
-    // Several simulation tests step hundreds of deterministic ticks and/or
-    // run a full headless evaluatePlan() comparison; under parallel
-    // test-worker CPU contention these can exceed Vitest's 5s default and
-    // flake even though they're not actually hung.
-    testTimeout: 15000,
+    // Several simulation tests step hundreds of deterministic ticks, run a full
+    // headless evaluatePlan() comparison, or scan a world-scale city (tens of
+    // thousands of buildings); under parallel test-worker CPU contention these
+    // can exceed a short timeout and flake even though they are not hung.
+    testTimeout: 120000,
   },
 })

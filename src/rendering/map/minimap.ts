@@ -1,6 +1,11 @@
 // Minimap math: world→SVG projection plus the camera view wedge.
 // The minimap is a lightweight SVG (no second WebGL context); this module
 // holds every number it needs. Pure and deterministic.
+import { WORLD_SCALE } from '../../simulation/city/geography.ts';
+
+/** Padding and fallback extents are world distances, so they scale with it. */
+const S = WORLD_SCALE;
+
 export interface MinimapFrame {
   minX: number;
   maxX: number;
@@ -11,7 +16,7 @@ export interface MinimapFrame {
 }
 
 /** Fit frame around points with padding, preserving no aspect (SVG scales). */
-export function frameFor(points: { x: number; z: number }[], w: number, h: number, pad = 40): MinimapFrame {
+export function frameFor(points: { x: number; z: number }[], w: number, h: number, pad = 40 * S): MinimapFrame {
   let minX = Infinity;
   let maxX = -Infinity;
   let minZ = Infinity;
@@ -23,10 +28,10 @@ export function frameFor(points: { x: number; z: number }[], w: number, h: numbe
     maxZ = Math.max(maxZ, p.z);
   }
   if (!Number.isFinite(minX)) {
-    minX = -500;
-    maxX = 500;
-    minZ = -400;
-    maxZ = 400;
+    minX = -500 * S;
+    maxX = 500 * S;
+    minZ = -400 * S;
+    maxZ = 400 * S;
   }
   return { minX: minX - pad, maxX: maxX + pad, minZ: minZ - pad, maxZ: maxZ + pad, w, h };
 }
@@ -55,7 +60,7 @@ export function cameraWedge(
   // Half-angle ~25° matching the 50° main-camera FOV.
   const cos = Math.cos(0.44);
   const sin = Math.sin(0.44);
-  const reach = Math.min(Math.max(120, dist * 1.1), Math.hypot(f.maxX - f.minX, f.maxZ - f.minZ));
+  const reach = Math.min(Math.max(120 * S, dist * 1.1), Math.hypot(f.maxX - f.minX, f.maxZ - f.minZ));
   const lx = cam.x + (ux * cos - uz * sin) * reach;
   const lz = cam.z + (ux * sin + uz * cos) * reach;
   const rx = cam.x + (ux * cos + uz * sin) * reach;

@@ -3,6 +3,9 @@
 // rendering derives meshes from this model.
 import type { Connection, Station, TransportMode, TransportRoute, Vec3 } from '../../types/index.ts';
 import type { FarePolicy } from '../economics/fares.ts';
+import { WORLD_SCALE } from '../city/geography.ts';
+
+const S = WORLD_SCALE;
 
 function v(x: number, z: number): Vec3 {
   return { x, y: 0, z };
@@ -21,20 +24,20 @@ interface StationSpec {
 }
 
 const STATION_SPECS: StationSpec[] = [
-  { id: 'st-north-res', name: 'North Residences', x: -40, z: -260, capacityPerHr: 4000 },
-  { id: 'st-mid-north', name: 'Mid North', x: -20, z: -140, capacityPerHr: 3000 },
+  { id: 'st-north-res', name: 'North Residences', x: -40 * S, z: -260 * S, capacityPerHr: 4000 },
+  { id: 'st-mid-north', name: 'Mid North', x: -20 * S, z: -140 * S, capacityPerHr: 3000 },
   { id: 'st-central', name: 'Central Interchange', x: 0, z: 0, capacityPerHr: 20000 },
-  { id: 'st-park-east', name: 'East Park', x: 90, z: -90, capacityPerHr: 3000 },
-  { id: 'st-university', name: 'University', x: 170, z: -190, capacityPerHr: 6000 },
-  { id: 'st-west-res', name: 'West Residences', x: -220, z: -60, capacityPerHr: 4000 },
-  { id: 'st-west-mid', name: 'West Mid', x: -120, z: -30, capacityPerHr: 3000 },
-  { id: 'st-old-town', name: 'Old Town', x: -130, z: 100, capacityPerHr: 3500 },
-  { id: 'st-harbor', name: 'Harbor', x: -260, z: 210, capacityPerHr: 5000 },
-  { id: 'st-ne-suburb', name: 'NE Suburb', x: 330, z: -300, capacityPerHr: 3500 },
-  { id: 'st-east-res', name: 'East Residences', x: 250, z: -140, capacityPerHr: 4000 },
-  { id: 'st-airport', name: 'Aurora Airport', x: 470, z: -40, capacityPerHr: 8000 },
-  { id: 'st-industrial', name: 'East Industrial', x: 300, z: 170, capacityPerHr: 6000 },
-  { id: 'st-south-sub', name: 'South Suburbs', x: 40, z: 300, capacityPerHr: 4000 },
+  { id: 'st-park-east', name: 'East Park', x: 90 * S, z: -90 * S, capacityPerHr: 3000 },
+  { id: 'st-university', name: 'University', x: 170 * S, z: -190 * S, capacityPerHr: 6000 },
+  { id: 'st-west-res', name: 'West Residences', x: -220 * S, z: -60 * S, capacityPerHr: 4000 },
+  { id: 'st-west-mid', name: 'West Mid', x: -120 * S, z: -30 * S, capacityPerHr: 3000 },
+  { id: 'st-old-town', name: 'Old Town', x: -130 * S, z: 100 * S, capacityPerHr: 3500 },
+  { id: 'st-harbor', name: 'Harbor', x: -260 * S, z: 210 * S, capacityPerHr: 5000 },
+  { id: 'st-ne-suburb', name: 'NE Suburb', x: 330 * S, z: -300 * S, capacityPerHr: 3500 },
+  { id: 'st-east-res', name: 'East Residences', x: 250 * S, z: -140 * S, capacityPerHr: 4000 },
+  { id: 'st-airport', name: 'Aurora Airport', x: 470 * S, z: -40 * S, capacityPerHr: 8000 },
+  { id: 'st-industrial', name: 'East Industrial', x: 300 * S, z: 170 * S, capacityPerHr: 6000 },
+  { id: 'st-south-sub', name: 'South Suburbs', x: 40 * S, z: 300 * S, capacityPerHr: 4000 },
 ];
 
 interface RouteSpec {

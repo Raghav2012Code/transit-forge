@@ -4,13 +4,22 @@ TransitForge is a sandbox where a network edit has to change simulation results,
 and where the numbers on screen have to be believable. Three decisions follow
 from that. Each is recorded in more detail in an ADR or in `AGENTS.md`.
 
+One constant is the ruler for the whole world: `WORLD_SCALE` in
+`src/simulation/city/geography.ts` multiplies every position — city bounds, coast,
+river, zones, roads, stations — by the same factor. Speeds, headways, dwells,
+street widths and building envelopes are intentionally not scaled, so enlarging
+the world lengthens trips in real minutes without enlarging the things that stand
+in it. Bumping the constant rescales the world; the pieces that are not derived
+from it (the shadow frustum's reach, the camera's near/far ratio) are tuned
+alongside it, so a scale pass also means rechecking those few.
+
 ## A tick is a time budget
 
-One simulation step is one minute. On this map a metro covers about 530 m in a
-minute and stations are 90 to 150 m apart, so the first version of the step moved
-a vehicle its full distance, served every station it crossed and applied a single
-dwell. A line was sized as if it stopped everywhere, but ran as if it stopped
-once.
+One simulation step is one minute. A metro covers about 530 m in a minute, and at
+real scale (`WORLD_SCALE = 5`) stations are 450 to 750 m apart, so a step reaches
+roughly one station. The first version of the step moved a vehicle its full
+distance, served every station it crossed and applied a single dwell. A line was
+sized as if it stopped everywhere, but ran as if it stopped once.
 
 [ADR 0002](adr/0002-a-tick-is-a-time-budget.md) changes the step to spend the
 minute as a budget per vehicle: run to the next station, serve it, pay its dwell,
@@ -22,8 +31,9 @@ traced to vehicles that really stopped where people were standing.
 
 ## The picture follows a schedule, the numbers follow the simulation
 
-Drawn at the simulation's own positions, a train that covers most of a 520 m line
-in a step is a flicker. Changing the step or the speeds would change every result.
+Drawn at the simulation's own positions, a train that jumps 530 m — a fifth of a
+2.6 km metro line — in a step is a flicker. Changing the step or the speeds would
+change every result.
 [ADR 0001](adr/0001-vehicles-follow-a-display-schedule.md) keeps the simulation
 as it is and has the renderer replay each line's service: hold at the platform,
 ease out, run, ease in, hold, turn at the ends. Only position is replayed. Load,
