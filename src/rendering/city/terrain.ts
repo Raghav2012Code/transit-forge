@@ -13,7 +13,6 @@ const SLAB = 16;
 const SEA_Y = -1.4;
 
 /** Water sits below the land, so the river and the sea read as cut into the plate. */
-export const WATER_Y = SEA_Y;
 
 function polyline(points: { x: number; z: number }[]): TrackCurve {
   return new TrackCurve(points.map((p) => new THREE.Vector3(p.x, 0, p.z)), [], [], []);

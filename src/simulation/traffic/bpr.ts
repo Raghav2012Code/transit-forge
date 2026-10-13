@@ -1,18 +1,13 @@
-// BPR-style congestion model behind a replaceable interface.
-// t = t0 * (1 + alpha * (v/c)^beta). Defaults are classic BPR alpha/beta.
+// BPR-style congestion model: t = t0 * (1 + alpha * (v/c)^beta), classic alpha/beta.
 import type { CongestionLevel } from '../../types/index.ts';
 
-export interface CongestionParams {
-  alpha: number;
-  beta: number;
-}
-
-export const DEFAULT_BPR: CongestionParams = { alpha: 0.15, beta: 4 };
+const BPR_ALPHA = 0.15;
+const BPR_BETA = 4;
 
 /** Travel-time ratio (>= 1) for a volume/capacity ratio. */
-export function bprRatio(vc: number, params: CongestionParams = DEFAULT_BPR): number {
+export function bprRatio(vc: number): number {
   const x = Math.max(0, vc);
-  return 1 + params.alpha * Math.pow(x, params.beta);
+  return 1 + BPR_ALPHA * Math.pow(x, BPR_BETA);
 }
 
 export function congestionLevel(vc: number): CongestionLevel {

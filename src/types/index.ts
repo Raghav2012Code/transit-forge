@@ -287,12 +287,6 @@ export interface RoadCounters {
   abandonedCars: number;
 }
 
-export interface PassengerCounts {
-  waitingTotal: number;
-  boardedDay: number;
-  avgWaitMin: number;
-}
-
 export interface CityData {
   zones: Zone[];
   roadNodes: RoadNode[];

@@ -155,11 +155,6 @@ export function nextRouteId(ops: EditOp[], mode: 'metro' | 'bus'): string {
   return `rt-u${prefix.toLowerCase()}${base + n + 1}`;
 }
 
-export function nextRoadIds(ops: EditOp[]): { node: string; edge: string } {
-  const n = ops.filter((o) => o.type === 'addRoad').length;
-  return { node: `rn-u${n + 1}`, edge: `re-u${n + 1}` };
-}
-
 export const ROUTE_PALETTE = ['#22d3ee', '#a3e635', '#f472b6', '#60a5fa', '#facc15', '#4ade80'];
 
 export function paletteColor(existingRoutes: number): string {

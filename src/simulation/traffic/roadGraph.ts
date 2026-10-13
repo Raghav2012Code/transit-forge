@@ -36,7 +36,7 @@ export function buildRoadGraph(city: CityData): RoadGraph {
   return { edges, freeMin, capacityPerHr, adj, edgeById };
 }
 
-export function shortNode(id: string): string {
+function shortNode(id: string): string {
   return id.replace(/^rn-/, '').toUpperCase();
 }
 

@@ -158,7 +158,7 @@ function snapCounters(sim: SimulationState) {
 }
 
 /** Advance incident lifecycles by sim time. Returns timeline events. */
-export function updateIncidentLifecycle(sim: SimulationState, _dtMin: number): IncidentEvent[] {
+export function updateIncidentLifecycle(sim: SimulationState): IncidentEvent[] {
   const events: IncidentEvent[] = [];
   const t = sim.timeMinutes;
   for (const inc of sim.incidents) {
@@ -188,7 +188,7 @@ export function updateIncidentLifecycle(sim: SimulationState, _dtMin: number): I
         events.push({ t, text: `${inc.label} — network back to 90% baseline`, level: 'good' });
       }
       if (t >= inc.startMin + inc.durationMin + inc.recoveryMin) {
-        finalizeIncident(sim, inc, t);
+        finalizeIncident(sim, inc);
         events.push({ t, text: `${inc.label} — resolved`, level: 'good' });
       }
     }
@@ -202,7 +202,7 @@ export function updateIncidentLifecycle(sim: SimulationState, _dtMin: number): I
   return events;
 }
 
-function finalizeIncident(sim: SimulationState, inc: Incident, t: number): void {
+function finalizeIncident(sim: SimulationState, inc: Incident): void {
   inc.status = 'resolved';
   const c = sim.counters;
   const s = inc.snap ?? { rerouted: 0, completed: 0, totalWaitMin: 0, cancelledTrips: 0, strandedPeak: 0 };
@@ -219,7 +219,6 @@ function finalizeIncident(sim: SimulationState, inc: Incident, t: number): void 
     ...cap,
   };
   removeReplacement(sim, inc);
-  void t;
 }
 
 /** True when a leg cannot be used under current closures. */

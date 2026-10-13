@@ -274,7 +274,7 @@ export function stepSimulation(state: SimulationState, dtMinutes = 1): Simulatio
   }
   // Disruptions first: lifecycle transitions, then effective closures.
   // A changed incident set invalidates cached road paths immediately.
-  const lifecycleEvents = updateIncidentLifecycle(state, dtMinutes);
+  const lifecycleEvents = updateIncidentLifecycle(state);
   state.closures = deriveClosures(state.incidents, state.routes);
   const sig = closureSignature(state.incidents);
   if (sig !== state.closureSig) {

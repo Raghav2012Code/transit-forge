@@ -15,7 +15,7 @@ const RATES: Record<string, CostRates> = {
   bus: { perVehHr: 16, perVehKm: 1.4, perVehicleDay: 60 },
 };
 
-export function costRatesFor(mode: TransportMode): CostRates {
+function costRatesFor(mode: TransportMode): CostRates {
   return RATES[mode] ?? RATES.bus;
 }
 
