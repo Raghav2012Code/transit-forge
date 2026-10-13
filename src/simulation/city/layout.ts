@@ -2,12 +2,16 @@
 // streets and the same buildings. Nothing here feeds the simulation (demand
 // comes from zone populations); it is what the map is drawn from.
 import type { Building, CityData, DistrictKind, Landmark, Park, RoadEdge, Street, Vec3, Zone } from '../../types/index.ts';
-import { coastXAt, RIVER_HALF_M as WATER_HALF } from './geography.ts';
+import { coastXAt, RIVER_HALF_M as WATER_HALF, WORLD_SCALE } from './geography.ts';
 import type { Rng } from './seededRng.ts';
 
 export { coastXAt };
 
 const BEACH = 12; // keep lots this far from the shoreline
+
+// One ruler for positions and long-run lengths of the hand-placed landmarks.
+// Strip widths and building envelopes are genuinely physical and stay as they are.
+const S = WORLD_SCALE;
 
 export function riverXAt(river: Vec3[], z: number): number {
   if (river.length === 0) return 120;
@@ -274,17 +278,17 @@ export function layoutCity(input: LayoutInput, rand: Rng): Layout {
   const har = zones.findIndex((z) => z.kind === 'harbor');
   if (air >= 0) {
     const c = zones[air].center;
-    strip('runway', c.x - 100, c.z - 86, c.x + 118, c.z - 86, 26);
-    strip('taxiway', c.x - 70, c.z - 54, c.x + 98, c.z - 54, 10);
-    strip('taxiway', c.x - 40, c.z - 86, c.x - 40, c.z - 54, 9);
-    strip('taxiway', c.x + 64, c.z - 86, c.x + 64, c.z - 54, 9);
+    strip('runway', c.x - 100 * S, c.z - 86 * S, c.x + 118 * S, c.z - 86 * S, 26);
+    strip('taxiway', c.x - 70 * S, c.z - 54 * S, c.x + 98 * S, c.z - 54 * S, 10);
+    strip('taxiway', c.x - 40 * S, c.z - 86 * S, c.x - 40 * S, c.z - 54 * S, 9);
+    strip('taxiway', c.x + 64 * S, c.z - 86 * S, c.x + 64 * S, c.z - 54 * S, 9);
   }
   if (har >= 0) {
     const c = zones[har].center;
     for (const dz of [-50, -2, 46]) {
-      const z = c.z + dz;
+      const z = c.z + dz * S;
       const x0 = coastXAt(z) + 6;
-      strip('pier', x0, z, x0 - 78, z, 16);
+      strip('pier', x0, z, x0 - 78 * S, z, 16);
     }
   }
 
@@ -292,11 +296,11 @@ export function layoutCity(input: LayoutInput, rand: Rng): Layout {
   if (air >= 0) {
     const c = zones[air].center;
     // The terminal sits east of the station, clear of the line that comes in from the west.
-    place(air, c.x + 65, c.z + 14, 80, 24, 17, 0, 'airport', { free: true });
-    place(air, c.x - 84, c.z - 22, 38, 30, 13, 0, 'airport', { free: true });
-    place(air, c.x + 100, c.z - 22, 38, 30, 13, 0, 'airport', { free: true });
-    place(air, c.x + 50, c.z - 42, 8, 8, 34, 0, 'airport', { free: true });
-    for (let i = 0; i < 2; i++) place(air, c.x + 35 + i * 25, c.z - 11, 8, 20, 6, 0, 'airport', { free: true });
+    place(air, c.x + 65 * S, c.z + 14 * S, 80, 24, 17, 0, 'airport', { free: true });
+    place(air, c.x - 84 * S, c.z - 22 * S, 38, 30, 13, 0, 'airport', { free: true });
+    place(air, c.x + 100 * S, c.z - 22 * S, 38, 30, 13, 0, 'airport', { free: true });
+    place(air, c.x + 50 * S, c.z - 42 * S, 8, 8, 34, 0, 'airport', { free: true });
+    for (let i = 0; i < 2; i++) place(air, c.x + (35 + i * 25) * S, c.z - 11 * S, 8, 20, 6, 0, 'airport', { free: true });
   }
 
   // --- Block lots per district. ---------------------------------------------
