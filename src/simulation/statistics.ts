@@ -53,6 +53,8 @@ export function computeStats(sim: SimulationState): SimStats {
   let vcSum = 0;
   let vcN = 0;
   for (const id in sim.edgeState) {
+    // A closed edge carries no traffic; its sentinel vc must not drag the mean.
+    if (sim.edgeState[id].closed) continue;
     vcSum += sim.edgeState[id].vc;
     vcN++;
   }

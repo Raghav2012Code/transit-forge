@@ -377,7 +377,9 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
         p.transferLeft = 0;
         p.strandedMin = 0;
       }
-    } else if (p.state === 'STRANDED' && p.atStation && w.closures.active) {
+    } else if (p.state === 'STRANDED' && p.atStation) {
+      // Retry periodically whether or not an incident is active: service may
+      // have been restored (or the route rebuilt) since they stranded.
       if ((w.tick + p.id) % 5 === 0) {
         if (replanFromStation(w, p, p.atStation, zoneById)) {
           if (!isArrived(p)) {
@@ -412,6 +414,7 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
     } else if (p.state === 'STRANDED') {
       p.waitMin += dtMin;
       p.strandedMin += dtMin;
+      w.counters.strandedMin += dtMin;
       if (disrupted) w.counters.incidentDelayMin += dtMin;
       if (p.strandedMin >= 45) {
         // Gave up (taxi home off-sim): remove without completing.

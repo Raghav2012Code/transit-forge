@@ -42,7 +42,10 @@ export function reconcileFleet(sim: SimulationState, routeId: string): void {
   const total = Math.max(1, cum[cum.length - 1]);
   const cycle = cycleMin(total, plan, route.stationIds.length);
   const h = headwayAt(plan, sim.timeMinutes);
-  const desired = plan.fleetSize > 0 ? plan.fleetSize : Number.isFinite(h) ? fleetRequired(cycle, h) : 0;
+  // Outside the operating window headwayAt is Infinity; there is no service to
+  // size for, so leave the fleet alone rather than deleting every vehicle.
+  if (!Number.isFinite(h) && plan.fleetSize <= 0) return;
+  const desired = plan.fleetSize > 0 ? plan.fleetSize : fleetRequired(cycle, h);
   const existing = sim.vehicles.filter((v) => v.routeId === routeId);
   if (existing.length < desired) {
     for (let i = existing.length; i < desired; i++) {

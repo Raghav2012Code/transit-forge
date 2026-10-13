@@ -10,6 +10,7 @@ import type {
 import type { Connection } from '../../types/index.ts';
 import type { RoadGraph } from '../traffic/roadGraph.ts';
 import { findShortestPath } from '../transport/graph.ts';
+import { WORLD_SCALE } from '../city/geography.ts';
 import { findRoadPath } from '../traffic/roadGraph.ts';
 import { ZONE_ACCESS } from '../passengers/demand.ts';
 
@@ -249,7 +250,7 @@ export function redundancyFor(
     if (!st) return { level: 'Low', lines: ['Unknown station.'] };
     const metro = st.routeIds.filter((r) => base.routes.find((x) => x.id === r)?.mode === 'metro').length;
     const bus = st.routeIds.filter((r) => base.routes.find((x) => x.id === r)?.mode === 'bus').length;
-    const nearby = base.stations.filter((s) => s.id !== id && Math.hypot(s.pos.x - st.pos.x, s.pos.z - st.pos.z) < 600).length;
+    const nearby = base.stations.filter((s) => s.id !== id && Math.hypot(s.pos.x - st.pos.x, s.pos.z - st.pos.z) < 600 * WORLD_SCALE).length;
     const nodeById = new Map(base.city.roadNodes.map((n) => [n.id, n.pos]));
     let roadAlts = 0;
     for (const e of base.roadGraph.edges) {
@@ -258,7 +259,7 @@ export function redundancyFor(
       if (!a || !b) continue;
       const mx = (a.x + b.x) / 2;
       const mz = (a.z + b.z) / 2;
-      if (Math.hypot(mx - st.pos.x, mz - st.pos.z) < 400) roadAlts++;
+      if (Math.hypot(mx - st.pos.x, mz - st.pos.z) < 400 * WORLD_SCALE) roadAlts++;
     }
     const score = metro * 2 + bus + Math.min(2, nearby) + Math.min(2, roadAlts);
     return {

@@ -99,7 +99,7 @@ export function buildBusRoadMap(
 
 /** Background (non-simulated) demand: through-traffic with AM/PM peaks. */
 export function baseVC(edgeId: string, timeMin: number, graph: RoadGraph): number {
-  const h = timeMin / 60;
+  const h = (((timeMin / 60) % 24) + 24) % 24;
   const am = Math.exp(-Math.pow(h - 8.2, 2) / (2 * 1.1 * 1.1));
   const pm = Math.exp(-Math.pow(h - 17.6, 2) / (2 * 1.2 * 1.2));
   const e = graph.edgeById.get(edgeId);

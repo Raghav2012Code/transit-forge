@@ -5,6 +5,7 @@ import type { NetworkData } from '../transport/network.ts';
 import type { ServicePlan } from '../service/servicePlan.ts';
 import type { IncidentConfig } from '../incidents/incidents.ts';
 import { applyEdits, type ModifiedNetwork } from './applyEdits.ts';
+import { WORLD_SCALE } from '../city/geography.ts';
 import {
   compareHorizons,
   compareResilience,
@@ -73,7 +74,7 @@ export function constraintInputs(
     if (op.type !== 'addStation') continue;
     for (const z of mod.city.zones) {
       const d = Math.hypot(z.center.x - op.station.x, z.center.z - op.station.z);
-      if (d <= z.radius + 800) affected.add(z.id);
+      if (d <= z.radius + 800 * WORLD_SCALE) affected.add(z.id);
     }
   }
   return { constructionCost: mod.cost, opCostPerDay, subsidyPerDay, newStations, districtsAffected: affected.size };

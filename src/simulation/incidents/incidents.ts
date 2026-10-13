@@ -118,7 +118,7 @@ export function deriveClosures(incidents: Incident[], routes: TransportRoute[]):
       case 'road-capacity': {
         const mult = inc.capacityMult ?? 0.5;
         for (const e of inc.edgeIds ?? []) {
-          c.closedEdges.delete(e);
+          // A capacity cut never re-opens an edge another incident closed.
           c.edgeCapMult.set(e, Math.min(c.edgeCapMult.get(e) ?? 1, mult));
         }
         break;
@@ -541,7 +541,7 @@ export function detectThresholdEvents(sim: SimulationState): IncidentEvent[] {
   }
   for (const id in sim.edgeState) {
     const st = sim.edgeState[id];
-    if (st.vc >= 0.85) {
+    if (!st.closed && st.vc >= 0.85) {
       flag(`cong:${id}`, `Road ${id} heavily congested (V/C ${st.vc.toFixed(2)})`, 'warn');
     }
   }

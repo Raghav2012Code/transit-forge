@@ -9,6 +9,7 @@ import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overla
 import { generateCity } from './simulation/city/generateCity.ts';
 import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
 import { advanceReplayFor, postForkWholeDayOps, replayProgress01, startReplay } from './simulation/replay.ts';
+import { WORLD_SCALE } from './simulation/city/geography.ts';
 import { runDayInWorker } from './workers/client.ts';
 import ForkCard, { type ForkResult } from './ui/day/ForkCard.tsx';
 import { dayStartOf, rewindFloor } from './ui/shell/dayStrip.ts';
@@ -1632,7 +1633,7 @@ export default function App() {
   function focusSelectionOf(sel: Selection) {
     const at = anchorOf(sel);
     if (!at) return;
-    const dist = sel.kind === 'zone' ? 320 : 170;
+    const dist = (sel.kind === 'zone' ? 320 : 170) * WORLD_SCALE;
     const pose = poseFor(at, dist, tilt);
     requestCameraPose(pose.pos, pose.target);
   }
@@ -1645,7 +1646,7 @@ export default function App() {
     const st = snapshot.stations.find((s) => s.id === id);
     if (!st) return;
     setSelection({ kind: 'station', id });
-    const pose = poseFor({ x: st.pos.x, z: st.pos.z }, 170, tilt);
+    const pose = poseFor({ x: st.pos.x, z: st.pos.z }, 170 * WORLD_SCALE, tilt);
     requestCameraPose(pose.pos, pose.target);
   }
 
@@ -1663,7 +1664,7 @@ export default function App() {
             ? mapAnchors.routeMid.get(target.id) ?? null
             : mapAnchors.roadMid.get(target.id) ?? null;
     if (at) {
-      const pose = poseFor(at, 220, tilt);
+      const pose = poseFor(at, 220 * WORLD_SCALE, tilt);
       requestCameraPose(pose.pos, pose.target);
     }
     announceSelection({ kind: target.kind, id: target.id });
@@ -1685,12 +1686,14 @@ export default function App() {
               ? `vehicle on ${snapshot.routes.find((r) => r.id === snapshot.vehicles.find((v) => v.id === sel.id)?.routeId)?.name ?? 'a route'}`
               : sel.kind === 'incident'
                 ? (snapshot.incidents.find((i) => i.id === sel.id)?.label ?? 'disruption')
-                : (problems.find((p) => p.id === sel.id)?.title ?? 'planning problem');
+                : sel.kind === 'road'
+                  ? sel.id
+                  : (problems.find((p) => p.id === sel.id)?.title ?? 'planning problem');
     setAnnouncement(`Selected ${sel.kind}: ${label}.`);
   }
 
   function minimapJump(x: number, z: number) {
-    const dist = camInfo ? camInfo.dist : 480;
+    const dist = camInfo ? camInfo.dist : 480 * WORLD_SCALE;
     const pose = poseFor({ x, z }, dist, tilt);
     requestCameraPose(pose.pos, pose.target);
   }
@@ -1792,7 +1795,7 @@ export default function App() {
   function pickSearchResult(e: SearchEntry) {
     if (e.kind === 'district') setSelection({ kind: 'zone', id: e.id });
     else setSelection({ kind: e.kind, id: e.id });
-    const pose = poseFor({ x: e.x, z: e.z }, e.kind === 'district' ? 320 : 170, tilt);
+    const pose = poseFor({ x: e.x, z: e.z }, (e.kind === 'district' ? 320 : 170) * WORLD_SCALE, tilt);
     requestCameraPose(pose.pos, pose.target);
     announceSelection(e.kind === 'district' ? { kind: 'zone', id: e.id } : { kind: e.kind, id: e.id });
   }
@@ -1807,6 +1810,7 @@ export default function App() {
       return snapshot.routes.find((r) => r.id === vv?.routeId)?.name ?? 'Vehicle';
     }
     if (sel.kind === 'incident') return snapshot.incidents.find((i) => i.id === sel.id)?.label ?? 'Disruption';
+    if (sel.kind === 'road') return sel.id;
     return problems.find((p) => p.id === sel.id)?.title ?? 'Problem';
   }
 
@@ -1857,10 +1861,10 @@ export default function App() {
         focus,
         { label: 'Build connection from here', run: () => startMetroFrom(sel.id) },
         {
-          label: catchmentRadius === 800 ? 'Hide catchment' : 'Show catchment (800m)',
+          label: catchmentRadius !== null ? 'Hide catchment' : 'Show catchment (800m)',
           run: () => {
             setSelection(sel);
-            setCatchmentRadius(catchmentRadius === 800 ? null : 800);
+            setCatchmentRadius(catchmentRadius !== null ? null : 800);
           },
         },
         { label: 'Show accessibility', run: () => setOverlay('accessibility') },

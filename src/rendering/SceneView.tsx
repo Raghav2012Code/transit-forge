@@ -486,6 +486,10 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       renderer.setSize(w, h);
     };
     window.addEventListener('resize', onResize);
+    // The stage resizes without a window event when the side panel toggles or a
+    // narrow layout opens it, so watch the mount itself.
+    const ro = new ResizeObserver(onResize);
+    ro.observe(mount);
 
     const selRing = new THREE.Mesh(
       new THREE.TorusGeometry(7, 0.8, 8, 32),
@@ -1381,6 +1385,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
 
     return () => {
       cancelAnimationFrame(raf);
+      ro.disconnect();
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('click', handleClick);
       renderer.domElement.removeEventListener('mousemove', handleHover);
@@ -1397,6 +1402,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
         else if (mat) mat.dispose();
       });
+      // Shared draft resources are only reached by the traversal above while a
+      // draft mesh exists, so dispose them here too.
+      draftMat.dispose();
+      draftDotGeo.dispose();
+      draftDotMat.dispose();
+      hoverDotMat.dispose();
       renderer.dispose();
       mount.removeChild(renderer.domElement);
     };

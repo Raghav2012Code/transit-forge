@@ -83,14 +83,14 @@ export function findTransitGaps(input: GapInput, cellM = 60 * S, top = 8): GapCa
   const maxPop = Math.max(1, ...cells.map((c) => c.population));
   for (const c of cells) {
     const popN = c.population / maxPop;
-    const distN = Math.min(1, c.nearestStationM / (1500 * S));
-    const timeN = c.cbdMin === null ? 1 : Math.min(1, c.cbdMin / (45 * S));
+    const distN = Math.min(1, c.nearestStationM / 1500);
+    const timeN = c.cbdMin === null ? 1 : Math.min(1, c.cbdMin / 45);
     c.score = Math.round((0.5 * popN + 0.3 * distN + 0.2 * timeN) * 1000) / 10;
     if (popN > 0.5) c.reasons.push('High population');
     if (c.cbdMin === null) c.reasons.push('No transit path to CBD');
-    else if (c.cbdMin > 30 * S) c.reasons.push('Poor CBD accessibility');
-    if (c.nearestRapidM < 0 || c.nearestRapidM > 1200 * S) c.reasons.push('No rapid transit');
-    if (c.nearestStationM > 800 * S) c.reasons.push('Low station coverage');
+    else if (c.cbdMin > 30) c.reasons.push('Poor CBD accessibility');
+    if (c.nearestRapidM < 0 || c.nearestRapidM > 1200) c.reasons.push('No rapid transit');
+    if (c.nearestStationM > 800) c.reasons.push('Low station coverage');
     if (c.reasons.length === 0) c.reasons.push('Moderate gap');
   }
   return cells.sort((a, b) => b.score - a.score).slice(0, top);
