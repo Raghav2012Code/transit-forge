@@ -42,11 +42,19 @@ export interface BriefFacts {
   busiestRouteId: string | null;
 }
 
+// Construction ceilings per difficulty. Recalibrated for the world-scale pass:
+// the airport and uneven-access briefs cap new stations at three, and one metro
+// station is a flat ₹450Cr (COST_RATES.metroStation), so a ceiling below 3 x that
+// cannot fund the plan it demands. The pre-scale ceilings (150/100/70/45 Cr) were
+// a tenth of a single station, so every station-building brief failed its budget
+// before the player moved. Each tier now covers one fewer station than the one
+// above: easy = 3 stations + track, medium = 2, hard = 1, expert = a track-only
+// link between existing stations or a service change.
 const BUDGET: Record<Difficulty, number> = {
-  easy: 150_00_00_000,
-  medium: 100_00_00_000,
-  hard: 70_00_00_000,
-  expert: 45_00_00_000,
+  easy: 15_00_00_00_000, // 1500 Cr
+  medium: 10_00_00_00_000, // 1000 Cr
+  hard: 7_00_00_00_000, // 700 Cr
+  expert: 4_50_00_00_000, // 450 Cr
 };
 
 const HORIZON: Record<Difficulty, number> = { easy: 5, medium: 5, hard: 10, expert: 20 };

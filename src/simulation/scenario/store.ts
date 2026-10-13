@@ -1,6 +1,8 @@
 // Browser-local scenario persistence. Versioned envelope so the schema can
-// evolve; unknown versions are ignored rather than crashing.
-import type { Scenario } from './scenario.ts';
+// evolve; unknown versions are ignored rather than crashing. Version 2 is the
+// world-scale format: version-1 saves carry old-metre coordinates and are
+// dropped, never loaded onto the wrong place.
+import { SCENARIO_VERSION, type Scenario } from './scenario.ts';
 
 const KEY = 'transitforge.scenarios.v1';
 /** Keep the store bounded so it cannot grow until the quota fails. */
@@ -28,14 +30,19 @@ export function storageWrite(key: string, value: unknown): boolean {
 }
 
 interface Envelope {
-  version: 1;
+  version: typeof SCENARIO_VERSION;
   scenarios: Scenario[];
 }
 
 function readEnvelope(): Envelope {
-  const parsed = storageRead<Envelope>(KEY, { version: 1, scenarios: [] });
-  if (parsed.version !== 1 || !Array.isArray(parsed.scenarios)) return { version: 1, scenarios: [] };
-  return { version: 1, scenarios: parsed.scenarios.filter((s) => s && s.version === 1 && Array.isArray(s.ops)) };
+  const parsed = storageRead<Envelope>(KEY, { version: SCENARIO_VERSION, scenarios: [] });
+  if (parsed.version !== SCENARIO_VERSION || !Array.isArray(parsed.scenarios)) {
+    return { version: SCENARIO_VERSION, scenarios: [] };
+  }
+  return {
+    version: SCENARIO_VERSION,
+    scenarios: parsed.scenarios.filter((s) => s && s.version === SCENARIO_VERSION && Array.isArray(s.ops)),
+  };
 }
 
 function writeEnvelope(env: Envelope): boolean {
@@ -51,10 +58,13 @@ export function listScenarios(): Scenario[] {
   return readEnvelope().scenarios;
 }
 
-export function saveScenario(s: Scenario): boolean {
+/** A scenario to save; the version is stamped here, so callers need not set it. */
+export type ScenarioInput = Omit<Scenario, 'version'> & { version?: number };
+
+export function saveScenario(s: ScenarioInput): boolean {
   const env = readEnvelope();
   const idx = env.scenarios.findIndex((x) => x.id === s.id);
-  const stamped = { ...s, updatedAt: Date.now() };
+  const stamped: Scenario = { ...s, version: SCENARIO_VERSION, updatedAt: Date.now() };
   if (idx < 0) env.scenarios.push(stamped);
   else env.scenarios[idx] = stamped;
   return writeEnvelope(env);
@@ -71,6 +81,7 @@ let copySeq = 0;
 export function duplicateScenario(s: Scenario): boolean {
   const copy: Scenario = {
     ...s,
+    version: SCENARIO_VERSION,
     id: `sc-${Date.now().toString(36)}-${(copySeq++).toString(36)}-copy`,
     name: `${s.name} (copy)`,
     ops: s.ops.map((o) => ({ ...o })),
@@ -83,13 +94,14 @@ export function duplicateScenario(s: Scenario): boolean {
 
 /** Serialize one scenario for export / tests (same envelope version). */
 export function serializeScenario(s: Scenario): string {
-  return JSON.stringify({ version: 1 as const, scenario: s });
+  return JSON.stringify({ version: SCENARIO_VERSION, scenario: s });
 }
 
 export function deserializeScenario(raw: string): Scenario | null {
   try {
     const parsed = JSON.parse(raw) as { version: number; scenario: Scenario };
-    if (parsed.version !== 1 || !parsed.scenario || !Array.isArray(parsed.scenario.ops)) return null;
+    if (parsed.version !== SCENARIO_VERSION) return null;
+    if (!parsed.scenario || parsed.scenario.version !== SCENARIO_VERSION || !Array.isArray(parsed.scenario.ops)) return null;
     return parsed.scenario;
   } catch {
     return null;

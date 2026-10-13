@@ -9,7 +9,7 @@ import {
   type MetricsBundle,
   type Objective,
 } from '../planning/objectives.ts';
-import { generateBriefs } from '../planning/briefs.ts';
+import { generateBriefs, type Difficulty } from '../planning/briefs.ts';
 import { detectProblems } from '../planning/problems.ts';
 import { recommendFor, type RecContext } from '../planning/recommendations.ts';
 import { summarizeOps } from '../planning/intervention.ts';
@@ -20,7 +20,7 @@ import { deletePlan, listPlans, savePlan } from '../planning/planStore.ts';
 import { buildUtilization } from '../analytics/utilization.ts';
 import { computeAccessibility } from '../analytics/accessibility.ts';
 import { createSimulationFromParts, stepSimulation } from '../index.ts';
-import type { EditOp } from '../scenario/scenario.ts';
+import { COST_RATES, type EditOp } from '../scenario/scenario.ts';
 
 const SEED = 1337;
 
@@ -159,6 +159,32 @@ describe('briefs', () => {
     const expert = generateBriefs(facts, 'expert', 8000);
     expect(expert.find((x) => x.id === 'network-resilience')).toBeDefined();
     expect(expert[0].horizonYears).toBe(20);
+  });
+
+  it('budgets cover the station cap each brief imposes', () => {
+    const facts = {
+      transitShare: 50, avgCongestion: 0.9, avgTravelMin: 30, maxOccupancy: 97,
+      accessScore: 70, coveragePct: 80, opCost: 8000, population: 200000,
+      worstRoute: { id: 'rt-m1', name: 'M1', occ: 97 },
+      worstEdge: null, worstBridge: null, lowAccessZones: [], growthZones: [],
+      airportZone: null, centralStationId: null, busiestRouteId: 'rt-m1',
+    };
+    const budgetLimit = (d: Difficulty) => {
+      const brief = generateBriefs(facts, d, 8000)[0];
+      const budget = brief.constraints.find((c) => c.kind === 'budget');
+      if (!budget) throw new Error(`${d} brief has no budget constraint`);
+      return budget.limit;
+    };
+    // One metro station is a flat ₹450Cr; a brief that caps new stations at
+    // three must be able to fund three. Each lower tier funds one fewer.
+    const station = COST_RATES.metroStation;
+    expect(budgetLimit('easy')).toBeGreaterThanOrEqual(3 * station);
+    expect(budgetLimit('medium')).toBeGreaterThanOrEqual(2 * station);
+    expect(budgetLimit('hard')).toBeGreaterThanOrEqual(1 * station);
+    expect(budgetLimit('expert')).toBeGreaterThanOrEqual(1 * station);
+    expect(budgetLimit('easy')).toBeGreaterThan(budgetLimit('medium'));
+    expect(budgetLimit('medium')).toBeGreaterThan(budgetLimit('hard'));
+    expect(budgetLimit('hard')).toBeGreaterThan(budgetLimit('expert'));
   });
 });
 
@@ -401,6 +427,31 @@ describe('intervention summary and reports', () => {
     });
     deletePlan('plan-test-1');
     expect(listPlans().some((p) => p.id === 'plan-test-1')).toBe(false);
+  });
+
+  it('drops a version-1 saved-plan envelope rather than loading old-metre plans', () => {
+    const store = new Map<string, string>();
+    const fake = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+      removeItem: (k: string) => { store.delete(k); },
+    };
+    const prev = (globalThis as { localStorage?: unknown }).localStorage;
+    (globalThis as { localStorage?: unknown }).localStorage = fake;
+    try {
+      store.set('transitforge.plans.v1', JSON.stringify({
+        version: 1,
+        plans: [{ id: 'plan-old', name: 'Old', seed: SEED, briefId: null, ops: [], objectives: [], constraints: [], horizonYears: 0, createdAt: 0, attempts: [] }],
+      }));
+      expect(listPlans()).toEqual([]);
+      savePlan({
+        id: 'plan-new', name: 'New', seed: SEED, briefId: null, ops: [],
+        objectives: [], constraints: [], horizonYears: 0, createdAt: 0, attempts: [],
+      });
+      expect(listPlans().map((p) => p.id)).toEqual(['plan-new']);
+    } finally {
+      (globalThis as { localStorage?: unknown }).localStorage = prev;
+    }
   });
 
   it('generates briefs from a live snapshot and evaluates a crowd objective', () => {

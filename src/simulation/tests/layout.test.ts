@@ -59,6 +59,9 @@ function segDist(px: number, pz: number, a: { x: number; z: number }, b: { x: nu
   return Math.hypot(px - (a.x + dx * t), pz - (a.z + dz * t));
 }
 
+// The city is at world scale (tens of thousands of buildings), so the
+// pair-wise geometry checks below are heavier than a short timeout allows.
+// The checks are correct; the vitest config gives them the headroom.
 describe('city layout', () => {
   it('is deterministic and rich enough to read as a city', () => {
     const again = generateCity(1337);

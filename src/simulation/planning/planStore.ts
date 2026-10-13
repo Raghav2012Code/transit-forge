@@ -31,20 +31,26 @@ export interface SavedPlan {
 }
 
 const KEY = 'transitforge.plans.v1';
+/**
+ * Bumped to 2 for the world-scale pass. A version-1 plan carries old-metre
+ * coordinates, so it is dropped rather than loaded onto the wrong place; the
+ * plan envelope has no per-plan version, so the envelope version gates it.
+ */
+const PLAN_VERSION = 2 as const;
 /** Keep the store bounded so it cannot grow until the quota fails. */
 const MAX_PLANS = 50;
 const MAX_ATTEMPTS = 20;
 
 interface Envelope {
-  version: 1;
+  version: typeof PLAN_VERSION;
   plans: SavedPlan[];
 }
 
 function readEnvelope(): Envelope {
-  const parsed = storageRead<Envelope>(KEY, { version: 1, plans: [] });
-  if (parsed.version !== 1 || !Array.isArray(parsed.plans)) return { version: 1, plans: [] };
+  const parsed = storageRead<Envelope>(KEY, { version: PLAN_VERSION, plans: [] });
+  if (parsed.version !== PLAN_VERSION || !Array.isArray(parsed.plans)) return { version: PLAN_VERSION, plans: [] };
   return {
-    version: 1,
+    version: PLAN_VERSION,
     plans: parsed.plans.filter((p) => p && typeof p.id === 'string' && Array.isArray(p.ops) && Array.isArray(p.attempts)),
   };
 }
@@ -54,7 +60,7 @@ function writeEnvelope(env: Envelope): boolean {
     .toSorted((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
     .slice(0, MAX_PLANS)
     .map((p) => (p.attempts.length > MAX_ATTEMPTS ? { ...p, attempts: p.attempts.slice(-MAX_ATTEMPTS) } : p));
-  return storageWrite(KEY, { version: 1, plans });
+  return storageWrite(KEY, { version: PLAN_VERSION, plans });
 }
 
 export function listPlans(): SavedPlan[] {

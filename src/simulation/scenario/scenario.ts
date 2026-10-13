@@ -104,8 +104,17 @@ export function isTimed(op: EditOp): op is TimedOp {
   return (op.type === 'setService' || op.type === 'setFares') && typeof op.atMin === 'number' && Number.isFinite(op.atMin);
 }
 
+/**
+ * Save-format version. Bumped to 2 for the world-scale pass: before it, every
+ * saved coordinate was in the old (~1.2 km) metre, so a pre-scale scenario or
+ * plan would load onto the wrong place in the 5x city. Stores reject version 1
+ * rather than silently loading it. The store stamps this on save, so callers
+ * never set it by hand.
+ */
+export const SCENARIO_VERSION = 2 as const;
+
 export interface Scenario {
-  version: 1;
+  version: typeof SCENARIO_VERSION;
   id: string;
   name: string;
   seed: number;
@@ -115,7 +124,7 @@ export interface Scenario {
 
 export function createScenario(name: string, seed: number): Scenario {
   const n = Math.floor(Math.abs(seed * 2654435761 + Date.now() % 100000) % 100000);
-  return { version: 1, id: `sc-${Date.now().toString(36)}-${n}`, name, seed, ops: [], updatedAt: Date.now() };
+  return { version: SCENARIO_VERSION, id: `sc-${Date.now().toString(36)}-${n}`, name, seed, ops: [], updatedAt: Date.now() };
 }
 
 /** Push an op: clears the redo stack. Pure. */
@@ -158,6 +167,13 @@ export function paletteColor(existingRoutes: number): string {
 }
 
 // Construction costs in fictional ₹ (documented unit rates, not calibrated).
+// Re-examined for the world-scale pass and left as they are: the per-metre rates
+// are per real metre, so a 5x-longer line costing 5x more is correct, and at the
+// new scale a whole 2.6 km metro line (track + three stations) lands near
+// ₹1,580Cr — the order of a real light-metro extension. Under the old 1.2 km
+// ruler the same "whole line" was ~₹1,400Cr of which the track was a rounding
+// error, i.e. implausibly cheap. The difficulty tiers absorb the change; see
+// BUDGET in planning/briefs.ts.
 export const COST_RATES = {
   metroStation: 4_500_000_000,
   metroTrackPerM: 900_000,
