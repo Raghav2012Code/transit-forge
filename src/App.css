@@ -1157,7 +1157,9 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   position: fixed;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  /* `translate`, not `transform`: the rise animation keyframes `transform`
+   * and would otherwise pin the box off-centre when the fill holds. */
+  translate: -50% -50%;
   z-index: 61;
   width: min(440px, calc(100vw - var(--s-8)));
   max-height: 86vh;

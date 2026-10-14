@@ -44,6 +44,13 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
     ],
   },
   {
+    title: 'Scenarios',
+    items: [
+      [['O'], 'Open the scenario browser'],
+      [['Ctrl', 'S'], 'Save the scenario'],
+    ],
+  },
+  {
     title: 'Editing',
     items: [
       [['Ctrl', 'Z'], 'Undo'],
