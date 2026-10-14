@@ -1186,56 +1186,169 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   background: var(--paper);
   color: var(--ink);
 }
+/* ---- start screen: a report page, not a cold simulator ----
+ * The same language as the landing page (landing.css): a 1180 column, hairline
+ * rules, the city set into the page as a captioned figure, and one page-local
+ * display scale. The landing's plate rules are repeated here rather than shared,
+ * because the simulator bundle never loads landing.css. */
+
+.tf-start {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink);
+}
 .tf-start-inner {
   box-sizing: border-box;
-  max-width: 960px;
+  display: flex;
+  flex-direction: column;
+  /* Fills the viewport so the closing rule sits on the bottom edge rather than
+   * leaving the page floating in the middle of a void. */
+  min-height: 100%;
+  width: 100%;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: var(--s-8) var(--s-6);
+  padding: clamp(24px, 4vw, 36px) 28px 0;
 }
-.tf-start-brand h1 { margin: 0; font-size: var(--fs-metric); line-height: var(--lh-tight); letter-spacing: -0.015em; }
-.tf-start-brand p { margin: var(--s-2) 0 0; color: var(--ink-soft); font-size: var(--fs-lead); }
+.tf-start-head { display: flex; flex-direction: column; align-items: flex-start; }
+/* Mark and name on one line: a masthead, not a logo above a title. */
+.tf-start-lockup { display: flex; align-items: center; gap: var(--s-5); }
+.tf-start-mark { display: grid; place-items: center; }
+.tf-start-head h1 {
+  margin: 0;
+  font-size: clamp(30px, 4.4vw, 46px);
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  letter-spacing: -0.022em;
+  color: var(--ink-strong);
+  text-wrap: balance;
+}
+.tf-start-lede {
+  margin: var(--s-5) 0 0;
+  max-width: 46ch;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+
 .tf-start-grid {
+  flex: 1;
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: var(--s-6);
-  margin-top: var(--s-7);
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: clamp(28px, 4vw, 56px);
+  padding: clamp(24px, 3vw, 28px) 0 clamp(24px, 2.6vw, 32px);
 }
-.tf-start-actions { display: flex; flex-direction: column; gap: var(--s-4); }
-/* Big launch buttons: quiet outline rank, label over sub-line. */
-.tf-btn.tf-start-big {
+
+.tf-start-actions { display: flex; flex-direction: column; gap: var(--s-6); }
+.tf-start-quiet-block { display: flex; flex-direction: column; gap: var(--s-3); }
+
+/* Launch buttons: label over a quiet sub-line. The ink fill is the one
+ * committing action; everything below it is a quiet outline. */
+.tf-btn.tf-start-go {
   height: auto;
-  min-height: 56px;
+  min-height: 48px;
   align-items: flex-start;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
-  padding: var(--s-4) var(--s-5);
+  gap: 1px;
+  padding: 10px var(--s-5);
   font-size: var(--fs-lead);
   font-weight: 600;
   text-align: left;
   white-space: normal;
 }
-.tf-start-sub { display: block; font-size: var(--fs-small); font-weight: 400; color: var(--ink-soft); }
-.tf-btn.primary .tf-start-sub { color: inherit; opacity: 0.75; }
-.tf-start-row { display: flex; flex-wrap: wrap; gap: var(--s-3); }
-.tf-start-row.secondary { margin-top: var(--s-2); }
-.tf-start-side { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
-.tf-start-card {
-  padding: var(--s-5);
-  background: var(--paper-raised);
-  border: 1px solid var(--rule);
+.tf-start-go-sub { display: block; font-size: var(--fs-small); font-weight: 400; color: var(--ink-soft); }
+.tf-btn.primary .tf-start-go-sub { color: inherit; opacity: 0.72; }
+
+/* Tertiary actions sit at the landing page's nav rank: quiet text, no box.
+ * Pushed to the foot of the column so they align with the last ruled row. */
+.tf-start-links { display: flex; flex-wrap: wrap; gap: var(--s-6); margin-top: auto; }
+.tf-start-link {
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--fs-small);
+  cursor: pointer;
+  transition: color var(--d-fast) var(--ease);
+}
+.tf-start-link:hover { color: var(--ink-strong); }
+
+.tf-start-side { display: flex; flex-direction: column; gap: var(--s-7); min-width: 0; }
+
+/* The city, inset and captioned the way a report sets a survey figure. */
+.tf-start-plate {
+  margin: 0;
+  padding: 10px;
+  background: var(--plate);
+  border: 1px solid var(--plate-edge);
   border-radius: var(--r-md);
 }
-.tf-start-card h2 { margin: 0 0 var(--s-3); font-size: var(--fs-body); }
-.tf-start-demos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
-/* Inline flow, not flex: the title and its meta are one sentence, so a long
- * line wraps at a space rather than pushing the comma onto its own line. */
-.tf-start-demos li { display: block; }
-.tf-start-foot { margin-top: var(--s-7); }
+.tf-start-plate-img { overflow: hidden; border-radius: var(--r-sm); }
+.tf-start-plate-img svg { display: block; width: 100%; height: auto; }
+.tf-start-plate figcaption {
+  padding: 9px 2px 1px;
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  color: var(--ink-faint);
+  text-wrap: pretty;
+}
+
+/* A list of five is a table: ruled rows, figures right-aligned and tabular. */
+.tf-start-scenarios h2 {
+  margin: 0 0 var(--s-2);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--ink-strong);
+}
+.tf-start-demos { list-style: none; margin: 0; padding: 0; }
+.tf-start-demos li { border-top: 1px solid var(--rule); }
+.tf-start-demos li:last-child { border-bottom: 1px solid var(--rule); }
+.tf-start-demo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px 64px;
+  align-items: baseline;
+  gap: var(--s-4);
+  width: 100%;
+  padding: 8px 2px;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tf-start-demo:hover .tf-start-demo-name { color: var(--ink); }
+.tf-start-demo-name { font-size: var(--fs-body); font-weight: 500; color: var(--ink-strong); }
+.tf-start-demo-diff { font-size: var(--fs-small); color: var(--ink-faint); }
+.tf-start-demo-min {
+  font-family: var(--font-data);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink-soft);
+}
+
+.tf-start-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-6);
+  padding: var(--s-4) 0 16px;
+  border-top: 1px solid var(--rule);
+  font-size: var(--fs-small);
+  color: var(--ink-faint);
+}
 
 /* ---- scenario browser ---- */
 
 .tf-modal.tf-browser { width: min(920px, calc(100vw - var(--s-8))); }
+/* Four tabs do not fit a phone: let them wrap instead of clipping the last one. */
+.tf-browser .tf-seg { flex-wrap: wrap; }
 .tf-browser-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
@@ -1266,6 +1379,9 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 .tf-card-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
   padding: 0;
   background: none;
   border: none;
@@ -1274,6 +1390,10 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   text-align: left;
   cursor: pointer;
 }
+.tf-card-main > div { min-width: 0; }
+/* A row is scanned, not admired: a small figure on the left, then the name.
+ * The full-width figure belongs to the details pane, not the list. */
+.tf-card-main .tf-thumb { flex: none; width: 104px; }
 .tf-card-main h3, .tf-card-main strong { display: block; margin: 0 0 var(--s-1); font-size: var(--fs-body); }
 .tf-card-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .tf-thumb { overflow: hidden; border: 1px solid var(--rule); border-radius: var(--r-sm); background: var(--paper-sunken); }
@@ -1284,7 +1404,6 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 .tf-empty strong { display: block; margin-bottom: var(--s-2); color: var(--ink-soft); font-size: var(--fs-body); }
 .tf-empty p { margin: 0 0 var(--s-3); }
 .tf-empty p:last-child { margin-bottom: 0; }
-.tf-card-main .tf-thumb { margin-bottom: var(--s-3); }
 
 /* ---- onboarding, coach marks, loading ---- */
 
@@ -1351,9 +1470,15 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   border-radius: var(--r-sm);
 }
 
+/* The page column narrows before the phone shape: two columns of prose stop
+ * working well below about 900px. */
+@media (max-width: 900px) {
+  .tf-start-grid { grid-template-columns: minmax(0, 1fr); gap: 34px; }
+  .tf-start-side { gap: var(--s-6); }
+}
+
 @media (max-width: 699px) {
-  .tf-start-inner { padding: var(--s-6) var(--s-4); }
-  .tf-start-grid { grid-template-columns: minmax(0, 1fr); }
+  .tf-start-inner { padding: var(--s-7) 18px 0; }
   .tf-browser-body { grid-template-columns: minmax(0, 1fr); }
   .tf-browser-list { max-height: 40vh; }
 }

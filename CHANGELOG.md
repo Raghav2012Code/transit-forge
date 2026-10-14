@@ -2,6 +2,20 @@
 
 Newest first. Version is read from `src/version.ts`.
 
+## 1.6.2
+
+- **The launch screen is a page now, not a dialog.** It follows the same
+  language the landing page already set: the mark and name as a masthead, one
+  display-scale headline, the city set into the page as a captioned figure, and
+  the featured scenarios as ruled rows with their figures right-aligned. One
+  committing action, quiet ranks behind it, and the version and seed on a closing
+  rule. It fits a 1440×900 window without scrolling.
+- **The scenario browser scans.** Each scenario is a compact row — a small
+  figure, the name, the meta — so all five demos are visible at once rather than
+  one per screen. Row actions are quiet; the single ink action (Start Scenario)
+  stays in the details pane, where the design system puts it.
+- The browser's tabs wrap on a phone instead of clipping the last one.
+
 ## 1.6.1
 
 - **Scenario cards follow the theme.** Thumbnails were drawn on a dark plate in

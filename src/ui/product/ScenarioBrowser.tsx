@@ -131,7 +131,7 @@ export default function ScenarioBrowser(p: Props) {
                     <div className="tf-hint">{d.difficulty}, ~{d.minutes} min, {d.systems.slice(0, 2).join(', ')}</div>
                   </div>
                 </button>
-                <button type="button" className="tf-btn small primary" onClick={() => p.onOpenDemo(d.id)}>Start</button>
+                <button type="button" className="tf-btn small" onClick={() => p.onOpenDemo(d.id)}>Start</button>
               </article>
             ))}
 
@@ -156,7 +156,7 @@ export default function ScenarioBrowser(p: Props) {
                     </div>
                   </button>
                   <div className="tf-card-actions">
-                    <button type="button" className="tf-btn small primary" onClick={() => p.onOpenSave(s.id)}>Open</button>
+                    <button type="button" className="tf-btn small" onClick={() => p.onOpenSave(s.id)}>Open</button>
                     <button type="button" className="tf-btn small" onClick={() => p.onToggleFavorite(s.id)} title="Favorite" aria-label="Favorite">
                       {meta?.favorite ? '★' : '☆'}
                     </button>
@@ -188,7 +188,7 @@ export default function ScenarioBrowser(p: Props) {
                     </div>
                   </div>
                 </button>
-                <button type="button" className="tf-btn small primary" onClick={() => p.onOpenSave(s.id)}>Resume</button>
+                <button type="button" className="tf-btn small" onClick={() => p.onOpenSave(s.id)}>Resume</button>
               </article>
             ))}
 
@@ -207,7 +207,7 @@ export default function ScenarioBrowser(p: Props) {
                     <div className="tf-hint">Completed {timeAgo(p.metaById[s.id]?.completedAt ?? 0)}</div>
                   </div>
                 </button>
-                <button type="button" className="tf-btn small primary" onClick={() => p.onOpenSave(s.id)}>Reopen</button>
+                <button type="button" className="tf-btn small" onClick={() => p.onOpenSave(s.id)}>Reopen</button>
               </article>
             ))}
           </div>
