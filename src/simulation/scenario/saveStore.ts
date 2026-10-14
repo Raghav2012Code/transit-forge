@@ -3,7 +3,7 @@
 // Pre-scale v1 scenarios are never loaded: their coordinates are in the old
 // ~1.2 km metre and would land on the wrong place in the 5x city.
 import { SAVE_VERSION } from '../../version.ts';
-import { storageRead, storageWrite } from './store.ts';
+import { storageRead, storageWrite } from './storage.ts';
 import type { SaveGame } from './persistence.ts';
 
 const KEY = 'transitforge.saves.v2';

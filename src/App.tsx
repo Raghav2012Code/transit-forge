@@ -70,7 +70,6 @@ import {
   type ServicePatch,
 } from './simulation/scenario/scenario.ts';
 import type { FarePolicy } from './simulation/economics/fares.ts';
-import { deleteScenario, duplicateScenario, listScenarios, saveScenario } from './simulation/scenario/store.ts';
 import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
 import { type Speed } from './ui/controls/SimControls.tsx';
@@ -91,7 +90,6 @@ import DisruptPanel from './ui/disrupt/DisruptPanel.tsx';
 import { EMPTY_DRAFT, type IncidentDraft } from './ui/disrupt/draft.ts';
 import GrowthPanel, { type ForecastView } from './ui/growth/GrowthPanel.tsx';
 import type { Zone } from './types/index.ts';
-import ScenarioPanel from './ui/build/ScenarioPanel.tsx';
 import ServicePanel from './ui/service/ServicePanel.tsx';
 import FaresPanel from './ui/service/FaresPanel.tsx';
 import SimulateHome from './ui/panel/SimulateHome.tsx';
@@ -294,7 +292,6 @@ export default function App() {
   const [compareRunning, setCompareRunning] = useState(false);
   const [compareProgress, setCompareProgress] = useState('');
   const [scenarioMeta, setScenarioMeta] = useState<Scenario>(() => createScenario('East-West Metro', SEED));
-  const [saved, setSaved] = useState<Scenario[]>(() => listScenarios());
   const [critical, setCritical] = useState<CriticalItem[] | null>(null);
 
   // Planning state.
@@ -2812,32 +2809,14 @@ export default function App() {
         scenarioName={scenarioMeta.name}
         edits={ops.length}
         scenarioMenu={
-          <ScenarioPanel
-            name={scenarioMeta.name}
-            onName={(n) => setScenarioMeta((s) => ({ ...s, name: n }))}
-            onSave={() => {
-              if (!saveScenario({ ...scenarioMeta, seed: SEED, ops, version: 1 })) pushToast('warn', 'Could not save: browser storage is full');
-              setSaved(listScenarios());
-            }}
-            saved={saved}
-            onLoad={(s) => {
-              setScenarioMeta(s);
-              setViewing('scenario');
-              applyOps(s.ops, [], 'scenario');
-            }}
-            onRename={(s, name) => {
-              if (!saveScenario({ ...s, name })) pushToast('warn', 'Could not save: browser storage is full');
-              setSaved(listScenarios());
-            }}
-            onDuplicate={(s) => {
-              if (!duplicateScenario(s)) pushToast('warn', 'Could not save: browser storage is full');
-              setSaved(listScenarios());
-            }}
-            onDelete={(id) => {
-              deleteScenario(id);
-              setSaved(listScenarios());
-            }}
-          />
+          <div className="tf-scenario-menu">
+            <label className="tf-namelabel">
+              Name
+              <input value={scenarioMeta.name} maxLength={48} onChange={(e) => setScenarioMeta((s) => ({ ...s, name: e.target.value }))} />
+            </label>
+            <button type="button" className="tf-btn small" onClick={quickSave}>Save scenario</button>
+            <button type="button" className="tf-btn small" onClick={openBrowser}>Open scenario browser</button>
+          </div>
         }
         onSearch={openSearch}
         theme={theme}
