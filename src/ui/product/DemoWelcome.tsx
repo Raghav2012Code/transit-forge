@@ -1,7 +1,7 @@
 import type { DemoAction } from '../../simulation/scenario/demos.ts';
 import Dock from '../shell/Dock.tsx';
 
-export interface WelcomeStats {
+interface WelcomeStats {
   population: number;
   jobs: number;
   lines: number;
@@ -44,19 +44,4 @@ export default function DemoWelcome({ title, intro, stats, suggestions, onAction
       </div>
     </Dock>
   );
-}
-
-export const DEMO_CITY_INTRO = [
-  'Welcome to the demo city. Ten districts, six transit lines, and a full day of travel demand — all simulated live.',
-  'Press Play, inspect anything that catches your eye, and break things safely: Build mode never touches your saves.',
-];
-
-export function demoCitySuggestions(): { label: string; action: DemoAction }[] {
-  return [
-    { label: 'Inspect Central interchange', action: 'inspect-central' },
-    { label: 'View passenger demand', action: 'show-demand' },
-    { label: 'Open accessibility analysis', action: 'show-access' },
-    { label: 'Enter Build mode', action: 'enter-build' },
-    { label: 'Run simulation', action: 'run-sim' },
-  ];
 }

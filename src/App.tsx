@@ -169,6 +169,28 @@ import { applyTheme, savedTheme, saveTheme, systemTheme } from './ui/shell/theme
 import type { Theme } from './rendering/palette.ts';
 import { applyFares, applyServicePatch } from './simulation/service/live.ts';
 
+/** Wall-clock read. Kept at module scope so the component body stays pure. */
+const nowMs = (): number => Date.now();
+
+/**
+ * Walk the coach tour forward while the current step's condition already holds.
+ * Pure: the tour state is a function of what the person has actually done, so
+ * no effect has to commit it. Bounded by the step count, so it cannot loop.
+ */
+function advanceTour(
+  tutorial: TutorialState,
+  facts: { mode: string; playing: boolean; overlay: string; editCount: number },
+): TutorialState {
+  let out = tutorial;
+  for (let guard = 0; guard < TUTORIAL_STEPS.length; guard++) {
+    if (!out.active || out.paused) break;
+    const step = TUTORIAL_STEPS[out.index];
+    if (!step?.doneWhen || !tutorialDone(step.doneWhen, facts)) break;
+    out = tutorialReducer(out, { type: 'auto-advance' });
+  }
+  return out;
+}
+
 const SEED = 1337;
 const TICKS_PER_SEC: Record<Speed, number> = { 1: 2, 5: 8, 20: 24 };
 const ROAD_SNAP_M = 45;
@@ -296,7 +318,7 @@ export default function App() {
       return false;
     }
   });
-  const tutorialSeen = useRef<Set<string>>(new Set());
+  const [tutorialSeen, setTutorialSeen] = useState<readonly string[]>([]);
   const evalCache = useRef(new Map<string, PlanEvaluation>());
 
   // Guided tour (coach marks over the real controls) and first-run onboarding.
@@ -311,7 +333,7 @@ export default function App() {
     setTutorial(tutorialReducer(IDLE_TUTORIAL, { type: 'start' }));
   }
   function sendTutorial(e: TutorialEvent) {
-    setTutorial((t) => tutorialReducer(t, e));
+    setTutorial((t) => tutorialReducer(advanceTour(t, tourFacts), e));
   }
   function sendOnboarding(e: OnboardingEvent) {
     const next = onboardingReducer(onboarding, e);
@@ -346,6 +368,7 @@ export default function App() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [loading, setLoading] = useState<{ title: string; label: string; progress: number } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const [commands, setCommands] = useState<Command[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [welcome, setWelcome] = useState<{ title: string; intro: string[]; suggestions: { label: string; action: DemoAction }[] } | null>(null);
 
@@ -353,6 +376,12 @@ export default function App() {
     const all = listSaves();
     setSaves(all);
     setMetaById(Object.fromEntries(all.map((s) => [s.id, getMeta(s.id)])));
+  }
+
+  // The palette's command list is built when it opens, never during render.
+  function openSearch() {
+    setCommands(buildCommands());
+    setSearchOpen(true);
   }
 
   function openBrowser() {
@@ -377,14 +406,16 @@ export default function App() {
     }
   }
 
-  function captureSave(name: string, id: string | null): SaveGame {
+  // Memoised so the autosave effect can depend on it honestly: its identity
+  // changes exactly when the session state it captures changes.
+  const captureSave = useCallback((name: string, id: string | null, now: number): SaveGame => {
     const sim = simRef.current;
     const base = blankSave(name, SEED);
     return {
       ...base,
       ...(id ? { id } : {}),
       appVersion: APP_VERSION,
-      savedAt: Date.now(),
+      savedAt: now,
       ops: ops.map((o) => ({ ...o })),
       fares: { ...sim.fares },
       tick: sim.tick,
@@ -399,10 +430,10 @@ export default function App() {
       analytics: { overlay, demandLayer, travelDest, coverageThreshold },
       scenarioId: null,
     };
-  }
+  }, [ops, zoneState, yearsApplied, growthHistory, mod, briefId, difficulty, planHorizon, overlay, demandLayer, travelDest, coverageThreshold]);
 
   function doSave(name: string, id: string | null) {
-    const save = captureSave(name, id);
+    const save = captureSave(name, id, nowMs());
     upsertSave(save);
     setActiveSaveId(save.id);
     touchOpened(save.id, 0);
@@ -667,7 +698,7 @@ export default function App() {
     'view-analytics': () => setOverlay((o) => (o === 'normal' ? 'accessibility' : 'normal')),
     'scenario-browser': openBrowser,
     'scenario-save': quickSave,
-    'scenario-export': () => exportSaveGame(captureSave(scenarioMeta.name, null)),
+    'scenario-export': () => exportSaveGame(captureSave(scenarioMeta.name, null, nowMs())),
     'scenario-import': () => importRef.current?.click(),
     'help-tutorial': startTutorial,
     'help-shortcuts': () => setHelpOpen(true),
@@ -826,8 +857,8 @@ export default function App() {
   }, [playing, speed]);
 
   // Tutorial progress follows real user actions (persists via dismissal flag).
-  // The keys true right now are computed purely here; the memo reads them and
-  // an effect commits them, so no render mutates the ref.
+  // Achievements only accumulate, so the list is adjusted during render — the
+  // documented React pattern — rather than committed from an effect.
   const tutorialNow = useCallback((): string[] => {
     const out: string[] = [];
     if (playing) out.push('play');
@@ -841,8 +872,12 @@ export default function App() {
     if (compareResult) out.push('compare');
     return out;
   }, [playing, selection, overlay, mode, ops, snapshot, compareResult]);
+  const tutorialNowKeys = tutorialNow();
+  if (tutorialNowKeys.some((k) => !tutorialSeen.includes(k))) {
+    setTutorialSeen((prev) => [...prev, ...tutorialNowKeys.filter((k) => !prev.includes(k))]);
+  }
   const tutorialSteps = useMemo(() => {
-    const done = new Set([...tutorialSeen.current, ...tutorialNow()]);
+    const done = new Set(tutorialSeen);
     const has = (k: string) => done.has(k);
     return [
       { label: 'Inspect the city (click a district)', done: has('select') },
@@ -855,127 +890,14 @@ export default function App() {
       { label: 'Run the simulation past tick 100', done: has('run') },
       { label: 'Compare baseline vs scenario', done: has('compare') },
     ];
-  }, [tutorialNow]);
-  useEffect(() => {
-    for (const k of tutorialNow()) tutorialSeen.current.add(k);
-  }, [tutorialNow]);
+  }, [tutorialSeen]);
 
   // The coach tour advances itself when the person does the step for real.
-  // Returns the same state unless a step completes, so this never loops.
-  useEffect(() => {
-    setTutorial((t) => {
-      if (!t.active || t.paused) return t;
-      const step = TUTORIAL_STEPS[t.index];
-      if (!step || !step.doneWhen) return t;
-      const facts = { mode, playing, overlay, editCount: ops.length };
-      return tutorialDone(step.doneWhen, facts) ? tutorialReducer(t, { type: 'auto-advance' }) : t;
-    });
-  });
+  // Derived during render (a pure walk over the steps), so no effect is needed
+  // and pressing Next operates on the same state the card is showing.
+  const tourFacts = { mode, playing, overlay, editCount: ops.length };
+  const tourState = advanceTour(tutorial, tourFacts);
 
-  // Keyboard shortcuts (ignored while typing; native undo kept in inputs).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-      const mod = e.ctrlKey || e.metaKey;
-      if (helpOpen || loading) return;
-      if (mod && (e.key === 's' || e.key === 'S')) {
-        if (typing) return;
-        e.preventDefault();
-        quickSave();
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
-        if (typing) return;
-        e.preventDefault();
-        setPaletteOpen(true);
-        return;
-      }
-      if (mod && (e.key === 'z' || e.key === 'Z')) {
-        if (typing) return;
-        e.preventDefault();
-        if (e.shiftKey) doRedo();
-        else doUndo();
-        return;
-      }
-      if (mod && (e.key === 'y' || e.key === 'Y')) {
-        if (typing) return;
-        e.preventDefault();
-        doRedo();
-        return;
-      }
-      if (typing) return;
-      // Plain keys only. Ctrl/Alt combinations belong to the browser
-      // (Ctrl+A select-all, Ctrl+F find, Ctrl+P print), never to the app.
-      const plain = !mod && !e.altKey;
-      // Space activates a focused control, so never steal it from one.
-      const onControl = !!t && (t.tagName === 'BUTTON' || t.tagName === 'A' || t.getAttribute('role') === 'button');
-      if (e.key === ' ' && plain && !onControl) {
-        e.preventDefault();
-        togglePlay();
-      } else if (plain && e.key === '1') setSpeed(1);
-      else if (plain && e.key === '2') setSpeed(5);
-      else if (plain && e.key === '3') setSpeed(20);
-      else if (plain && (e.key === 'b' || e.key === 'B')) {
-        if (mode === 'build') enterSimulate();
-        else enterBuild();
-      } else if (plain && (e.key === 'd' || e.key === 'D')) {
-        if (mode === 'disrupt') enterSimulate();
-        else enterDisrupt();
-      } else if (plain && (e.key === 'a' || e.key === 'A')) {
-        setOverlay((o) => (o === 'normal' ? 'accessibility' : 'normal'));
-      } else if (plain && (e.key === 'p' || e.key === 'P')) {
-        if (mode === 'plan') enterSimulate();
-        else enterPlan();
-      } else if (plain && (e.key === 'i' || e.key === 'I')) {
-        setInspectMode((v) => !v);
-      } else if (plain && e.key === '/') {
-        e.preventDefault();
-        setSearchOpen(true);
-      } else if (plain && (e.key === 'o' || e.key === 'O')) {
-        openBrowser();
-      } else if (plain && (e.key === 'f' || e.key === 'F')) {
-        focusSelection();
-      } else if (plain && (e.key === '0' || e.key === 'Home')) {
-        resetCamera();
-      } else if (plain && e.key === '[') {
-        setRailOpen(false);
-      } else if (plain && e.key === ']') {
-        setRailOpen(true);
-      } else if (e.key === 'Escape') {
-        if (contextMenu) setContextMenu(null);
-        else if (paletteOpen) setPaletteOpen(false);
-        else if (searchOpen) setSearchOpen(false);
-        else if (reportsOpen) setReportsOpen(false);
-        else if (measureTool) {
-          setMeasureTool(false);
-          setMeasure(null);
-          setMeasureHover(null);
-        } else if (inspectMode) setInspectMode(false);
-        else if (openTrip) setOpenTrip(null);
-        else if (savePrompt) setSavePrompt(false);
-        else if (confirmReset) setConfirmReset(false);
-        else if (settingsOpen) setSettingsOpen(false);
-        else if (browserOpen) { setBrowserOpen(false); setImportErrors(null); }
-        else if (tutorial.active) sendTutorial({ type: 'exit' });
-        else if (onboarding.active) sendOnboarding({ type: 'skip' });
-        else if (mode === 'simulate' && selection) setSelection(null);
-        else enterSimulate();
-      } else if ((e.key === 't' || e.key === 'T') && plain) {
-        toggleTheme();
-      } else if ((e.key === 's' || e.key === 'S') && plain) {
-        setReportsOpen((v) => !v);
-      } else if ((e.key === 'm' || e.key === 'M') && plain) {
-        toggleMeasure();
-      } else if (e.key === '?' && plain) {
-        setHelpOpen(true);
-      } else if (plain && (e.key === 'r' || e.key === 'R')) {
-        resetAll();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
 
   // New simulation events surface as transient HUD toasts (deduped by key).
   useEffect(() => {
@@ -1641,12 +1563,13 @@ export default function App() {
   }, [settings]);
 
   // Background autosave: every session change lands in the recovery slot.
-  // Silent by design; failures stay session-local inside the store.
+  // Silent by design; failures stay session-local inside the store. The slot is
+  // read back at launch (the start screen's Continue), so nothing has to re-render
+  // here — and the browser list excludes it either way.
   useEffect(() => {
     if (!settings.autosave) return;
-    upsertSave({ ...captureSave('Autosave', null), id: 'autosave', savedAt: Date.now() });
-    setSaves(listSaves());
-  }, [ops, zoneState, yearsApplied, growthHistory, briefId, difficulty, planHorizon, overlay, demandLayer, travelDest, coverageThreshold, settings.autosave]);
+    upsertSave({ ...captureSave('Autosave', null, nowMs()), id: 'autosave', savedAt: nowMs() });
+  }, [captureSave, settings.autosave]);
 
   // ---- plan submit / save / export ----
   async function onSubmitPlan() {
@@ -1720,7 +1643,7 @@ export default function App() {
       horizonYears: planHorizon,
       incident: activeBrief?.incident ? { ...activeBrief.incident } : undefined,
       difficulty,
-      createdAt: Date.now(),
+      createdAt: nowMs(),
       attempts: [],
     };
     if (!savePlan(plan)) pushToast('warn', 'Could not save the plan: browser storage is full');
@@ -2120,7 +2043,7 @@ export default function App() {
     for (const pr of PRESETS) {
       add({ id: `place-${pr.id}`, group: 'View', label: `Jump to ${pr.label}`, keywords: 'go fly camera place', run: () => applyCameraPreset(pr.id) });
     }
-    add({ id: 'search', group: 'Map', label: 'Search the map or run a command', keys: ['/'], keywords: 'find places commands palette', run: () => setSearchOpen(true) });
+    add({ id: 'search', group: 'Map', label: 'Search the map or run a command', keys: ['/'], keywords: 'find places commands palette', run: openSearch });
     add({ id: 'measure', group: 'Map', label: measureTool ? 'Stop measuring' : 'Measure a distance', keys: ['M'], keywords: 'ruler length', run: toggleMeasure });
     add({ id: 'inspect', group: 'Map', label: inspectMode ? 'Stop quick inspect' : 'Quick inspect while building', keys: ['I'], keywords: 'select click look', run: () => setInspectMode((v) => !v) });
     add({ id: 'minimap', group: 'Map', label: minimapOpen ? 'Hide the overview map' : 'Show the overview map', keywords: 'minimap', run: toggleMinimap });
@@ -2137,7 +2060,7 @@ export default function App() {
     add({ id: 'palette', group: 'Workspace', label: 'Open the command palette', keys: ['Ctrl', 'K'], keywords: 'commands actions run', run: () => setPaletteOpen(true) });
     add({ id: 'scenario-browser', group: 'Scenario', label: 'Open the scenario browser', keys: ['O'], keywords: 'saves load library demos projects', suggested: true, run: openBrowser });
     add({ id: 'scenario-save', group: 'Scenario', label: 'Save the scenario', keys: ['Ctrl', 'S'], keywords: 'store persist snapshot', run: quickSave });
-    add({ id: 'scenario-export', group: 'Scenario', label: 'Export the scenario file', keywords: 'download json share backup', run: () => exportSaveGame(captureSave(scenarioMeta.name, null)) });
+    add({ id: 'scenario-export', group: 'Scenario', label: 'Export the scenario file', keywords: 'download json share backup', run: () => exportSaveGame(captureSave(scenarioMeta.name, null, nowMs())) });
     add({ id: 'scenario-import', group: 'Scenario', label: 'Import a scenario file', keywords: 'upload open file restore', run: () => importRef.current?.click() });
 
     if (ops.length > 0) {
@@ -2332,10 +2255,113 @@ export default function App() {
     applyOps(r.ops, r.redo);
   }
 
+  // Keyboard shortcuts (ignored while typing; native undo kept in inputs).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+      const mod = e.ctrlKey || e.metaKey;
+      if (helpOpen || loading) return;
+      if (mod && (e.key === 's' || e.key === 'S')) {
+        if (typing) return;
+        e.preventDefault();
+        quickSave();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        if (typing) return;
+        e.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
+      if (mod && (e.key === 'z' || e.key === 'Z')) {
+        if (typing) return;
+        e.preventDefault();
+        if (e.shiftKey) doRedo();
+        else doUndo();
+        return;
+      }
+      if (mod && (e.key === 'y' || e.key === 'Y')) {
+        if (typing) return;
+        e.preventDefault();
+        doRedo();
+        return;
+      }
+      if (typing) return;
+      // Plain keys only. Ctrl/Alt combinations belong to the browser
+      // (Ctrl+A select-all, Ctrl+F find, Ctrl+P print), never to the app.
+      const plain = !mod && !e.altKey;
+      // Space activates a focused control, so never steal it from one.
+      const onControl = !!t && (t.tagName === 'BUTTON' || t.tagName === 'A' || t.getAttribute('role') === 'button');
+      if (e.key === ' ' && plain && !onControl) {
+        e.preventDefault();
+        togglePlay();
+      } else if (plain && e.key === '1') setSpeed(1);
+      else if (plain && e.key === '2') setSpeed(5);
+      else if (plain && e.key === '3') setSpeed(20);
+      else if (plain && (e.key === 'b' || e.key === 'B')) {
+        if (mode === 'build') enterSimulate();
+        else enterBuild();
+      } else if (plain && (e.key === 'd' || e.key === 'D')) {
+        if (mode === 'disrupt') enterSimulate();
+        else enterDisrupt();
+      } else if (plain && (e.key === 'a' || e.key === 'A')) {
+        setOverlay((o) => (o === 'normal' ? 'accessibility' : 'normal'));
+      } else if (plain && (e.key === 'p' || e.key === 'P')) {
+        if (mode === 'plan') enterSimulate();
+        else enterPlan();
+      } else if (plain && (e.key === 'i' || e.key === 'I')) {
+        setInspectMode((v) => !v);
+      } else if (plain && e.key === '/') {
+        e.preventDefault();
+        openSearch();
+      } else if (plain && (e.key === 'o' || e.key === 'O')) {
+        openBrowser();
+      } else if (plain && (e.key === 'f' || e.key === 'F')) {
+        focusSelection();
+      } else if (plain && (e.key === '0' || e.key === 'Home')) {
+        resetCamera();
+      } else if (plain && e.key === '[') {
+        setRailOpen(false);
+      } else if (plain && e.key === ']') {
+        setRailOpen(true);
+      } else if (e.key === 'Escape') {
+        if (contextMenu) setContextMenu(null);
+        else if (paletteOpen) setPaletteOpen(false);
+        else if (searchOpen) setSearchOpen(false);
+        else if (reportsOpen) setReportsOpen(false);
+        else if (measureTool) {
+          setMeasureTool(false);
+          setMeasure(null);
+          setMeasureHover(null);
+        } else if (inspectMode) setInspectMode(false);
+        else if (openTrip) setOpenTrip(null);
+        else if (savePrompt) setSavePrompt(false);
+        else if (confirmReset) setConfirmReset(false);
+        else if (settingsOpen) setSettingsOpen(false);
+        else if (browserOpen) { setBrowserOpen(false); setImportErrors(null); }
+        else if (tutorial.active) sendTutorial({ type: 'exit' });
+        else if (onboarding.active) sendOnboarding({ type: 'skip' });
+        else if (mode === 'simulate' && selection) setSelection(null);
+        else enterSimulate();
+      } else if ((e.key === 't' || e.key === 'T') && plain) {
+        toggleTheme();
+      } else if ((e.key === 's' || e.key === 'S') && plain) {
+        setReportsOpen((v) => !v);
+      } else if ((e.key === 'm' || e.key === 'M') && plain) {
+        toggleMeasure();
+      } else if (e.key === '?' && plain) {
+        setHelpOpen(true);
+      } else if (plain && (e.key === 'r' || e.key === 'R')) {
+        resetAll();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   // ---- static baseline sim for split-view comparison (§24) ----
   const baseSim = useMemo(() => createSimulationFromParts(SEED, effBaseCity, baseNet), [effBaseCity, baseNet]);
-  const baseSimRef = useRef(baseSim);
-  baseSimRef.current = baseSim;
 
   // ---- build interactions (from the 3D view) ----
   const stationPos = useMemo(() => new Map(snapshot.stations.map((s) => [s.id, { x: s.pos.x, z: s.pos.z }])), [snapshot]);
@@ -2801,7 +2827,7 @@ export default function App() {
             }}
           />
         }
-        onSearch={() => setSearchOpen(true)}
+        onSearch={openSearch}
         theme={theme}
         onTheme={toggleTheme}
         onHelp={() => setHelpOpen(true)}
@@ -2965,7 +2991,7 @@ export default function App() {
           <HoverTooltip hover={hoverInfo} />
           <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
           {searchOpen && (
-            <SearchPalette entries={searchEntries} commands={buildCommands()} onPick={pickSearchResult} onClose={() => setSearchOpen(false)} />
+            <SearchPalette entries={searchEntries} commands={commands} onPick={pickSearchResult} onClose={() => setSearchOpen(false)} />
           )}
           {(measureTool || inspectMode) && (
             <div className="tf-map-bc">
@@ -3191,9 +3217,9 @@ export default function App() {
           onFinish={() => sendOnboarding({ type: 'finish' })}
         />
       )}
-      {tutorial.active && (
+      {tourState.active && (
         <TutorialOverlay
-          state={tutorial}
+          state={tourState}
           onNext={() => sendTutorial({ type: 'next' })}
           onBack={() => sendTutorial({ type: 'back' })}
           onSkip={() => sendTutorial({ type: 'skip' })}
@@ -3230,7 +3256,7 @@ export default function App() {
           onChange={applySettings}
           onResetData={() => setConfirmReset(true)}
           onRestartTutorial={() => { setSettingsOpen(false); startTutorial(); }}
-          onExport={() => exportSaveGame(captureSave(scenarioMeta.name, null))}
+          onExport={() => exportSaveGame(captureSave(scenarioMeta.name, null, nowMs()))}
           onImportFile={(f) => void importFile(f)}
           onClose={() => setSettingsOpen(false)}
         />
