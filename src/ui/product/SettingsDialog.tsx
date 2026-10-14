@@ -95,7 +95,7 @@ export default function SettingsDialog(p: Props) {
         </Row>
         </dl>
 
-        <p className="tf-hint">TransitForge v{APP_VERSION} · save format v2 · fictional city · seed 1337</p>
+        <p className="tf-hint">TransitForge v{APP_VERSION}, save format v2, fictional city, seed 1337</p>
       </div>
     </div>
   );

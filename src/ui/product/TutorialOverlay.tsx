@@ -59,7 +59,7 @@ export default function TutorialOverlay({ state, onNext, onBack, onSkip, onPause
         />
       )}
       <div className="tf-coach-card" role="dialog" aria-modal="false" aria-label={step.title} style={cardStyle}>
-        <p className="tf-hint">Guided tutorial · {state.index + 1} of {TUTORIAL_STEPS.length}{state.paused ? ' · paused' : ''}</p>
+        <p className="tf-hint">Guided tutorial, step {state.index + 1} of {TUTORIAL_STEPS.length}{state.paused ? ', paused' : ''}</p>
         <h2>{step.title}</h2>
         <p>{step.body}</p>
         <div className="tf-draft-actions">

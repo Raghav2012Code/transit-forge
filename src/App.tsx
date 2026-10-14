@@ -138,6 +138,10 @@ import {
 } from './ui/product/tutorial.ts';
 import ScenarioBrowser, { type DetailsBaseline } from './ui/product/ScenarioBrowser.tsx';
 import SettingsDialog from './ui/product/SettingsDialog.tsx';
+import StartScreen from './ui/product/StartScreen.tsx';
+import DemoWelcome from './ui/product/DemoWelcome.tsx';
+import CommandPalette from './ui/product/CommandPalette.tsx';
+import { builtinCommands } from './ui/product/commands.ts';
 import { ConfirmDialog, PromptDialog } from './ui/product/Dialog.tsx';
 import LoadingOverlay from './ui/product/LoadingOverlay.tsx';
 import {
@@ -148,9 +152,9 @@ import {
   type SaveGame,
 } from './simulation/scenario/persistence.ts';
 import { deleteSave, duplicateSave, listSaves, renameSave, upsertSave } from './simulation/scenario/saveStore.ts';
-import { dropMeta, getMeta, toggleFavorite, touchOpened, type ScenarioMeta } from './simulation/scenario/scenarioMeta.ts';
+import { dropMeta, getMeta, orderRecent, toggleFavorite, touchOpened, type ScenarioMeta } from './simulation/scenario/scenarioMeta.ts';
 import { networkThumbnail } from './simulation/scenario/thumbnail.ts';
-import { DEMOS, demoById } from './simulation/scenario/demos.ts';
+import { DEMOS, demoById, type DemoAction } from './simulation/scenario/demos.ts';
 import {
   loadSettings,
   sanitizeSettings,
@@ -282,9 +286,10 @@ export default function App() {
   // Guided tour (coach marks over the real controls) and first-run onboarding.
   // Both are additive: the passive tutorial checklist in SimulateHome is untouched.
   const [tutorial, setTutorial] = useState<TutorialState>(() => IDLE_TUTORIAL);
-  const [onboarding, setOnboarding] = useState<OnboardingState>(() =>
-    loadOnboardingDone() ? IDLE_ONBOARDING : onboardingReducer(IDLE_ONBOARDING, { type: 'start' }),
-  );
+  // The start screen gates first paint; onboarding begins once the person
+  // steps inside, so the two never stack.
+  const [started, setStarted] = useState(false);
+  const [onboarding, setOnboarding] = useState<OnboardingState>(() => IDLE_ONBOARDING);
   function startTutorial() {
     enterSimulate();
     setTutorial(tutorialReducer(IDLE_TUTORIAL, { type: 'start' }));
@@ -296,6 +301,12 @@ export default function App() {
     const next = onboardingReducer(onboarding, e);
     if (next.done) saveOnboardingDone();
     setOnboarding(next);
+  }
+
+  // Newcomers get the tour on the way in, but never on top of a dialog
+  // they opened on purpose (browser, tutorial, settings).
+  function maybeOnboard() {
+    if (!loadOnboardingDone()) setOnboarding(onboardingReducer(IDLE_ONBOARDING, { type: 'start' }));
   }
 
   // ---- savegames (v2): full-session capture ----
@@ -319,6 +330,8 @@ export default function App() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [loading, setLoading] = useState<{ title: string; label: string; progress: number } | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [welcome, setWelcome] = useState<{ title: string; intro: string[]; suggestions: { label: string; action: DemoAction }[] } | null>(null);
 
   function refreshSaves() {
     const all = listSaves();
@@ -425,8 +438,15 @@ export default function App() {
     pushToast('good', `Imported ${parsed.save.name}.`);
   }
 
+  // Yield to paint between restore chunks. rAF alone never fires in a hidden
+  // tab, so race it against a timeout: fast when visible, alive when not.
   function frame() {
-    return new Promise<void>((r) => requestAnimationFrame(() => r()));
+    return new Promise<void>((r) => {
+      let done = false;
+      const go = () => { if (!done) { done = true; r(); } };
+      requestAnimationFrame(go);
+      setTimeout(go, 50);
+    });
   }
 
   function validOverlay(v: string): v is Overlay {
@@ -434,6 +454,8 @@ export default function App() {
   }
 
   async function openSaveGame(save: SaveGame) {
+    setStarted(true);
+    setWelcome(null);
     setBrowserOpen(false);
     setPlaying(false);
     enterSimulate();
@@ -478,11 +500,14 @@ export default function App() {
     touchOpened(save.id, 0);
     refreshSaves();
     setLoading(null);
+    maybeOnboard();
   }
 
   async function openDemo(id: string) {
     const d = demoById(id);
     if (!d) return;
+    setStarted(true);
+    setWelcome({ title: d.title, intro: d.intro, suggestions: d.suggestions });
     setBrowserOpen(false);
     setPlaying(false);
     enterSimulate();
@@ -521,6 +546,7 @@ export default function App() {
       resetSimTo(applied.city, applied);
       setNetworkKey((k) => k + 1);
     }
+    maybeOnboard();
   }
 
   // Thumbnails are pure renders of stored networks: a save always draws the
@@ -566,6 +592,71 @@ export default function App() {
     });
     setSampling(false);
   }
+
+  // ---- start screen + demo welcome ----
+  const continueSave = useMemo(() => orderRecent(saves)[0] ?? null, [saves]);
+
+  function newScenario() {
+    setStarted(true);
+    setZoneState(null);
+    setYearsApplied(0);
+    setGrowthHistory([]);
+    setForecast(null);
+    setOps([]);
+    setRedo([]);
+    setBriefId(null);
+    setActiveSaveId(null);
+    setWelcome(null);
+    setViewing('scenario');
+    setCompareResult(null);
+    clearDraft();
+    enterSimulate();
+    resetSimTo(baseCity, baseNet);
+    setNetworkKey((k) => k + 1);
+    setPlaying(true);
+    maybeOnboard();
+  }
+
+  function enterDemoCity() {
+    setStarted(true);
+    setActiveSaveId(null);
+    setWelcome(null);
+    enterSimulate();
+    resetAll();
+    setPlaying(true);
+    maybeOnboard();
+  }
+
+  function demoAction(a: DemoAction) {
+    if (a === 'enter-build') enterBuild();
+    else if (a === 'run-sim') { enterSimulate(); setPlaying(true); }
+    else if (a === 'show-demand') setOverlay('demand');
+    else if (a === 'show-access') setOverlay('traveltime');
+    else if (a === 'show-crowding') setOverlay('crowding');
+    else if (a === 'inspect-central') focusStation('st-central');
+  }
+
+  // One handler map behind both command surfaces: `/` search and Ctrl+K.
+  const commandRuns: Record<string, () => void> = {
+    'mode-simulate': () => selectMode('simulate'),
+    'mode-build': () => selectMode('build'),
+    'mode-disrupt': () => selectMode('disrupt'),
+    'mode-plan': () => selectMode('plan'),
+    'sim-play-pause': togglePlay,
+    'sim-speed-1': () => setSpeed(1),
+    'sim-speed-5': () => setSpeed(5),
+    'sim-speed-20': () => setSpeed(20),
+    'sim-reset': resetAll,
+    'view-panel': () => setRailOpen((r) => !r),
+    'view-analytics': () => setOverlay((o) => (o === 'normal' ? 'accessibility' : 'normal')),
+    'scenario-browser': openBrowser,
+    'scenario-save': quickSave,
+    'scenario-export': () => exportSaveGame(captureSave(scenarioMeta.name, null)),
+    'scenario-import': () => importRef.current?.click(),
+    'help-tutorial': startTutorial,
+    'help-shortcuts': () => setHelpOpen(true),
+    'help-settings': () => setSettingsOpen(true),
+  };
 
   // Shell state: event toasts + side-panel visibility.
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -792,6 +883,12 @@ export default function App() {
         quickSave();
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        if (typing) return;
+        e.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
       if (mod && (e.key === 'z' || e.key === 'Z')) {
         if (typing) return;
         e.preventDefault();
@@ -845,6 +942,7 @@ export default function App() {
         setRailOpen(true);
       } else if (e.key === 'Escape') {
         if (contextMenu) setContextMenu(null);
+        else if (paletteOpen) setPaletteOpen(false);
         else if (searchOpen) setSearchOpen(false);
         else if (reportsOpen) setReportsOpen(false);
         else if (measureTool) {
@@ -930,6 +1028,17 @@ export default function App() {
     () => computeAccessibility({ zones: snapshot.city.zones, stations: snapshot.stations, connections: snapshot.connections, routes: snapshot.routes }),
     [snapshot],
   );
+
+  // Demo welcome figures: the same live numbers as the dashboard, summed once.
+  const welcomeStats = useMemo(() => ({
+    population: snapshot.city.zones.reduce((s, z) => s + z.population, 0),
+    jobs: snapshot.city.zones.reduce((s, z) => s + z.jobs, 0),
+    lines: snapshot.routes.length,
+    stations: snapshot.stations.length,
+    dailyTrips: Math.round(snapshot.demand.totalDaily * SIM_TRIPS_SCALE),
+    congestion: Math.round(stats.avgCongestion * 100) / 100,
+    access: Math.round(access.cityScore),
+  }), [snapshot, stats, access]);
   const coverage = useMemo(
     () => computeCoverage(snapshot.city.zones, snapshot.stations, coverageThreshold),
     [snapshot, coverageThreshold],
@@ -2023,6 +2132,7 @@ export default function App() {
     add({ id: 'help', group: 'Workspace', label: 'Show keyboard shortcuts', keys: ['?'], keywords: 'help keys hotkeys', suggested: true, run: () => setHelpOpen(true) });
     add({ id: 'help-tutorial', group: 'Workspace', label: 'Start the guided tutorial', keywords: 'tour learn howto interactive guide', run: startTutorial });
     add({ id: 'help-settings', group: 'Workspace', label: 'Open settings', keywords: 'preferences options configure', run: () => setSettingsOpen(true) });
+    add({ id: 'palette', group: 'Workspace', label: 'Open the command palette', keys: ['Ctrl', 'K'], keywords: 'commands actions run', run: () => setPaletteOpen(true) });
     add({ id: 'scenario-browser', group: 'Scenario', label: 'Open the scenario browser', keys: ['O'], keywords: 'saves load library demos projects', suggested: true, run: openBrowser });
     add({ id: 'scenario-save', group: 'Scenario', label: 'Save the scenario', keys: ['Ctrl', 'S'], keywords: 'store persist snapshot', run: quickSave });
     add({ id: 'scenario-export', group: 'Scenario', label: 'Export the scenario file', keywords: 'download json share backup', run: () => exportSaveGame(captureSave(scenarioMeta.name, null)) });
@@ -2632,6 +2742,29 @@ export default function App() {
     </div>
   ) : null;
 
+  // Launch screen until the first action. Every hook above still runs, so the
+  // city, thumbnails and autosave are ready the moment the person steps in.
+  if (!started) {
+    return (
+      <div className="tf-app">
+        <StartScreen
+          continueTarget={continueSave ? { label: continueSave.name, detail: `${continueSave.ops.length} edits, ${continueSave.tick > 0 ? `day at ${Math.floor(continueSave.tick / 60) + 7}:00` : 'fresh morning'}` } : null}
+          recentSaves={libSaves}
+          city={baseCity}
+          net={baseNet}
+          onContinue={() => { if (continueSave) void openSaveGame(continueSave); }}
+          onNew={newScenario}
+          onDemoCity={enterDemoCity}
+          onDemo={(id) => void openDemo(id)}
+          onBrowse={() => { setStarted(true); openBrowser(); }}
+          onTutorial={() => { setStarted(true); startTutorial(); }}
+          onSettings={() => { setStarted(true); setSettingsOpen(true); }}
+          onAbout={() => { setStarted(true); setHelpOpen(true); }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`tf-app${railOpen ? '' : ' panel-closed'}`} data-mode={mode}>
       <TopBar
@@ -2906,6 +3039,16 @@ export default function App() {
           {mode === 'simulate' ? (
             tripCard ?? (selection ? null : (
               <div className="tf-rail-body">
+                {welcome && (
+                  <DemoWelcome
+                    title={welcome.title}
+                    intro={welcome.intro}
+                    stats={welcomeStats}
+                    suggestions={welcome.suggestions}
+                    onAction={demoAction}
+                    onDismiss={() => setWelcome(null)}
+                  />
+                )}
                 <SimulateHome
                   routes={snapshot.routes}
                   peakHeadway={Object.fromEntries(snapshot.routes.map((r) => [r.id, snapshot.service[r.id]?.peakHeadwayMin ?? r.headwayMin]))}
@@ -3109,6 +3252,9 @@ export default function App() {
         />
       )}
       {loading && <LoadingOverlay title={loading.title} stage={{ label: loading.label, progress: loading.progress }} />}
+      {paletteOpen && (
+        <CommandPalette commands={builtinCommands()} onRun={(id) => commandRuns[id]?.()} onClose={() => setPaletteOpen(false)} />
+      )}
       <input
         ref={importRef}
         type="file"

@@ -40,6 +40,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
       [['['], 'Hide the side panel'],
       [[']'], 'Show the side panel'],
       [['T'], 'Switch between light and dark'],
+      [['Ctrl', 'K'], 'Command palette'],
       [['?'], 'This list'],
     ],
   },

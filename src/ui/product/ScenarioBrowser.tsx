@@ -128,7 +128,7 @@ export default function ScenarioBrowser(p: Props) {
                   <Thumb svg={p.thumbs[`demo:${d.id}`]} label={d.title} />
                   <div>
                     <strong>{d.title}</strong>
-                    <div className="tf-hint">{d.difficulty} · ~{d.minutes} min · {d.systems.slice(0, 2).join(' · ')}</div>
+                    <div className="tf-hint">{d.difficulty}, ~{d.minutes} min, {d.systems.slice(0, 2).join(', ')}</div>
                   </div>
                 </button>
                 <button type="button" className="tf-btn small primary" onClick={() => p.onOpenDemo(d.id)}>Start</button>
@@ -151,7 +151,7 @@ export default function ScenarioBrowser(p: Props) {
                     <div>
                       <strong>{meta?.favorite ? '★ ' : ''}{s.name}</strong>
                       <div className="tf-hint">
-                        {s.ops.length} edits · {s.tick > 0 ? `day at ${Math.floor(s.tick / 60) + 7}:00` : 'fresh morning'} · saved {timeAgo(s.savedAt)}
+                        {s.ops.length} edits, {s.tick > 0 ? `day at ${Math.floor(s.tick / 60) + 7}:00` : 'fresh morning'}, saved {timeAgo(s.savedAt)}
                       </div>
                     </div>
                   </button>
@@ -183,8 +183,8 @@ export default function ScenarioBrowser(p: Props) {
                     <strong>{s.name}</strong>
                     <div className="tf-hint">
                       Opened {timeAgo(p.metaById[s.id]?.lastOpenedAt ?? 0)}
-                      {p.metaById[s.id]?.progressPct ? ` · ${p.metaById[s.id].progressPct}% objectives` : ''}
-                      {p.metaById[s.id]?.completedAt ? ' · completed' : ''}
+                      {p.metaById[s.id]?.progressPct ? `, ${p.metaById[s.id].progressPct}% objectives` : ''}
+                      {p.metaById[s.id]?.completedAt ? ', completed' : ''}
                     </div>
                   </div>
                 </button>
@@ -261,10 +261,10 @@ function DemoDetails({ demo, thumb, onStart }: { demo: DemoScenario; thumb: stri
     <div>
       <Thumb svg={thumb} label={demo.title} />
       <h3>{demo.title}</h3>
-      <p className="tf-hint">{demo.difficulty} · ~{demo.minutes} min · {demo.growthYears > 0 ? `starts +${demo.growthYears}y` : 'present day'}</p>
+      <p className="tf-hint">{demo.difficulty}, ~{demo.minutes} min, {demo.growthYears > 0 ? `starts +${demo.growthYears}y` : 'present day'}</p>
       <p>{demo.description}</p>
       <h4>Demonstrates</h4>
-      <p className="tf-hint">{demo.systems.join(' · ')}</p>
+      <p className="tf-hint">{demo.systems.join(', ')}</p>
       <h4>Objectives</h4>
       <ul className="tf-ranked">
         {demo.objectives.map((o) => <li key={o.id}>{o.title}</li>)}
@@ -289,9 +289,9 @@ function SaveDetails({ save, meta, thumb, baseline, sampling, onOpen }: {
       <Thumb svg={thumb} label={save.name} />
       <h3>{save.name}</h3>
       <p className="tf-hint">
-        {save.ops.length} edits · {save.tick > 0 ? `day at tick ${save.tick}` : 'fresh morning'}
-        {save.yearsApplied > 0 ? ` · +${save.yearsApplied}y grown` : ''} · saved {timeAgo(save.savedAt)}
-        {meta?.completedAt ? ' · completed' : ''}
+        {save.ops.length} edits, {save.tick > 0 ? `day at tick ${save.tick}` : 'fresh morning'}
+        {save.yearsApplied > 0 ? `, +${save.yearsApplied}y grown` : ''}, saved {timeAgo(save.savedAt)}
+        {meta?.completedAt ? ', completed' : ''}
       </p>
       <h4>Baseline sample</h4>
       {sampling && <p className="tf-hint">Running a 60-tick sample…</p>}

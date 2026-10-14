@@ -41,7 +41,7 @@ export default function StartScreen(p: Props) {
             {p.continueTarget ? (
               <button type="button" className="tf-btn primary tf-start-big" onClick={p.onContinue} autoFocus>
                 Continue
-                <span className="tf-start-sub">{p.continueTarget.label} · {p.continueTarget.detail}</span>
+                <span className="tf-start-sub">{p.continueTarget.label}, {p.continueTarget.detail}</span>
               </button>
             ) : (
               <button type="button" className="tf-btn primary tf-start-big" onClick={p.onDemoCity} autoFocus>
@@ -78,8 +78,8 @@ export default function StartScreen(p: Props) {
               {/* Generated from live network data — always matches the sim. */}
               <div className="tf-thumb" dangerouslySetInnerHTML={{ __html: thumb }} />
               <p className="tf-hint">
-                {p.city.zones.reduce((s, z) => s + z.population, 0).toLocaleString()} citizens ·
-                {' '}{p.net.routes.length} lines · {p.net.stations.length} stations
+                {p.city.zones.reduce((s, z) => s + z.population, 0).toLocaleString()} citizens,
+                {' '}{p.net.routes.length} lines, {p.net.stations.length} stations
               </p>
             </div>
             <div className="tf-start-card">
@@ -90,7 +90,7 @@ export default function StartScreen(p: Props) {
                     <button type="button" className="tf-link" onClick={() => p.onDemo(d.id)}>
                       {d.title}
                     </button>
-                    <span className="tf-hint"> · {d.difficulty} · ~{d.minutes} min</span>
+                    <span className="tf-hint">, {d.difficulty}, ~{d.minutes} min</span>
                   </li>
                 ))}
               </ul>
@@ -99,7 +99,7 @@ export default function StartScreen(p: Props) {
         </main>
 
         <footer className="tf-start-foot">
-          <span className="tf-hint">TransitForge v{APP_VERSION} · fictional city · deterministic seed 1337</span>
+          <span className="tf-hint">TransitForge v{APP_VERSION}, fictional city, deterministic seed 1337</span>
         </footer>
       </div>
     </div>

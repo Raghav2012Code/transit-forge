@@ -21,7 +21,7 @@ export default function OnboardingOverlay({ state, onNext, onBack, onSkip, onFin
             <i key={s.id} className={i < state.index ? 'done' : i === state.index ? 'now' : undefined} />
           ))}
         </div>
-        <p className="tf-hint">First run · {state.index + 1} of {ONBOARDING_STEPS.length}</p>
+        <p className="tf-hint">First run, step {state.index + 1} of {ONBOARDING_STEPS.length}</p>
         <h2>{step.title}</h2>
         <p>{step.body}</p>
         <div className="tf-draft-actions">
