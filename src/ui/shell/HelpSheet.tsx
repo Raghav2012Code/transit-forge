@@ -41,7 +41,7 @@ export default function HelpSheet({ version, seed, onClose }: Props) {
               <h3>{g.title}</h3>
               <dl className="tf-keys">
                 {g.items.map(([keys, does]) => (
-                  <Fragment key={does}>
+                  <Fragment key={`${does} (${keys.join('+')})`}>
                     <dt>{keys.map((k) => <kbd key={k}>{k}</kbd>)}</dt>
                     <dd>{does}</dd>
                   </Fragment>

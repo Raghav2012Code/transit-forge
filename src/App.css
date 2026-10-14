@@ -1176,22 +1176,10 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 .tf-modal > p { margin: 0 0 var(--s-4); }
 .tf-modal-wide { width: min(640px, calc(100vw - var(--s-8))); }
 
-/* ---- start screen: a page, not a modal ---- */
-
-.tf-start {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  overflow-y: auto;
-  background: var(--paper);
-  color: var(--ink);
-}
-/* ---- start screen: a report page, not a cold simulator ----
- * The same language as the landing page (landing.css): a 1180 column, hairline
- * rules, the city set into the page as a captioned figure, and one page-local
- * display scale. The landing's plate rules are repeated here rather than shared,
- * because the simulator bundle never loads landing.css. */
-
+/* ---- start screen: a transit authority's launch desk ----
+ * Same paper, ink, route colours and Barlow as the workspace. The city is the
+ * figure; the user's next action is the first thing on the left; the five
+ * briefs form a compact register beneath it. No cards-within-cards. */
 .tf-start {
   position: fixed;
   inset: 0;
@@ -1204,70 +1192,25 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  /* Fills the viewport so the closing rule sits on the bottom edge rather than
-   * leaving the page floating in the middle of a void. */
   min-height: 100%;
   width: 100%;
-  max-width: 1180px;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: clamp(24px, 4vw, 36px) 28px 0;
+  padding: 0 clamp(24px, 5vw, 72px);
 }
-.tf-start-head { display: flex; flex-direction: column; align-items: flex-start; }
-/* Mark and name on one line: a masthead, not a logo above a title. */
-.tf-start-lockup { display: flex; align-items: center; gap: var(--s-5); }
-.tf-start-mark { display: grid; place-items: center; }
-.tf-start-head h1 {
-  margin: 0;
-  font-size: clamp(30px, 4.4vw, 46px);
-  font-weight: 600;
-  line-height: var(--lh-tight);
-  letter-spacing: -0.022em;
-  color: var(--ink-strong);
-  text-wrap: balance;
+.tf-start-masthead {
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-6);
+  border-bottom: 1px solid var(--rule);
 }
-.tf-start-lede {
-  margin: var(--s-5) 0 0;
-  max-width: 46ch;
-  font-size: 17px;
-  line-height: 1.55;
-  color: var(--ink-soft);
-  text-wrap: pretty;
-}
-
-.tf-start-grid {
-  flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
-  gap: clamp(28px, 4vw, 56px);
-  padding: clamp(24px, 3vw, 28px) 0 clamp(24px, 2.6vw, 32px);
-}
-
-.tf-start-actions { display: flex; flex-direction: column; gap: var(--s-6); }
-.tf-start-quiet-block { display: flex; flex-direction: column; gap: var(--s-3); }
-
-/* Launch buttons: label over a quiet sub-line. The ink fill is the one
- * committing action; everything below it is a quiet outline. */
-.tf-btn.tf-start-go {
-  height: auto;
-  min-height: 48px;
-  align-items: flex-start;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1px;
-  padding: 10px var(--s-5);
-  font-size: var(--fs-lead);
-  font-weight: 600;
-  text-align: left;
-  white-space: normal;
-}
-.tf-start-go-sub { display: block; font-size: var(--fs-small); font-weight: 400; color: var(--ink-soft); }
-.tf-btn.primary .tf-start-go-sub { color: inherit; opacity: 0.72; }
-
-/* Tertiary actions sit at the landing page's nav rank: quiet text, no box.
- * Pushed to the foot of the column so they align with the last ruled row. */
-.tf-start-links { display: flex; flex-wrap: wrap; gap: var(--s-6); margin-top: auto; }
+.tf-start-lockup { display: inline-flex; align-items: center; gap: var(--s-4); color: var(--ink-strong); }
+.tf-start-wordmark { font-size: var(--fs-lead); font-weight: 600; letter-spacing: -0.01em; }
+.tf-start-utility { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-6); }
 .tf-start-link {
-  padding: 0;
+  padding: 4px 0;
   background: none;
   border: none;
   color: var(--ink-soft);
@@ -1278,70 +1221,139 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 }
 .tf-start-link:hover { color: var(--ink-strong); }
 
-.tf-start-side { display: flex; flex-direction: column; gap: var(--s-7); min-width: 0; }
+.tf-start-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  align-items: center;
+  gap: clamp(32px, 5vw, 72px);
+  padding: clamp(28px, 4vw, 48px) 0 clamp(32px, 4vw, 48px);
+}
+.tf-start-copy { min-width: 0; }
+.tf-start-copy h1 {
+  max-width: 12ch;
+  margin: 0;
+  font-size: clamp(36px, 4.3vw, 56px);
+  font-weight: 600;
+  line-height: 1.04;
+  letter-spacing: -0.028em;
+  color: var(--ink-strong);
+  text-wrap: balance;
+}
+.tf-start-lede {
+  max-width: 46ch;
+  margin: var(--s-5) 0 var(--s-7);
+  color: var(--ink-soft);
+  font-size: var(--fs-lead);
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+.tf-start-actions { display: flex; flex-direction: column; gap: var(--s-4); }
+.tf-btn.tf-start-primary {
+  width: 100%;
+  min-height: 58px;
+  height: auto;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px var(--s-5);
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  text-align: left;
+  white-space: normal;
+}
+.tf-start-primary-detail { display: block; font-size: var(--fs-small); font-weight: 400; color: var(--ink-soft); }
+.tf-btn.primary .tf-start-primary-detail { color: inherit; opacity: 0.72; }
+.tf-start-action-list { border-top: 1px solid var(--rule); }
+.tf-start-action {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 10px 2px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tf-start-action-name { color: var(--ink-strong); font-size: var(--fs-body); font-weight: 600; }
+.tf-start-action-detail { color: var(--ink-faint); font-size: var(--fs-small); }
+.tf-start-action:hover .tf-start-action-name { text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
 
-/* The city, inset and captioned the way a report sets a survey figure. */
-.tf-start-plate {
+.tf-start-figure {
+  min-width: 0;
   margin: 0;
   padding: 10px;
   background: var(--plate);
   border: 1px solid var(--plate-edge);
   border-radius: var(--r-md);
 }
-.tf-start-plate-img { overflow: hidden; border-radius: var(--r-sm); }
-.tf-start-plate-img svg { display: block; width: 100%; height: auto; }
-.tf-start-plate figcaption {
-  padding: 9px 2px 1px;
-  font-size: var(--fs-small);
-  line-height: 1.5;
-  color: var(--ink-faint);
-  text-wrap: pretty;
-}
-
-/* A list of five is a table: ruled rows, figures right-aligned and tabular. */
-.tf-start-scenarios h2 {
-  margin: 0 0 var(--s-2);
-  font-size: var(--fs-body);
-  font-weight: 600;
-  color: var(--ink-strong);
-}
-.tf-start-demos { list-style: none; margin: 0; padding: 0; }
-.tf-start-demos li { border-top: 1px solid var(--rule); }
-.tf-start-demos li:last-child { border-bottom: 1px solid var(--rule); }
-.tf-start-demo {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 56px 64px;
+.tf-start-map { overflow: hidden; border-radius: var(--r-sm); }
+.tf-start-map svg { display: block; width: 100%; height: auto; }
+.tf-start-figure figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--s-5);
   align-items: baseline;
-  gap: var(--s-4);
-  width: 100%;
-  padding: 8px 2px;
+  padding: 10px 2px 1px;
+  color: var(--ink-soft);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+.tf-start-figure-note { margin-left: auto; color: var(--ink-faint); }
+
+.tf-start-scenarios { padding: 0 0 var(--s-6); }
+.tf-start-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-5);
+  padding: 0 0 var(--s-3);
+  border-bottom: 1px solid var(--rule-strong);
+}
+.tf-start-section-head h2 { margin: 0; color: var(--ink-strong); font-size: var(--fs-lead); font-weight: 600; }
+.tf-start-section-head > span { color: var(--ink-faint); font-size: var(--fs-small); }
+.tf-start-table-wrap { width: 100%; overflow-x: auto; }
+.tf-start-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.tf-start-table th, .tf-start-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  font-size: var(--fs-small);
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+.tf-start-table thead th { padding-top: 7px; padding-bottom: 7px; color: var(--ink-faint); font-size: var(--fs-fine); }
+.tf-start-table th:first-child, .tf-start-table td:first-child { width: 24%; padding-left: 2px; }
+.tf-start-table th:nth-child(2), .tf-start-table td:nth-child(2) { width: 56%; }
+.tf-start-table th:nth-child(3), .tf-start-table td:nth-child(3) { width: 12%; }
+.tf-start-table th:last-child, .tf-start-table td:last-child { width: 8%; padding-right: 2px; text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.tf-start-demo {
+  padding: 2px 0;
   background: none;
   border: none;
-  color: inherit;
+  color: var(--ink-strong);
   font: inherit;
+  font-size: var(--fs-body);
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
-.tf-start-demo:hover .tf-start-demo-name { color: var(--ink); }
-.tf-start-demo-name { font-size: var(--fs-body); font-weight: 500; color: var(--ink-strong); }
-.tf-start-demo-diff { font-size: var(--fs-small); color: var(--ink-faint); }
-.tf-start-demo-min {
-  font-family: var(--font-data);
-  font-size: var(--fs-small);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  color: var(--ink-soft);
-}
-
+.tf-start-demo:hover { text-decoration: underline; text-decoration-color: var(--rule-strong); text-underline-offset: 3px; }
 .tf-start-foot {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
   gap: var(--s-3) var(--s-6);
+  margin-top: auto;
   padding: var(--s-4) 0 16px;
   border-top: 1px solid var(--rule);
-  font-size: var(--fs-small);
   color: var(--ink-faint);
+  font-size: var(--fs-small);
 }
 
 /* ---- scenario browser ---- */
@@ -1393,10 +1405,11 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 .tf-card-main > div { min-width: 0; }
 /* A row is scanned, not admired: a small figure on the left, then the name.
  * The full-width figure belongs to the details pane, not the list. */
-.tf-card-main .tf-thumb { flex: none; width: 104px; }
+.tf-card-main .tf-thumb { flex: none; width: 120px; }
 .tf-card-main h3, .tf-card-main strong { display: block; margin: 0 0 var(--s-1); font-size: var(--fs-body); }
 .tf-card-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.tf-thumb { overflow: hidden; border: 1px solid var(--rule); border-radius: var(--r-sm); background: var(--paper-sunken); }
+/* A scenario figure is a plate, like the map it previews. */
+.tf-thumb { overflow: hidden; border: 1px solid var(--plate-edge); border-radius: var(--r-sm); background: var(--plate); }
 .tf-thumb svg { display: block; width: 100%; height: auto; }
 .tf-thumb-empty { min-height: 64px; }
 .tf-import-errors { color: var(--alert); font-size: var(--fs-small); }
@@ -1470,11 +1483,9 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   border-radius: var(--r-sm);
 }
 
-/* The page column narrows before the phone shape: two columns of prose stop
- * working well below about 900px. */
+/* The hero stacks before the phone shape: the desk reads top to bottom. */
 @media (max-width: 900px) {
-  .tf-start-grid { grid-template-columns: minmax(0, 1fr); gap: 34px; }
-  .tf-start-side { gap: var(--s-6); }
+  .tf-start-hero { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 699px) {
