@@ -20,7 +20,7 @@ export function builtinCommands(): CommandDef[] {
     { id: 'sim-speed-20', title: 'Speed 20×', section: 'Simulation', shortcut: '3', keywords: 'fast' },
     { id: 'sim-reset', title: 'Reset the simulated day', section: 'Simulation', shortcut: 'R', keywords: 'restart morning' },
     { id: 'view-panel', title: 'Toggle side panel', section: 'View', shortcut: '[', keywords: 'rail sidebar hide show' },
-    { id: 'view-analytics', title: 'Cycle analytics overlay', section: 'View', shortcut: 'A', keywords: 'access heatmap travel coverage' },
+    { id: 'view-analytics', title: 'Toggle accessibility overlay', section: 'View', shortcut: 'A', keywords: 'access heatmap travel coverage' },
     { id: 'scenario-browser', title: 'Open scenario browser', section: 'Scenario', shortcut: 'O', keywords: 'saves load library demos projects' },
     { id: 'scenario-save', title: 'Save scenario', section: 'Scenario', shortcut: 'Ctrl+S', keywords: 'store persist autosave' },
     { id: 'scenario-export', title: 'Export scenario file', section: 'Scenario', keywords: 'download json share backup' },

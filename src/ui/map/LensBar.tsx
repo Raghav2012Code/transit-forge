@@ -24,7 +24,7 @@ interface Props {
 export default function LensBar({ overlay, onOverlay, layers, onLayers, children }: Props) {
   const hidden = !PRIMARY_LENSES.includes(overlay);
   return (
-    <div className="tf-lens">
+    <div className="tf-lens" data-tour="overlays">
       <div className="tf-lens-row">
         <Seg
           label="Map lens"

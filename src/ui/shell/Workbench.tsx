@@ -52,6 +52,7 @@ export default function Workbench({ mode, onMode, tool, onTool, measureOn, onMea
               onClick={() => onMode(m.key)}
               title={`${m.label} (${m.hotkey}). ${m.blurb}`}
               data-mode={m.key}
+              data-tour={m.key === 'build' ? 'mode-build' : m.key === 'plan' ? 'mode-plan' : undefined}
             >
               <Icon />
               <span>{m.label}</span>
@@ -61,7 +62,7 @@ export default function Workbench({ mode, onMode, tool, onTool, measureOn, onMea
       </div>
 
       {mode === 'build' && (
-        <div className="tf-rail-group" role="radiogroup" aria-label="Build tool">
+        <div className="tf-rail-group" role="radiogroup" aria-label="Build tool" data-tour="build-tools">
           {BUILD_TOOLS.map((t) => {
             const Icon = t.icon;
             return (

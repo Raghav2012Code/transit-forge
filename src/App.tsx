@@ -118,6 +118,24 @@ import SearchPalette from './ui/map/SearchPalette.tsx';
 import CompareSplit from './ui/map/CompareSplit.tsx';
 import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './rendering/SceneView.tsx';
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
+import OnboardingOverlay from './ui/product/OnboardingOverlay.tsx';
+import TutorialOverlay from './ui/product/TutorialOverlay.tsx';
+import {
+  IDLE_ONBOARDING,
+  loadOnboardingDone,
+  onboardingReducer,
+  saveOnboardingDone,
+  type OnboardingEvent,
+  type OnboardingState,
+} from './ui/product/onboarding.ts';
+import {
+  IDLE_TUTORIAL,
+  TUTORIAL_STEPS,
+  tutorialDone,
+  tutorialReducer,
+  type TutorialEvent,
+  type TutorialState,
+} from './ui/product/tutorial.ts';
 import ReportsSheet, { type ReportTab } from './ui/shell/ReportsSheet.tsx';
 import type { Command } from './ui/shell/commands.ts';
 import { PRESETS } from './ui/map/places.ts';
@@ -232,6 +250,25 @@ export default function App() {
   });
   const tutorialSeen = useRef<Set<string>>(new Set());
   const evalCache = useRef(new Map<string, PlanEvaluation>());
+
+  // Guided tour (coach marks over the real controls) and first-run onboarding.
+  // Both are additive: the passive tutorial checklist in SimulateHome is untouched.
+  const [tutorial, setTutorial] = useState<TutorialState>(() => IDLE_TUTORIAL);
+  const [onboarding, setOnboarding] = useState<OnboardingState>(() =>
+    loadOnboardingDone() ? IDLE_ONBOARDING : onboardingReducer(IDLE_ONBOARDING, { type: 'start' }),
+  );
+  function startTutorial() {
+    enterSimulate();
+    setTutorial(tutorialReducer(IDLE_TUTORIAL, { type: 'start' }));
+  }
+  function sendTutorial(e: TutorialEvent) {
+    setTutorial((t) => tutorialReducer(t, e));
+  }
+  function sendOnboarding(e: OnboardingEvent) {
+    const next = onboardingReducer(onboarding, e);
+    if (next.done) saveOnboardingDone();
+    setOnboarding(next);
+  }
 
   // Shell state: event toasts + side-panel visibility.
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -433,6 +470,18 @@ export default function App() {
     for (const k of tutorialNow()) tutorialSeen.current.add(k);
   }, [tutorialNow]);
 
+  // The coach tour advances itself when the person does the step for real.
+  // Returns the same state unless a step completes, so this never loops.
+  useEffect(() => {
+    setTutorial((t) => {
+      if (!t.active || t.paused) return t;
+      const step = TUTORIAL_STEPS[t.index];
+      if (!step || !step.doneWhen) return t;
+      const facts = { mode, playing, overlay, editCount: ops.length };
+      return tutorialDone(step.doneWhen, facts) ? tutorialReducer(t, { type: 'auto-advance' }) : t;
+    });
+  });
+
   // Keyboard shortcuts (ignored while typing; native undo kept in inputs).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -499,6 +548,8 @@ export default function App() {
           setMeasureHover(null);
         } else if (inspectMode) setInspectMode(false);
         else if (openTrip) setOpenTrip(null);
+        else if (tutorial.active) sendTutorial({ type: 'exit' });
+        else if (onboarding.active) sendOnboarding({ type: 'skip' });
         else if (mode === 'simulate' && selection) setSelection(null);
         else enterSimulate();
       } else if ((e.key === 't' || e.key === 'T') && plain) {
@@ -1627,6 +1678,7 @@ export default function App() {
     add({ id: 'panel', group: 'Workspace', label: railOpen ? 'Hide the side panel' : 'Show the side panel', keys: [railOpen ? '[' : ']'], keywords: 'sidebar inspector', run: () => setRailOpen((r) => !r) });
     add({ id: 'theme', group: 'Workspace', label: theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme', keys: ['T'], keywords: 'appearance night day mode colour', suggested: true, run: toggleTheme });
     add({ id: 'help', group: 'Workspace', label: 'Show keyboard shortcuts', keys: ['?'], keywords: 'help keys hotkeys', suggested: true, run: () => setHelpOpen(true) });
+    add({ id: 'tutorial', group: 'Workspace', label: 'Start the guided tutorial', keywords: 'tour learn howto interactive guide', run: startTutorial });
 
     if (ops.length > 0) {
       add({ id: 'compare', group: 'Scenario', label: 'Compare this scenario with the baseline', keywords: 'diff versus', run: () => openReports('compare') });
@@ -2636,6 +2688,26 @@ export default function App() {
         onReports={() => setReportsOpen((v) => !v)}
       />
       {helpOpen && <HelpSheet version={APP_VERSION} seed={SEED} onClose={() => setHelpOpen(false)} />}
+      {onboarding.active && (
+        <OnboardingOverlay
+          state={onboarding}
+          onNext={() => sendOnboarding({ type: 'next' })}
+          onBack={() => sendOnboarding({ type: 'back' })}
+          onSkip={() => sendOnboarding({ type: 'skip' })}
+          onFinish={() => sendOnboarding({ type: 'finish' })}
+        />
+      )}
+      {tutorial.active && (
+        <TutorialOverlay
+          state={tutorial}
+          onNext={() => sendTutorial({ type: 'next' })}
+          onBack={() => sendTutorial({ type: 'back' })}
+          onSkip={() => sendTutorial({ type: 'skip' })}
+          onPause={() => sendTutorial({ type: 'pause' })}
+          onResume={() => sendTutorial({ type: 'resume' })}
+          onExit={() => sendTutorial({ type: 'exit' })}
+        />
+      )}
     </div>
   );
 }
