@@ -2,6 +2,22 @@
 
 Newest first. Version is read from `src/version.ts`.
 
+## 1.6.0
+
+- **Product foundation.** The simulator now opens on a start screen
+  (continue, new scenario, demo city, demos, browser, tutorial, settings)
+  instead of a cold map. Five curated demo scenarios ship with a contextual
+  welcome card and guided next actions. Sessions persist as savegames: the
+  scenario browser holds the library with recency, favorites, completion and
+  `.tfscenario.json` import/export; opening a save replays its edits and
+  fast-forwards its clock under a progress overlay; background autosave keeps
+  a recovery slot. A Ctrl+K command palette runs the same registry as `/`
+  search. First-run onboarding and a coach-marks guided tour teach the loop,
+  and settings cover density, motion, contrast, default speed, buildings,
+  autosave and a guarded reset of all local data. Restores yield through a
+  rAF/timeout race, so they also complete in background tabs where rAF never
+  fires.
+
 ## 1.5.1
 
 - **Time machine removed.** Rewind, fork-and-compare and their timed-edit machinery are gone: the day strip runs forward only again, service and fare edits apply at the start of the day through the op log, and the headless worker runner (`src/workers/`) goes with them. Live service and fare editing, hand-made disruptions, the journey inspector and all planning features are unchanged.
