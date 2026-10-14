@@ -154,7 +154,7 @@ import {
 import { deleteSave, duplicateSave, listSaves, renameSave, upsertSave } from './simulation/scenario/saveStore.ts';
 import { dropMeta, getMeta, orderRecent, toggleFavorite, touchOpened, type ScenarioMeta } from './simulation/scenario/scenarioMeta.ts';
 import { networkThumbnail } from './simulation/scenario/thumbnail.ts';
-import { DEMOS, demoById, type DemoAction } from './simulation/scenario/demos.ts';
+import { DEMOS, demoBrief, demoById, type DemoAction } from './simulation/scenario/demos.ts';
 import {
   loadSettings,
   sanitizeSettings,
@@ -300,6 +300,9 @@ export default function App() {
   // Planning state.
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [briefId, setBriefId] = useState<string | null>(null);
+  // The open demo's own brief, kept so the plan surface has objectives even
+  // when the generated brief set does not happen to include that brief today.
+  const [demoBriefState, setDemoBriefState] = useState<PlanningBrief | null>(null);
   const [baselineBundle, setBaselineBundle] = useState<MetricsBundle | null>(null);
   const [planHorizon, setPlanHorizon] = useState(5);
   const [evaluation, setEvaluation] = useState<{
@@ -514,6 +517,7 @@ export default function App() {
     setGrowthHistory(save.growthHistory);
     setForecast(null);
     setBriefId(save.briefId);
+    setDemoBriefState(null);
     setDifficulty(save.difficulty);
     setPlanHorizon(save.planHorizon);
     setRedo([]);
@@ -559,6 +563,7 @@ export default function App() {
     setPlaying(false);
     enterSimulate();
     setBriefId(d.briefId);
+    setDemoBriefState(demoBrief(d));
     setDifficulty(d.difficulty);
     if (validOverlay(d.overlay)) setOverlay(d.overlay as Overlay);
     if (TRAVEL_DESTS.some((t) => t.key === d.travelDest)) setTravelDest(d.travelDest as TravelDest);
@@ -652,6 +657,7 @@ export default function App() {
     setOps([]);
     setRedo([]);
     setBriefId(null);
+    setDemoBriefState(null);
     setActiveSaveId(null);
     setWelcome(null);
     setViewing('scenario');
@@ -1019,9 +1025,15 @@ export default function App() {
     };
   }, [snapshot, stats, access, coverage, utilization]);
   const briefs = useMemo(() => generateBriefs(briefFacts, difficulty, stats.opCost), [briefFacts, difficulty, stats.opCost]);
+  // A demo brings its own brief, so the objectives chip and the evaluation work
+  // even when the city's current facts would not generate that brief.
   const activeBrief: PlanningBrief | null = useMemo(
-    () => briefs.find((b) => b.id === briefId) ?? null,
-    [briefs, briefId],
+    () => briefs.find((b) => b.id === briefId) ?? (demoBriefState && demoBriefState.id === briefId ? demoBriefState : null),
+    [briefs, briefId, demoBriefState],
+  );
+  const panelBriefs = useMemo(
+    () => (demoBriefState && !briefs.some((b) => b.id === demoBriefState.id) ? [demoBriefState, ...briefs] : briefs),
+    [briefs, demoBriefState],
   );
   const liveBundle: MetricsBundle = useMemo(() => ({
     stats,
@@ -3118,7 +3130,7 @@ export default function App() {
           ) : mode === 'plan' ? (
             <div className="tf-rail-body">
               <PlanningPanel
-                briefs={briefs}
+                briefs={panelBriefs}
                 briefId={briefId}
                 onSelectBrief={onSelectBrief}
                 difficulty={difficulty}
