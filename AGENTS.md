@@ -49,10 +49,9 @@ Light and dark ship as one design:
 
 ## Git
 
-`origin` is the fork (`abivan100-stack/transit-forge`). `upstream` is the parent
-(`Raghav2012Code/transit-forge`), where the fork has read access only. Work lands
-on the fork's `main` through a pull request, and reaches the parent as a pull
-request from the fork's `main`.
+`origin` is `Raghav2012Code/transit-forge`. There is no `upstream` remote and
+no fork in play. Work lands on `main` directly for small close-outs, or
+through a pull request for milestones.
 
 ## Agent skills
 
