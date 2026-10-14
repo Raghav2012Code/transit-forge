@@ -9,6 +9,15 @@ export interface ThumbnailInput {
   zones: Zone[];
 }
 
+export type ThumbnailTheme = 'light' | 'dark';
+
+// One palette per theme, matching the map's own minimap values in
+// src/index.css (--mm-*), so a card agrees with the plate it previews.
+const PLATE: Record<ThumbnailTheme, { bg: string; zone: string; dot: string }> = {
+  dark: { bg: '#0b1020', zone: '#33436e', dot: '#dbe4ff' },
+  light: { bg: '#e9ebef', zone: '#97a1b3', dot: '#1f2937' },
+};
+
 const W = 232;
 const H = 120;
 
@@ -17,7 +26,8 @@ function round1(n: number): number {
 }
 
 /** Render a top-down network thumbnail as an SVG string. */
-export function networkThumbnail(input: ThumbnailInput): string {
+export function networkThumbnail(input: ThumbnailInput, theme: ThumbnailTheme): string {
+  const plate = PLATE[theme];
   const pts: { x: number; z: number }[] = [];
   for (const z of input.zones) pts.push({ x: z.center.x, z: z.center.z });
   for (const s of input.stations) pts.push({ x: s.pos.x, z: s.pos.z });
@@ -44,7 +54,7 @@ export function networkThumbnail(input: ThumbnailInput): string {
   const zoneCircles = input.zones
     .map((z) => {
       const r = Math.max(2, round1(((z.radius / Math.max(1, maxX - minX)) * W + (z.radius / Math.max(1, maxZ - minZ)) * H) / 2));
-      return `<circle cx="${sx(z.center.x)}" cy="${sz(z.center.z)}" r="${r}" fill="none" stroke="#33436e" stroke-width="1"/>`;
+      return `<circle cx="${sx(z.center.x)}" cy="${sz(z.center.z)}" r="${r}" fill="none" stroke="${plate.zone}" stroke-width="1"/>`;
     })
     .join('');
   const routeLines = input.routes
@@ -60,8 +70,8 @@ export function networkThumbnail(input: ThumbnailInput): string {
     })
     .join('');
   const dots = input.stations
-    .map((s) => `<circle cx="${sx(s.pos.x)}" cy="${sz(s.pos.z)}" r="1.8" fill="#dbe4ff"/>`)
+    .map((s) => `<circle cx="${sx(s.pos.x)}" cy="${sz(s.pos.z)}" r="1.8" fill="${plate.dot}"/>`)
     .join('');
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" role="img">` +
-    `<rect width="${W}" height="${H}" fill="#0b1020"/>${zoneCircles}${routeLines}${dots}</svg>`;
+    `<rect width="${W}" height="${H}" fill="${plate.bg}"/>${zoneCircles}${routeLines}${dots}</svg>`;
 }

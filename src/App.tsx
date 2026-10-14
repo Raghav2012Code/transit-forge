@@ -195,6 +195,22 @@ export default function App() {
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState<Speed>(() => loadSettings().defaultSpeed);
   const [layers, setLayers] = useState<Layers>(() => ({ ...loadLayers(), buildings: loadSettings().showBuildings }));
+  // Theme: an explicit choice is remembered; until one is made, follow the system.
+  // Declared with the other shell state so anything reading it (thumbnails) sits below.
+  const [theme, setTheme] = useState<Theme>(() => savedTheme() ?? systemTheme());
+  const themePinned = useRef(savedTheme() !== null);
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const onChange = () => {
+      if (!themePinned.current) setTheme(mq.matches ? 'dark' : 'light');
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
   // Layer preferences persist across sessions (map state, not sim state).
   // The buildings flag is shared with Settings, so the two stay one truth.
   function onLayers(next: Layers) {
@@ -550,20 +566,20 @@ export default function App() {
   }
 
   // Thumbnails are pure renders of stored networks: a save always draws the
-  // same card. Rebuilt only when the library changes.
+  // same card. Rebuilt when the library or the theme changes.
   const thumbs = useMemo(() => {
     const out: Record<string, string> = {};
     for (const d of DEMOS) {
       const a = applyEdits(baseCity, baseNet, d.ops);
-      out[`demo:${d.id}`] = networkThumbnail({ stations: a.stations, routes: a.routes, zones: a.city.zones });
+      out[`demo:${d.id}`] = networkThumbnail({ stations: a.stations, routes: a.routes, zones: a.city.zones }, theme);
     }
     for (const s of saves) {
       const c = s.zones ? { ...baseCity, zones: s.zones } : baseCity;
       const a = applyEdits(c, baseNet, s.ops);
-      out[s.id] = networkThumbnail({ stations: a.stations, routes: a.routes, zones: a.city.zones });
+      out[s.id] = networkThumbnail({ stations: a.stations, routes: a.routes, zones: a.city.zones }, theme);
     }
     return out;
-  }, [saves, baseCity, baseNet]);
+  }, [saves, baseCity, baseNet, theme]);
 
   // A 60-tick headless sample behind the details pane. Stale picks lose.
   async function selectDetails(d: { kind: 'save' | 'demo'; id: string } | null) {
@@ -692,20 +708,6 @@ export default function App() {
     setRunTarget(null);
   }
   // Theme: an explicit choice is remembered; until one is made, follow the system.
-  const [theme, setTheme] = useState<Theme>(() => savedTheme() ?? systemTheme());
-  const themePinned = useRef(savedTheme() !== null);
-  useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
-  useEffect(() => {
-    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
-    if (!mq) return;
-    const onChange = () => {
-      if (!themePinned.current) setTheme(mq.matches ? 'dark' : 'light');
-    };
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
   function toggleTheme() {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
     themePinned.current = true;
@@ -2752,6 +2754,7 @@ export default function App() {
           recentSaves={libSaves}
           city={baseCity}
           net={baseNet}
+          theme={theme}
           onContinue={() => { if (continueSave) void openSaveGame(continueSave); }}
           onNew={newScenario}
           onDemoCity={enterDemoCity}
