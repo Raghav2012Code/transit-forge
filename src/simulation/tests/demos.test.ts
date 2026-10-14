@@ -3,7 +3,8 @@ import { generateCity } from '../city/generateCity.ts';
 import { buildNetwork } from '../transport/network.ts';
 import { applyEdits } from '../scenario/applyEdits.ts';
 import { validateIncidentConfig } from '../scenario/applyEdits.ts';
-import { DEMOS, demoById } from '../scenario/demos.ts';
+import { DEMOS, demoBrief, demoById } from '../scenario/demos.ts';
+import { horizonFor } from '../planning/briefs.ts';
 import type { MetricKey } from '../planning/objectives.ts';
 
 const SEED = 1337;
@@ -31,6 +32,28 @@ describe('demo scenarios', () => {
       expect(demoById(d.id)).toBe(d);
     }
     expect(demoById('nope')).toBeNull();
+  });
+
+  it('gives every demo a usable brief, generated or synthesized', () => {
+    // A demo must never silently point at a brief the city's facts do not
+    // generate: the objectives chip and the evaluation would both go quiet.
+    for (const d of DEMOS) {
+      const synthesized = demoBrief(d);
+      expect(synthesized.title.length).toBeGreaterThan(0);
+      expect(synthesized.paragraphs.length).toBeGreaterThan(0);
+      expect(synthesized.objectives.length).toBeGreaterThan(0);
+      expect(synthesized.constraints.length).toBeGreaterThan(0);
+      expect(synthesized.horizonYears).toBe(horizonFor(d.difficulty));
+      // A briefed demo resolves to that id, so a generated brief of the same
+      // id can win; an unbriefed one resolves to its own id.
+      expect(synthesized.id).toBe(d.briefId ?? `demo-${d.id}`);
+      // Every objective must be evaluable on its own terms.
+      for (const o of synthesized.objectives) {
+        expect(METRICS).toContain(o.metric);
+        expect(['<', '>', '<=', '>=']).toContain(o.op);
+        expect(Number.isFinite(o.target)).toBe(true);
+      }
+    }
   });
 
   it('applies every demo cleanly and deterministically', () => {

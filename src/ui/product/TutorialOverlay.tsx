@@ -20,23 +20,26 @@ interface Rect {
 
 /** Coach mark pinned to the real control named by the step's data-tour key. */
 export default function TutorialOverlay({ state, onNext, onBack, onSkip, onPause, onResume, onExit }: Props) {
-  const [rect, setRect] = useState<Rect | null>(null);
+  // The measurement is stamped with the step it belongs to, so a stale one is
+  // simply ignored: the step shows a centred card when no measurement matches.
+  // (Clearing state from the effect would be a synchronous setState in an effect.)
+  const [measured, setMeasured] = useState<{ index: number; rect: Rect } | null>(null);
   const step = state.active ? TUTORIAL_STEPS[state.index] : null;
+  const rect = measured && measured.index === state.index ? measured.rect : null;
 
   useLayoutEffect(() => {
-    if (!state.active || !step?.target) {
-      setRect(null);
-      return;
-    }
+    if (!state.active || !step?.target) return;
+    const index = state.index;
+    const target = step.target;
     const place = () => {
-      const el = document.querySelector(`[data-tour="${step.target}"]`);
+      const el = document.querySelector(`[data-tour="${target}"]`);
       if (!el) {
-        setRect(null);
+        setMeasured({ index, rect: { x: 0, y: 0, w: 0, h: 0 } });
         return;
       }
       el.scrollIntoView({ block: 'nearest' });
       const r = el.getBoundingClientRect();
-      setRect({ x: r.x, y: r.y, w: r.width, h: r.height });
+      setMeasured({ index, rect: { x: r.x, y: r.y, w: r.width, h: r.height } });
     };
     place();
     window.addEventListener('resize', place);
@@ -45,14 +48,15 @@ export default function TutorialOverlay({ state, onNext, onBack, onSkip, onPause
 
   if (!state.active || !step) return null;
   const last = state.index === TUTORIAL_STEPS.length - 1;
+  const hasRing = rect !== null && rect.w > 0 && rect.h > 0;
   // Card sits below the highlight, or centered when there is no target.
   const cardStyle =
-    rect !== null
+    hasRing
       ? { top: Math.min(window.innerHeight - 240, rect.y + rect.h + 12), left: Math.max(12, Math.min(window.innerWidth - 340, rect.x)) }
       : { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
   return (
     <div className="tf-coach-layer" aria-hidden={false}>
-      {rect !== null && (
+      {hasRing && (
         <div
           className="tf-coach-ring"
           style={{ left: rect.x - 6, top: rect.y - 6, width: rect.w + 12, height: rect.h + 12 }}

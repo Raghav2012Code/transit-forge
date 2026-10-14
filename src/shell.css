@@ -95,6 +95,14 @@
 .tf-scenario-chip.open .tf-caret { transform: rotate(180deg); }
 .tf-scenario-pop { min-width: 0; }
 
+/* Name it, save it, or open the library: a short column, not a row of chips. */
+.tf-scenario-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+.tf-scenario-menu > .tf-btn { align-self: flex-start; }
+
 .tf-command {
   display: flex;
   align-items: center;

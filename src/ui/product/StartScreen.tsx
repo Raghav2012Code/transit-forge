@@ -4,6 +4,7 @@ import { networkThumbnail } from '../../simulation/scenario/thumbnail.ts';
 import type { SaveGame } from '../../simulation/scenario/persistence.ts';
 import type { CityData } from '../../types/index.ts';
 import type { NetworkData } from '../../simulation/transport/network.ts';
+import type { Theme } from '../../rendering/palette.ts';
 
 export interface StartContinue {
   label: string;
@@ -15,6 +16,7 @@ interface Props {
   recentSaves: SaveGame[];
   city: CityData;
   net: NetworkData;
+  theme: Theme;
   onContinue: () => void;
   onNew: () => void;
   onDemoCity: () => void;
@@ -27,7 +29,7 @@ interface Props {
 
 /** Launch screen: resume, start, or browse — never a cold simulator dump. */
 export default function StartScreen(p: Props) {
-  const thumb = networkThumbnail({ stations: p.net.stations, routes: p.net.routes, zones: p.city.zones });
+  const thumb = networkThumbnail({ stations: p.net.stations, routes: p.net.routes, zones: p.city.zones }, p.theme);
   return (
     <div className="tf-start">
       <div className="tf-start-inner">
@@ -89,8 +91,7 @@ export default function StartScreen(p: Props) {
                   <li key={d.id}>
                     <button type="button" className="tf-link" onClick={() => p.onDemo(d.id)}>
                       {d.title}
-                    </button>
-                    <span className="tf-hint">, {d.difficulty}, ~{d.minutes} min</span>
+                    </button><span className="tf-hint">, {d.difficulty}, ~{d.minutes} min</span>
                   </li>
                 ))}
               </ul>

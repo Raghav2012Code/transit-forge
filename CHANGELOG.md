@@ -2,6 +2,26 @@
 
 Newest first. Version is read from `src/version.ts`.
 
+## 1.6.1
+
+- **Scenario cards follow the theme.** Thumbnails were drawn on a dark plate in
+  both themes, so a scenario card was a dark tile on the light page. Each theme
+  now renders its own plate, matching the map's own minimap values.
+- **One place for scenarios.** The top-bar popover is name, save, and open the
+  browser; the old ops-only scenario list is gone, because the browser already
+  held everything it did (and more). Data left in the old store is simply never
+  read again — nothing was migrated, because a pre-scale payload must not load.
+- **Demo briefs always resolve.** A demo carries its own objectives and
+  constraints, so opening one no longer depends on which briefs the city's
+  current facts happen to generate: the objectives chip and the plan evaluation
+  work from the first tick.
+- Fixes: the featured-scenario list no longer pushes its comma onto its own line;
+  the scenario popover lays out as a column instead of overflowing.
+- Internal: `npm run lint` is back to zero warnings — by restructuring, not by
+  suppressing. The tour and the tutorial checklist now adjust state during render
+  instead of committing it from effects, and the clock read sits at module scope so
+  the component body stays pure.
+
 ## 1.6.0
 
 - **Product foundation.** The simulator now opens on a start screen

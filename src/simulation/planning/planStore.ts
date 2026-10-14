@@ -4,7 +4,7 @@ import type { EditOp } from '../scenario/scenario.ts';
 import type { IncidentConfig } from '../incidents/incidents.ts';
 import type { Objective, PlanConstraint } from './objectives.ts';
 import type { Difficulty } from './briefs.ts';
-import { storageRead, storageWrite } from '../scenario/store.ts';
+import { storageRead, storageWrite } from '../scenario/storage.ts';
 
 export interface PlanAttempt {
   atClock: string;

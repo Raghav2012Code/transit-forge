@@ -5,7 +5,7 @@
 // simulation layer never imports rendering types; the UI validates it.
 import type { FarePolicy } from '../economics/fares.ts';
 import type { Objective, PlanConstraint } from '../planning/objectives.ts';
-import type { Difficulty } from '../planning/briefs.ts';
+import { horizonFor, type Difficulty, type PlanningBrief } from '../planning/briefs.ts';
 import type { EditOp } from './scenario.ts';
 
 export type DemoAction =
@@ -224,4 +224,22 @@ export const DEMOS: DemoScenario[] = [
 
 export function demoById(id: string): DemoScenario | null {
   return DEMOS.find((d) => d.id === id) ?? null;
+}
+
+/**
+ * The brief a demo runs on. A demo carries its own objectives and constraints,
+ * so opening one never depends on which briefs today's city facts happen to
+ * generate — the generated set only says what the city is ready to be asked.
+ */
+export function demoBrief(d: DemoScenario): PlanningBrief {
+  return {
+    id: d.briefId ?? `demo-${d.id}`,
+    title: d.title,
+    difficulty: d.difficulty,
+    paragraphs: [d.description],
+    objectives: d.objectives.map((o) => ({ ...o })),
+    constraints: d.constraints.map((c) => ({ ...c })),
+    horizonYears: horizonFor(d.difficulty),
+    focus: [],
+  };
 }

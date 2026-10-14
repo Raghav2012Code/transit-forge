@@ -66,6 +66,11 @@ const STATION_CAP: Record<Difficulty, number | null> = { easy: 3, medium: 2, har
 
 const HORIZON: Record<Difficulty, number> = { easy: 5, medium: 5, hard: 10, expert: 20 };
 
+/** The planning horizon a difficulty implies, for callers synthesizing a brief. */
+export function horizonFor(difficulty: Difficulty): number {
+  return HORIZON[difficulty];
+}
+
 function budgetConstraint(d: Difficulty): PlanConstraint {
   return { id: `budget-${d}`, label: `Construction budget < ${BUDGET[d] / 1_00_00_000}Cr`, kind: 'budget', limit: BUDGET[d] };
 }

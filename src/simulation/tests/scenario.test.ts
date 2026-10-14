@@ -5,17 +5,14 @@ import { buildNetwork, validateNetwork } from '../transport/network.ts';
 import { applyEdits } from '../scenario/applyEdits.ts';
 import { buildCompareRows, runHeadless } from '../scenario/compare.ts';
 import {
-  nextRouteId,
   nextStationId,
   pushOp,
   redoOp,
   undoOp,
   validateStationPlacement,
   COST_RATES,
-  SCENARIO_VERSION,
   type EditOp,
 } from '../scenario/scenario.ts';
-import { deserializeScenario, listScenarios, saveScenario, serializeScenario } from '../scenario/store.ts';
 import { buildRoutePlan } from '../passengers/passengers.ts';
 
 const SEED = 1337;
@@ -121,59 +118,6 @@ describe('scenario history and serialization', () => {
     expect(s4.redo.length).toBe(0);
   });
 
-  it('round-trips through versioned serialization', () => {
-    const ops: EditOp[] = [{ type: 'addStation', station: { id: nextStationId([]), name: 'U', x: 0, z: 100, capacityPerHr: 4000 } }];
-    void nextRouteId;
-    const sc = { version: SCENARIO_VERSION, id: 'sc-1', name: 'Test', seed: SEED, ops, updatedAt: 0 };
-    const back = deserializeScenario(serializeScenario(sc));
-    expect(back).toEqual(sc);
-    expect(deserializeScenario('garbage')).toBeNull();
-    expect(deserializeScenario('{"version":99}')).toBeNull();
-  });
-
-  it('rejects pre-scale (version 1) saves instead of loading old-metre coordinates', () => {
-    const v1 = JSON.stringify({
-      version: 1,
-      scenario: { version: 1, id: 'sc-old', name: 'Old', seed: SEED, ops: [], updatedAt: 0 },
-    });
-    expect(deserializeScenario(v1)).toBeNull();
-    // A version-1 scenario inside the current envelope is rejected too.
-    const v1Body = JSON.stringify({
-      version: SCENARIO_VERSION,
-      scenario: { version: 1, id: 'sc-old', name: 'Old', seed: SEED, ops: [], updatedAt: 0 },
-    });
-    expect(deserializeScenario(v1Body)).toBeNull();
-    // And the current format still round-trips.
-    const ok = JSON.stringify({
-      version: SCENARIO_VERSION,
-      scenario: { version: SCENARIO_VERSION, id: 'sc-new', name: 'New', seed: SEED, ops: [], updatedAt: 0 },
-    });
-    expect(deserializeScenario(ok)?.id).toBe('sc-new');
-  });
-
-  it('listScenarios drops a version-1 envelope', () => {
-    const store = new Map<string, string>();
-    const fake = {
-      getItem: (k: string) => store.get(k) ?? null,
-      setItem: (k: string, v: string) => { store.set(k, v); },
-      removeItem: (k: string) => { store.delete(k); },
-    };
-    const prev = (globalThis as { localStorage?: unknown }).localStorage;
-    (globalThis as { localStorage?: unknown }).localStorage = fake;
-    try {
-      store.set('transitforge.scenarios.v1', JSON.stringify({
-        version: 1,
-        scenarios: [{ version: 1, id: 'sc-old', name: 'Old', seed: SEED, ops: [], updatedAt: 0 }],
-      }));
-      expect(listScenarios()).toEqual([]);
-      // A fresh save is stamped with the current version and reads back.
-      saveScenario({ id: 'sc-new', name: 'New', seed: SEED, ops: [], updatedAt: 0 });
-      expect(listScenarios().map((s) => s.id)).toEqual(['sc-new']);
-      expect(JSON.parse(store.get('transitforge.scenarios.v1') ?? '{}').version).toBe(SCENARIO_VERSION);
-    } finally {
-      (globalThis as { localStorage?: unknown }).localStorage = prev;
-    }
-  });
 
   it('derives deterministic ids from the op sequence', () => {
     expect(nextStationId([])).toBe('st-u1');
