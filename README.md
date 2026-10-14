@@ -1,6 +1,6 @@
 # TransitForge
 
-[![CI](https://github.com/abivan100-stack/transit-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/abivan100-stack/transit-forge/actions/workflows/ci.yml)
+[![CI](https://github.com/Raghav2012Code/transit-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/Raghav2012Code/transit-forge/actions/workflows/ci.yml)
 
 A browser-based 3D public transportation planning and simulation sandbox. Build
 metro, rail and bus lines, run a simulated day, break the network and plan
@@ -143,14 +143,15 @@ every pull request. Release notes are in [`CHANGELOG.md`](CHANGELOG.md).
   the map (`docs/adr/0001`). The simulation itself spends each tick as a time
   budget per vehicle: it stops at every station and pays that stop's dwell
   (`docs/adr/0002`).
+
 ## Licence
 
 Apache License 2.0. See [`LICENSE`](LICENSE).
 
 ## Credits
 
-Built on [Raghav2012Code/transit-forge](https://github.com/Raghav2012Code/transit-forge),
-the parent repository, by Raghav Krishna and Abivan.
+Built by [Raghav Krishna](https://github.com/Raghav2012Code), with Abivan
+([abivan100-stack](https://github.com/abivan100-stack)).
 
 ## Principle
 
