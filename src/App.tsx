@@ -75,7 +75,7 @@ import { buildNetwork } from './simulation/transport/network.ts';
 import { computeStats } from './simulation/statistics.ts';
 import { type Speed } from './ui/controls/SimControls.tsx';
 import LensOptions from './ui/controls/LensOptions.tsx';
-import { LENS_GROUPS, LENS_NOTE, type DemandLayer, type TravelDest } from './ui/controls/lenses.ts';
+import { DEMAND_LAYERS, LENS_GROUPS, LENS_NOTE, TRAVEL_DESTS, type DemandLayer, type TravelDest } from './ui/controls/lenses.ts';
 import StatsPanel from './ui/dashboard/StatsPanel.tsx';
 import DebugPanel from './ui/dashboard/DebugPanel.tsx';
 import Inspector from './ui/inspectors/Inspector.tsx';
@@ -118,6 +118,50 @@ import SearchPalette from './ui/map/SearchPalette.tsx';
 import CompareSplit from './ui/map/CompareSplit.tsx';
 import type { CameraInfo, CatchmentView, HoverInfo, MeasureView } from './rendering/SceneView.tsx';
 import Toasts, { type Toast } from './ui/shell/Toasts.tsx';
+import OnboardingOverlay from './ui/product/OnboardingOverlay.tsx';
+import TutorialOverlay from './ui/product/TutorialOverlay.tsx';
+import {
+  IDLE_ONBOARDING,
+  loadOnboardingDone,
+  onboardingReducer,
+  saveOnboardingDone,
+  type OnboardingEvent,
+  type OnboardingState,
+} from './ui/product/onboarding.ts';
+import {
+  IDLE_TUTORIAL,
+  TUTORIAL_STEPS,
+  tutorialDone,
+  tutorialReducer,
+  type TutorialEvent,
+  type TutorialState,
+} from './ui/product/tutorial.ts';
+import ScenarioBrowser, { type DetailsBaseline } from './ui/product/ScenarioBrowser.tsx';
+import SettingsDialog from './ui/product/SettingsDialog.tsx';
+import StartScreen from './ui/product/StartScreen.tsx';
+import DemoWelcome from './ui/product/DemoWelcome.tsx';
+import CommandPalette from './ui/product/CommandPalette.tsx';
+import { builtinCommands } from './ui/product/commands.ts';
+import { ConfirmDialog, PromptDialog } from './ui/product/Dialog.tsx';
+import LoadingOverlay from './ui/product/LoadingOverlay.tsx';
+import {
+  blankSave,
+  parseSaveGame,
+  saveFileName,
+  serializeSaveGame,
+  type SaveGame,
+} from './simulation/scenario/persistence.ts';
+import { deleteSave, duplicateSave, listSaves, renameSave, upsertSave } from './simulation/scenario/saveStore.ts';
+import { dropMeta, getMeta, orderRecent, toggleFavorite, touchOpened, type ScenarioMeta } from './simulation/scenario/scenarioMeta.ts';
+import { networkThumbnail } from './simulation/scenario/thumbnail.ts';
+import { DEMOS, demoById, type DemoAction } from './simulation/scenario/demos.ts';
+import {
+  loadSettings,
+  sanitizeSettings,
+  saveSettings,
+  settingsToDom,
+  type Settings,
+} from './ui/product/settings.ts';
 import ReportsSheet, { type ReportTab } from './ui/shell/ReportsSheet.tsx';
 import type { Command } from './ui/shell/commands.ts';
 import { PRESETS } from './ui/map/places.ts';
@@ -149,12 +193,18 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<SimulationState>(() => createSimulation(SEED));
   const simRef = useRef<SimulationState>(snapshot);
   const [playing, setPlaying] = useState(true);
-  const [speed, setSpeed] = useState<Speed>(1);
-  const [layers, setLayers] = useState<Layers>(() => loadLayers());
+  const [speed, setSpeed] = useState<Speed>(() => loadSettings().defaultSpeed);
+  const [layers, setLayers] = useState<Layers>(() => ({ ...loadLayers(), buildings: loadSettings().showBuildings }));
   // Layer preferences persist across sessions (map state, not sim state).
+  // The buildings flag is shared with Settings, so the two stay one truth.
   function onLayers(next: Layers) {
     setLayers(next);
     saveLayers(next);
+    if (next.buildings !== settings.showBuildings) {
+      const s = sanitizeSettings({ ...settings, showBuildings: next.buildings });
+      setSettings(s);
+      saveSettings(s);
+    }
   }
   const [overlay, setOverlay] = useState<Overlay>('normal');
   const [selection, setSelectionRaw] = useState<Selection | null>(null);
@@ -232,6 +282,381 @@ export default function App() {
   });
   const tutorialSeen = useRef<Set<string>>(new Set());
   const evalCache = useRef(new Map<string, PlanEvaluation>());
+
+  // Guided tour (coach marks over the real controls) and first-run onboarding.
+  // Both are additive: the passive tutorial checklist in SimulateHome is untouched.
+  const [tutorial, setTutorial] = useState<TutorialState>(() => IDLE_TUTORIAL);
+  // The start screen gates first paint; onboarding begins once the person
+  // steps inside, so the two never stack.
+  const [started, setStarted] = useState(false);
+  const [onboarding, setOnboarding] = useState<OnboardingState>(() => IDLE_ONBOARDING);
+  function startTutorial() {
+    enterSimulate();
+    setTutorial(tutorialReducer(IDLE_TUTORIAL, { type: 'start' }));
+  }
+  function sendTutorial(e: TutorialEvent) {
+    setTutorial((t) => tutorialReducer(t, e));
+  }
+  function sendOnboarding(e: OnboardingEvent) {
+    const next = onboardingReducer(onboarding, e);
+    if (next.done) saveOnboardingDone();
+    setOnboarding(next);
+  }
+
+  // Newcomers get the tour on the way in, but never on top of a dialog
+  // they opened on purpose (browser, tutorial, settings).
+  function maybeOnboard() {
+    if (!loadOnboardingDone()) setOnboarding(onboardingReducer(IDLE_ONBOARDING, { type: 'start' }));
+  }
+
+  // ---- savegames (v2): full-session capture ----
+  // The v1 ops-only scenarios in the TopBar popover are a separate,
+  // untouched system; these carry the whole session (ops, fares via replay,
+  // clock, growth, brief, view prefs) and the demo library.
+  const [settings, setSettings] = useState<Settings>(() => loadSettings());
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [saves, setSaves] = useState<SaveGame[]>(() => listSaves());
+  const [activeSaveId, setActiveSaveId] = useState<string | null>(null);
+  const [metaById, setMetaById] = useState<Record<string, ScenarioMeta>>({});
+  // The background autosave slot is resume state, not library stock.
+  const libSaves = useMemo(() => saves.filter((s) => s.id !== 'autosave'), [saves]);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [detailsSel, setDetailsSel] = useState<{ kind: 'save' | 'demo'; id: string } | null>(null);
+  const [baseline, setBaseline] = useState<DetailsBaseline | null>(null);
+  const [sampling, setSampling] = useState(false);
+  const sampleReq = useRef(0);
+  const [importErrors, setImportErrors] = useState<string[] | null>(null);
+  const [savePrompt, setSavePrompt] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [loading, setLoading] = useState<{ title: string; label: string; progress: number } | null>(null);
+  const importRef = useRef<HTMLInputElement>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [welcome, setWelcome] = useState<{ title: string; intro: string[]; suggestions: { label: string; action: DemoAction }[] } | null>(null);
+
+  function refreshSaves() {
+    const all = listSaves();
+    setSaves(all);
+    setMetaById(Object.fromEntries(all.map((s) => [s.id, getMeta(s.id)])));
+  }
+
+  function openBrowser() {
+    refreshSaves();
+    setImportErrors(null);
+    setBrowserOpen(true);
+  }
+
+  function applySettings(next: Settings) {
+    const clean = sanitizeSettings(next);
+    setSettings(clean);
+    saveSettings(clean);
+    const dom = settingsToDom(clean);
+    const root = document.documentElement;
+    root.dataset.uiScale = dom.uiScale;
+    root.dataset.motion = dom.motion;
+    root.dataset.contrast = dom.contrast;
+    if (clean.showBuildings !== layers.buildings) {
+      const nextLayers = { ...layers, buildings: clean.showBuildings };
+      setLayers(nextLayers);
+      saveLayers(nextLayers);
+    }
+  }
+
+  function captureSave(name: string, id: string | null): SaveGame {
+    const sim = simRef.current;
+    const base = blankSave(name, SEED);
+    return {
+      ...base,
+      ...(id ? { id } : {}),
+      appVersion: APP_VERSION,
+      savedAt: Date.now(),
+      ops: ops.map((o) => ({ ...o })),
+      fares: { ...sim.fares },
+      tick: sim.tick,
+      zones: zoneState ? zoneState.map((z) => ({ ...z })) : null,
+      yearsApplied,
+      growthHistory: growthHistory.map((g) => ({ ...g })),
+      incidents: mod.incidents.map((i) => ({ ...i })),
+      briefId,
+      difficulty,
+      planHorizon,
+      completedBriefIds: [],
+      analytics: { overlay, demandLayer, travelDest, coverageThreshold },
+      scenarioId: null,
+    };
+  }
+
+  function doSave(name: string, id: string | null) {
+    const save = captureSave(name, id);
+    upsertSave(save);
+    setActiveSaveId(save.id);
+    touchOpened(save.id, 0);
+    refreshSaves();
+    pushToast('good', `Saved ${save.name}.`);
+  }
+
+  function quickSave() {
+    if (activeSaveId) {
+      const current = saves.find((s) => s.id === activeSaveId);
+      doSave(current?.name ?? scenarioMeta.name, activeSaveId);
+    } else {
+      setSavePrompt(true);
+    }
+  }
+
+  function exportSaveGame(save: SaveGame) {
+    const blob = new Blob([serializeSaveGame(save)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = saveFileName(save.name);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function importFile(file: File) {
+    let text = '';
+    try {
+      text = await file.text();
+    } catch {
+      setImportErrors(['Could not read that file.']);
+      setBrowserOpen(true);
+      return;
+    }
+    const parsed = parseSaveGame(text);
+    if ('errors' in parsed) {
+      setImportErrors(parsed.errors);
+      setBrowserOpen(true);
+      return;
+    }
+    upsertSave(parsed.save);
+    touchOpened(parsed.save.id, 0);
+    openBrowser();
+    setDetailsSel({ kind: 'save', id: parsed.save.id });
+    for (const w of parsed.warnings) pushToast('info', w);
+    pushToast('good', `Imported ${parsed.save.name}.`);
+  }
+
+  // Yield to paint between restore chunks. rAF alone never fires in a hidden
+  // tab, so race it against a timeout: fast when visible, alive when not.
+  function frame() {
+    return new Promise<void>((r) => {
+      let done = false;
+      const go = () => { if (!done) { done = true; r(); } };
+      requestAnimationFrame(go);
+      setTimeout(go, 50);
+    });
+  }
+
+  function validOverlay(v: string): v is Overlay {
+    return LENS_GROUPS.some((g) => g.items.some((i) => i.key === v));
+  }
+
+  async function openSaveGame(save: SaveGame) {
+    setStarted(true);
+    setWelcome(null);
+    setBrowserOpen(false);
+    setPlaying(false);
+    enterSimulate();
+    setLoading({ title: `Opening ${save.name}`, label: 'Replaying edits', progress: 0 });
+    await frame();
+    const city = save.zones ? { ...baseCity, zones: save.zones } : baseCity;
+    setZoneState(save.zones);
+    setYearsApplied(save.yearsApplied);
+    setGrowthHistory(save.growthHistory);
+    setForecast(null);
+    setBriefId(save.briefId);
+    setDifficulty(save.difficulty);
+    setPlanHorizon(save.planHorizon);
+    setRedo([]);
+    setCompareResult(null);
+    clearDraft();
+    if (validOverlay(save.analytics.overlay)) setOverlay(save.analytics.overlay);
+    if (TRAVEL_DESTS.some((d) => d.key === save.analytics.travelDest)) setTravelDest(save.analytics.travelDest as TravelDest);
+    if (DEMAND_LAYERS.some((d) => d.key === save.analytics.demandLayer)) setDemandLayer(save.analytics.demandLayer as DemandLayer);
+    if (Number.isFinite(save.analytics.coverageThreshold)) setCoverageThreshold(save.analytics.coverageThreshold);
+    const opsCopy = save.ops.map((o) => ({ ...o }));
+    setOps(opsCopy);
+    setViewing('scenario');
+    const applied = applyEdits(city, baseNet, opsCopy);
+    resetSimTo(applied.city, applied);
+    setNetworkKey((k) => k + 1);
+    // Fares and incidents ride the ops replay, so the clock starts clean.
+    const target = Math.max(0, Math.min(save.tick, 1020));
+    let sim = simRef.current;
+    const total = Math.max(1, target);
+    while (sim.tick < target) {
+      const n = Math.min(120, target - sim.tick);
+      for (let i = 0; i < n; i++) sim = stepSimulation(sim, 1);
+      simRef.current = sim;
+      setLoading({ title: `Opening ${save.name}`, label: 'Advancing the clock', progress: sim.tick / total });
+      await frame();
+    }
+    setSnapshot({ ...sim });
+    setHistory([]);
+    lastHistTick.current = sim.tick;
+    setActiveSaveId(save.id);
+    touchOpened(save.id, 0);
+    refreshSaves();
+    setLoading(null);
+    maybeOnboard();
+  }
+
+  async function openDemo(id: string) {
+    const d = demoById(id);
+    if (!d) return;
+    setStarted(true);
+    setWelcome({ title: d.title, intro: d.intro, suggestions: d.suggestions });
+    setBrowserOpen(false);
+    setPlaying(false);
+    enterSimulate();
+    setBriefId(d.briefId);
+    setDifficulty(d.difficulty);
+    if (validOverlay(d.overlay)) setOverlay(d.overlay as Overlay);
+    if (TRAVEL_DESTS.some((t) => t.key === d.travelDest)) setTravelDest(d.travelDest as TravelDest);
+    setViewing('scenario');
+    setRedo([]);
+    setCompareResult(null);
+    clearDraft();
+    const demoOps = d.ops.map((o) => ({ ...o }));
+    if (d.fares) demoOps.push({ type: 'setFares', fares: { ...d.fares } });
+    setOps(demoOps);
+    setActiveSaveId(null);
+    if (d.growthYears > 0) {
+      setLoading({ title: d.title, label: `Growing the city ${d.growthYears} years`, progress: 0 });
+      await frame();
+      const fresh = createSimulationFromParts(SEED, baseCity, baseNet);
+      const grown = growZones(baseCity.zones, structuralOf(fresh), d.growthYears, BASE_YEAR, 0.5);
+      const newCity = { ...baseCity, zones: grown.zones };
+      setZoneState(grown.zones);
+      setYearsApplied(d.growthYears);
+      setGrowthHistory(grown.history);
+      setForecast(null);
+      const applied = applyEdits(newCity, baseNet, demoOps);
+      resetSimTo(applied.city, applied);
+      setNetworkKey((k) => k + 1);
+      setLoading(null);
+    } else {
+      setZoneState(null);
+      setYearsApplied(0);
+      setGrowthHistory([]);
+      setForecast(null);
+      const applied = applyEdits(baseCity, baseNet, demoOps);
+      resetSimTo(applied.city, applied);
+      setNetworkKey((k) => k + 1);
+    }
+    maybeOnboard();
+  }
+
+  // Thumbnails are pure renders of stored networks: a save always draws the
+  // same card. Rebuilt only when the library changes.
+  const thumbs = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const d of DEMOS) {
+      const a = applyEdits(baseCity, baseNet, d.ops);
+      out[`demo:${d.id}`] = networkThumbnail({ stations: a.stations, routes: a.routes, zones: a.city.zones });
+    }
+    for (const s of saves) {
+      const c = s.zones ? { ...baseCity, zones: s.zones } : baseCity;
+      const a = applyEdits(c, baseNet, s.ops);
+      out[s.id] = networkThumbnail({ stations: a.stations, routes: a.routes, zones: a.city.zones });
+    }
+    return out;
+  }, [saves, baseCity, baseNet]);
+
+  // A 60-tick headless sample behind the details pane. Stale picks lose.
+  async function selectDetails(d: { kind: 'save' | 'demo'; id: string } | null) {
+    setDetailsSel(d);
+    setBaseline(null);
+    if (!d || d.kind !== 'save') return;
+    const save = saves.find((s) => s.id === d.id);
+    if (!save) return;
+    const req = ++sampleReq.current;
+    setSampling(true);
+    await frame();
+    const c = save.zones ? { ...baseCity, zones: save.zones } : baseCity;
+    const applied = applyEdits(c, baseNet, save.ops);
+    let sim = createSimulationFromParts(SEED, applied.city, applied);
+    for (let i = 0; i < 60; i++) sim = stepSimulation(sim, 1);
+    if (req !== sampleReq.current) return;
+    const stats = computeStats(sim);
+    const access = computeAccessibility({ zones: sim.city.zones, stations: sim.stations, connections: sim.connections, routes: sim.routes });
+    setBaseline({
+      population: sim.city.zones.reduce((n, z) => n + z.population, 0),
+      transitShare: Math.round(stats.transitShare),
+      congestion: Math.round(stats.avgCongestion * 100) / 100,
+      travelMin: Math.round(stats.avgTravelMin * 10) / 10,
+      access: Math.round(access.cityScore),
+      completed: stats.completed,
+    });
+    setSampling(false);
+  }
+
+  // ---- start screen + demo welcome ----
+  const continueSave = useMemo(() => orderRecent(saves)[0] ?? null, [saves]);
+
+  function newScenario() {
+    setStarted(true);
+    setZoneState(null);
+    setYearsApplied(0);
+    setGrowthHistory([]);
+    setForecast(null);
+    setOps([]);
+    setRedo([]);
+    setBriefId(null);
+    setActiveSaveId(null);
+    setWelcome(null);
+    setViewing('scenario');
+    setCompareResult(null);
+    clearDraft();
+    enterSimulate();
+    resetSimTo(baseCity, baseNet);
+    setNetworkKey((k) => k + 1);
+    setPlaying(true);
+    maybeOnboard();
+  }
+
+  function enterDemoCity() {
+    setStarted(true);
+    setActiveSaveId(null);
+    setWelcome(null);
+    enterSimulate();
+    resetAll();
+    setPlaying(true);
+    maybeOnboard();
+  }
+
+  function demoAction(a: DemoAction) {
+    if (a === 'enter-build') enterBuild();
+    else if (a === 'run-sim') { enterSimulate(); setPlaying(true); }
+    else if (a === 'show-demand') setOverlay('demand');
+    else if (a === 'show-access') setOverlay('traveltime');
+    else if (a === 'show-crowding') setOverlay('crowding');
+    else if (a === 'inspect-central') focusStation('st-central');
+  }
+
+  // One handler map behind both command surfaces: `/` search and Ctrl+K.
+  const commandRuns: Record<string, () => void> = {
+    'mode-simulate': () => selectMode('simulate'),
+    'mode-build': () => selectMode('build'),
+    'mode-disrupt': () => selectMode('disrupt'),
+    'mode-plan': () => selectMode('plan'),
+    'sim-play-pause': togglePlay,
+    'sim-speed-1': () => setSpeed(1),
+    'sim-speed-5': () => setSpeed(5),
+    'sim-speed-20': () => setSpeed(20),
+    'sim-reset': resetAll,
+    'view-panel': () => setRailOpen((r) => !r),
+    'view-analytics': () => setOverlay((o) => (o === 'normal' ? 'accessibility' : 'normal')),
+    'scenario-browser': openBrowser,
+    'scenario-save': quickSave,
+    'scenario-export': () => exportSaveGame(captureSave(scenarioMeta.name, null)),
+    'scenario-import': () => importRef.current?.click(),
+    'help-tutorial': startTutorial,
+    'help-shortcuts': () => setHelpOpen(true),
+    'help-settings': () => setSettingsOpen(true),
+  };
 
   // Shell state: event toasts + side-panel visibility.
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -433,13 +858,37 @@ export default function App() {
     for (const k of tutorialNow()) tutorialSeen.current.add(k);
   }, [tutorialNow]);
 
+  // The coach tour advances itself when the person does the step for real.
+  // Returns the same state unless a step completes, so this never loops.
+  useEffect(() => {
+    setTutorial((t) => {
+      if (!t.active || t.paused) return t;
+      const step = TUTORIAL_STEPS[t.index];
+      if (!step || !step.doneWhen) return t;
+      const facts = { mode, playing, overlay, editCount: ops.length };
+      return tutorialDone(step.doneWhen, facts) ? tutorialReducer(t, { type: 'auto-advance' }) : t;
+    });
+  });
+
   // Keyboard shortcuts (ignored while typing; native undo kept in inputs).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       const typing = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
       const mod = e.ctrlKey || e.metaKey;
-      if (helpOpen) return;
+      if (helpOpen || loading) return;
+      if (mod && (e.key === 's' || e.key === 'S')) {
+        if (typing) return;
+        e.preventDefault();
+        quickSave();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        if (typing) return;
+        e.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
       if (mod && (e.key === 'z' || e.key === 'Z')) {
         if (typing) return;
         e.preventDefault();
@@ -481,6 +930,8 @@ export default function App() {
       } else if (plain && e.key === '/') {
         e.preventDefault();
         setSearchOpen(true);
+      } else if (plain && (e.key === 'o' || e.key === 'O')) {
+        openBrowser();
       } else if (plain && (e.key === 'f' || e.key === 'F')) {
         focusSelection();
       } else if (plain && (e.key === '0' || e.key === 'Home')) {
@@ -491,6 +942,7 @@ export default function App() {
         setRailOpen(true);
       } else if (e.key === 'Escape') {
         if (contextMenu) setContextMenu(null);
+        else if (paletteOpen) setPaletteOpen(false);
         else if (searchOpen) setSearchOpen(false);
         else if (reportsOpen) setReportsOpen(false);
         else if (measureTool) {
@@ -499,6 +951,12 @@ export default function App() {
           setMeasureHover(null);
         } else if (inspectMode) setInspectMode(false);
         else if (openTrip) setOpenTrip(null);
+        else if (savePrompt) setSavePrompt(false);
+        else if (confirmReset) setConfirmReset(false);
+        else if (settingsOpen) setSettingsOpen(false);
+        else if (browserOpen) { setBrowserOpen(false); setImportErrors(null); }
+        else if (tutorial.active) sendTutorial({ type: 'exit' });
+        else if (onboarding.active) sendOnboarding({ type: 'skip' });
         else if (mode === 'simulate' && selection) setSelection(null);
         else enterSimulate();
       } else if ((e.key === 't' || e.key === 'T') && plain) {
@@ -570,6 +1028,17 @@ export default function App() {
     () => computeAccessibility({ zones: snapshot.city.zones, stations: snapshot.stations, connections: snapshot.connections, routes: snapshot.routes }),
     [snapshot],
   );
+
+  // Demo welcome figures: the same live numbers as the dashboard, summed once.
+  const welcomeStats = useMemo(() => ({
+    population: snapshot.city.zones.reduce((s, z) => s + z.population, 0),
+    jobs: snapshot.city.zones.reduce((s, z) => s + z.jobs, 0),
+    lines: snapshot.routes.length,
+    stations: snapshot.stations.length,
+    dailyTrips: Math.round(snapshot.demand.totalDaily * SIM_TRIPS_SCALE),
+    congestion: Math.round(stats.avgCongestion * 100) / 100,
+    access: Math.round(access.cityScore),
+  }), [snapshot, stats, access]);
   const coverage = useMemo(
     () => computeCoverage(snapshot.city.zones, snapshot.stations, coverageThreshold),
     [snapshot, coverageThreshold],
@@ -1136,12 +1605,46 @@ export default function App() {
     setYearsApplied(0);
     setGrowthHistory([]);
     setForecast(null);
+    setSpeed(settings.defaultSpeed);
     if (viewing === 'base') resetSimTo(baseCity, baseNet);
     else {
       const fresh = applyEdits(baseCity, baseNet, ops);
       resetSimTo(fresh.city, fresh);
     }
   }
+
+  // Settings: destructive reset clears every transitforge.* key and reloads,
+  // so nothing half-cleared can linger in memory.
+  function resetAllData() {
+    try {
+      const drop: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('transitforge.')) drop.push(k);
+      }
+      drop.forEach((k) => localStorage.removeItem(k));
+    } catch {
+      // Reload clears the rest.
+    }
+    location.reload();
+  }
+
+  // Settings apply to the DOM shell; every change re-applies idempotently.
+  useEffect(() => {
+    const dom = settingsToDom(settings);
+    const root = document.documentElement;
+    root.dataset.uiScale = dom.uiScale;
+    root.dataset.motion = dom.motion;
+    root.dataset.contrast = dom.contrast;
+  }, [settings]);
+
+  // Background autosave: every session change lands in the recovery slot.
+  // Silent by design; failures stay session-local inside the store.
+  useEffect(() => {
+    if (!settings.autosave) return;
+    upsertSave({ ...captureSave('Autosave', null), id: 'autosave', savedAt: Date.now() });
+    setSaves(listSaves());
+  }, [ops, zoneState, yearsApplied, growthHistory, briefId, difficulty, planHorizon, overlay, demandLayer, travelDest, coverageThreshold, settings.autosave]);
 
   // ---- plan submit / save / export ----
   async function onSubmitPlan() {
@@ -1627,6 +2130,13 @@ export default function App() {
     add({ id: 'panel', group: 'Workspace', label: railOpen ? 'Hide the side panel' : 'Show the side panel', keys: [railOpen ? '[' : ']'], keywords: 'sidebar inspector', run: () => setRailOpen((r) => !r) });
     add({ id: 'theme', group: 'Workspace', label: theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme', keys: ['T'], keywords: 'appearance night day mode colour', suggested: true, run: toggleTheme });
     add({ id: 'help', group: 'Workspace', label: 'Show keyboard shortcuts', keys: ['?'], keywords: 'help keys hotkeys', suggested: true, run: () => setHelpOpen(true) });
+    add({ id: 'help-tutorial', group: 'Workspace', label: 'Start the guided tutorial', keywords: 'tour learn howto interactive guide', run: startTutorial });
+    add({ id: 'help-settings', group: 'Workspace', label: 'Open settings', keywords: 'preferences options configure', run: () => setSettingsOpen(true) });
+    add({ id: 'palette', group: 'Workspace', label: 'Open the command palette', keys: ['Ctrl', 'K'], keywords: 'commands actions run', run: () => setPaletteOpen(true) });
+    add({ id: 'scenario-browser', group: 'Scenario', label: 'Open the scenario browser', keys: ['O'], keywords: 'saves load library demos projects', suggested: true, run: openBrowser });
+    add({ id: 'scenario-save', group: 'Scenario', label: 'Save the scenario', keys: ['Ctrl', 'S'], keywords: 'store persist snapshot', run: quickSave });
+    add({ id: 'scenario-export', group: 'Scenario', label: 'Export the scenario file', keywords: 'download json share backup', run: () => exportSaveGame(captureSave(scenarioMeta.name, null)) });
+    add({ id: 'scenario-import', group: 'Scenario', label: 'Import a scenario file', keywords: 'upload open file restore', run: () => importRef.current?.click() });
 
     if (ops.length > 0) {
       add({ id: 'compare', group: 'Scenario', label: 'Compare this scenario with the baseline', keywords: 'diff versus', run: () => openReports('compare') });
@@ -2232,6 +2742,29 @@ export default function App() {
     </div>
   ) : null;
 
+  // Launch screen until the first action. Every hook above still runs, so the
+  // city, thumbnails and autosave are ready the moment the person steps in.
+  if (!started) {
+    return (
+      <div className="tf-app">
+        <StartScreen
+          continueTarget={continueSave ? { label: continueSave.name, detail: `${continueSave.ops.length} edits, ${continueSave.tick > 0 ? `day at ${Math.floor(continueSave.tick / 60) + 7}:00` : 'fresh morning'}` } : null}
+          recentSaves={libSaves}
+          city={baseCity}
+          net={baseNet}
+          onContinue={() => { if (continueSave) void openSaveGame(continueSave); }}
+          onNew={newScenario}
+          onDemoCity={enterDemoCity}
+          onDemo={(id) => void openDemo(id)}
+          onBrowse={() => { setStarted(true); openBrowser(); }}
+          onTutorial={() => { setStarted(true); startTutorial(); }}
+          onSettings={() => { setStarted(true); setSettingsOpen(true); }}
+          onAbout={() => { setStarted(true); setHelpOpen(true); }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`tf-app${railOpen ? '' : ' panel-closed'}`} data-mode={mode}>
       <TopBar
@@ -2506,6 +3039,16 @@ export default function App() {
           {mode === 'simulate' ? (
             tripCard ?? (selection ? null : (
               <div className="tf-rail-body">
+                {welcome && (
+                  <DemoWelcome
+                    title={welcome.title}
+                    intro={welcome.intro}
+                    stats={welcomeStats}
+                    suggestions={welcome.suggestions}
+                    onAction={demoAction}
+                    onDismiss={() => setWelcome(null)}
+                  />
+                )}
                 <SimulateHome
                   routes={snapshot.routes}
                   peakHeadway={Object.fromEntries(snapshot.routes.map((r) => [r.id, snapshot.service[r.id]?.peakHeadwayMin ?? r.headwayMin]))}
@@ -2636,6 +3179,89 @@ export default function App() {
         onReports={() => setReportsOpen((v) => !v)}
       />
       {helpOpen && <HelpSheet version={APP_VERSION} seed={SEED} onClose={() => setHelpOpen(false)} />}
+      {onboarding.active && (
+        <OnboardingOverlay
+          state={onboarding}
+          onNext={() => sendOnboarding({ type: 'next' })}
+          onBack={() => sendOnboarding({ type: 'back' })}
+          onSkip={() => sendOnboarding({ type: 'skip' })}
+          onFinish={() => sendOnboarding({ type: 'finish' })}
+        />
+      )}
+      {tutorial.active && (
+        <TutorialOverlay
+          state={tutorial}
+          onNext={() => sendTutorial({ type: 'next' })}
+          onBack={() => sendTutorial({ type: 'back' })}
+          onSkip={() => sendTutorial({ type: 'skip' })}
+          onPause={() => sendTutorial({ type: 'pause' })}
+          onResume={() => sendTutorial({ type: 'resume' })}
+          onExit={() => sendTutorial({ type: 'exit' })}
+        />
+      )}
+      {browserOpen && (
+        <ScenarioBrowser
+          saves={libSaves}
+          metaById={metaById}
+          thumbs={thumbs}
+          details={detailsSel}
+          baseline={baseline}
+          samplingBaseline={sampling}
+          importErrors={importErrors}
+          onSelectDetails={(d) => void selectDetails(d)}
+          onOpenSave={(id) => { const s = saves.find((x) => x.id === id); if (s) void openSaveGame(s); }}
+          onOpenDemo={(id) => void openDemo(id)}
+          onDuplicate={(id) => { const s = saves.find((x) => x.id === id); if (s) { duplicateSave(s); refreshSaves(); } }}
+          onRename={(id, name) => { const s = saves.find((x) => x.id === id); if (s) { renameSave(s, name); refreshSaves(); } }}
+          onDelete={(id) => { deleteSave(id); dropMeta(id); if (activeSaveId === id) setActiveSaveId(null); refreshSaves(); }}
+          onToggleFavorite={(id) => { toggleFavorite(id); refreshSaves(); }}
+          onExportSave={(id) => { const s = saves.find((x) => x.id === id); if (s) exportSaveGame(s); }}
+          onImportFile={(f) => void importFile(f)}
+          onClose={() => { setBrowserOpen(false); setImportErrors(null); }}
+          onClearImportErrors={() => setImportErrors(null)}
+        />
+      )}
+      {settingsOpen && (
+        <SettingsDialog
+          settings={settings}
+          onChange={applySettings}
+          onResetData={() => setConfirmReset(true)}
+          onRestartTutorial={() => { setSettingsOpen(false); startTutorial(); }}
+          onExport={() => exportSaveGame(captureSave(scenarioMeta.name, null))}
+          onImportFile={(f) => void importFile(f)}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {savePrompt && (
+        <PromptDialog
+          title="Save scenario"
+          label="Name"
+          initial={scenarioMeta.name}
+          confirmLabel="Save"
+          onConfirm={(name) => { doSave(name, null); setSavePrompt(false); }}
+          onCancel={() => setSavePrompt(false)}
+        />
+      )}
+      {confirmReset && (
+        <ConfirmDialog
+          title="Reset all local data?"
+          body="This clears saves, plans, scenarios, preferences and tour progress in this browser. Export anything you want to keep first."
+          confirmLabel="Reset everything"
+          onConfirm={resetAllData}
+          onCancel={() => setConfirmReset(false)}
+        />
+      )}
+      {loading && <LoadingOverlay title={loading.title} stage={{ label: loading.label, progress: loading.progress }} />}
+      {paletteOpen && (
+        <CommandPalette commands={builtinCommands()} onRun={(id) => commandRuns[id]?.()} onClose={() => setPaletteOpen(false)} />
+      )}
+      <input
+        ref={importRef}
+        type="file"
+        accept=".json,application/json"
+        hidden
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void importFile(f); e.target.value = ''; }}
+      />
     </div>
   );
 }

@@ -942,7 +942,7 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
   justify-content: space-between;
   gap: var(--s-4);
 }
-.tf-inspector-head h3 {
+.tf-inspector-head h2, .tf-inspector-head h3 {
   margin: 0;
   min-width: 0;
   font-size: var(--fs-head);
@@ -1146,3 +1146,212 @@ button.tf-route-ref:hover > span { text-decoration: underline; }
 .tf-fatal h1 { margin: 0; font-size: var(--fs-head); line-height: var(--lh-tight); }
 .tf-fatal p { margin: 0; color: var(--ink-soft); font-size: var(--fs-body); line-height: var(--lh-body); overflow-wrap: anywhere; }
 .tf-fatal-actions { display: flex; flex-wrap: wrap; gap: var(--s-4); }
+
+/* =====================================================================
+ * 9. Product surfaces: dialogs, start screen, browser, tour
+ * ===================================================================== */
+
+/* Base dialog box. The scrim (.tf-modal-scrim, section 6) is not a flex
+ * container, so the box centres itself and scrolls when content is tall. */
+.tf-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  /* `translate`, not `transform`: the rise animation keyframes `transform`
+   * and would otherwise pin the box off-centre when the fill holds. */
+  translate: -50% -50%;
+  z-index: 61;
+  width: min(440px, calc(100vw - var(--s-8)));
+  max-height: 86vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: var(--s-6);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift-float);
+  animation: tf-rise var(--d-base) var(--ease) both;
+}
+.tf-modal h2 { margin: 0 0 var(--s-3); font-size: var(--fs-head); line-height: var(--lh-tight); }
+.tf-modal > p { margin: 0 0 var(--s-4); }
+.tf-modal-wide { width: min(640px, calc(100vw - var(--s-8))); }
+
+/* ---- start screen: a page, not a modal ---- */
+
+.tf-start {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--ink);
+}
+.tf-start-inner {
+  box-sizing: border-box;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: var(--s-8) var(--s-6);
+}
+.tf-start-brand h1 { margin: 0; font-size: var(--fs-metric); line-height: var(--lh-tight); letter-spacing: -0.015em; }
+.tf-start-brand p { margin: var(--s-2) 0 0; color: var(--ink-soft); font-size: var(--fs-lead); }
+.tf-start-grid {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: var(--s-6);
+  margin-top: var(--s-7);
+}
+.tf-start-actions { display: flex; flex-direction: column; gap: var(--s-4); }
+/* Big launch buttons: quiet outline rank, label over sub-line. */
+.tf-btn.tf-start-big {
+  height: auto;
+  min-height: 56px;
+  align-items: flex-start;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: var(--s-4) var(--s-5);
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  text-align: left;
+  white-space: normal;
+}
+.tf-start-sub { display: block; font-size: var(--fs-small); font-weight: 400; color: var(--ink-soft); }
+.tf-btn.primary .tf-start-sub { color: inherit; opacity: 0.75; }
+.tf-start-row { display: flex; flex-wrap: wrap; gap: var(--s-3); }
+.tf-start-row.secondary { margin-top: var(--s-2); }
+.tf-start-side { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.tf-start-card {
+  padding: var(--s-5);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-md);
+}
+.tf-start-card h2 { margin: 0 0 var(--s-3); font-size: var(--fs-body); }
+.tf-start-demos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.tf-start-demos li { display: flex; align-items: baseline; gap: var(--s-2); }
+.tf-start-foot { margin-top: var(--s-7); }
+
+/* ---- scenario browser ---- */
+
+.tf-modal.tf-browser { width: min(920px, calc(100vw - var(--s-8))); }
+.tf-browser-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--s-5);
+  margin-top: var(--s-4);
+}
+.tf-browser-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+  max-height: 56vh;
+  overflow-y: auto;
+  padding-right: var(--s-2);
+}
+.tf-browser-details { min-width: 0; }
+.tf-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+}
+/* Selection is ink: a strong rule, never a colour fill. */
+.tf-card.selected { border-color: var(--ink-strong); box-shadow: inset 0 0 0 1px var(--ink-strong); }
+.tf-card-main {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tf-card-main h3, .tf-card-main strong { display: block; margin: 0 0 var(--s-1); font-size: var(--fs-body); }
+.tf-card-actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.tf-thumb { overflow: hidden; border: 1px solid var(--rule); border-radius: var(--r-sm); background: var(--paper-sunken); }
+.tf-thumb svg { display: block; width: 100%; height: auto; }
+.tf-thumb-empty { min-height: 64px; }
+.tf-import-errors { color: var(--alert); font-size: var(--fs-small); }
+.tf-empty { padding: var(--s-5) var(--s-4); color: var(--ink-faint); font-size: var(--fs-small); text-align: center; }
+.tf-empty strong { display: block; margin-bottom: var(--s-2); color: var(--ink-soft); font-size: var(--fs-body); }
+.tf-empty p { margin: 0 0 var(--s-3); }
+.tf-empty p:last-child { margin-bottom: 0; }
+.tf-card-main .tf-thumb { margin-bottom: var(--s-3); }
+
+/* ---- onboarding, coach marks, loading ---- */
+
+.tf-onboard-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-6);
+  background: var(--scrim);
+}
+.tf-onboard-card {
+  box-sizing: border-box;
+  width: min(420px, 100%);
+  padding: var(--s-6);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift-float);
+  animation: tf-rise var(--d-base) var(--ease) both;
+}
+.tf-onboard-card h2 { margin: 0 0 var(--s-3); font-size: var(--fs-head); line-height: var(--lh-tight); }
+.tf-onboard-card > p { margin: 0 0 var(--s-4); }
+.tf-onboard-progress { display: flex; gap: var(--s-2); margin-bottom: var(--s-4); }
+.tf-onboard-progress i { width: 24px; height: 3px; border-radius: 2px; background: var(--rule-soft); }
+.tf-onboard-progress i.done { background: var(--ink-faint); }
+.tf-onboard-progress i.now { background: var(--ink-strong); }
+.tf-coach-layer { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+.tf-coach-layer > * { pointer-events: auto; }
+.tf-coach-ring {
+  position: absolute;
+  border: 2px solid var(--ink-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--lift-float);
+}
+.tf-coach-card {
+  position: absolute;
+  box-sizing: border-box;
+  width: min(320px, calc(100vw - var(--s-8)));
+  padding: var(--s-5);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--lift-float);
+}
+.tf-coach-card h2 { margin: 0 0 var(--s-2); font-size: var(--fs-body); }
+.tf-coach-card > p { margin: 0 0 var(--s-4); }
+.tf-modal.tf-load-modal { width: min(360px, calc(100vw - var(--s-8))); }
+.tf-setting-row { align-items: center; }
+.tf-compare-table kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 1px 6px;
+  font-family: var(--font-data);
+  font-size: var(--fs-fine);
+  font-weight: 600;
+  text-align: center;
+  color: var(--ink-strong);
+  background: var(--paper-raised);
+  border: 1px solid var(--rule-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--r-sm);
+}
+
+@media (max-width: 699px) {
+  .tf-start-inner { padding: var(--s-6) var(--s-4); }
+  .tf-start-grid { grid-template-columns: minmax(0, 1fr); }
+  .tf-browser-body { grid-template-columns: minmax(0, 1fr); }
+  .tf-browser-list { max-height: 40vh; }
+}

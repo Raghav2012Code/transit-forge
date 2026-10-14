@@ -390,3 +390,20 @@ input[type='checkbox']:checked::after {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---- user settings: attributes set by the Settings dialog ----
+ * Token roles only, never theme branches, so one rule covers both themes. */
+:root[data-ui-scale='compact'] {
+  --rail-w: 56px;
+  --panel-w: 300px;
+}
+:root[data-contrast='high'] {
+  --ink-soft: var(--ink-strong);
+  --ink-faint: var(--ink);
+  --rule: var(--rule-strong);
+}
+:root[data-motion='reduced'] *, :root[data-motion='reduced'] *::before, :root[data-motion='reduced'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
