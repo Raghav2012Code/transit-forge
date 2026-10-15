@@ -5,7 +5,6 @@ import { BrandMark } from '../shell/icons.tsx';
 import type { SaveGame } from '../../simulation/scenario/persistence.ts';
 import type { CityData } from '../../types/index.ts';
 import type { NetworkData } from '../../simulation/transport/network.ts';
-import type { Theme } from '../../rendering/palette.ts';
 
 export interface StartContinue {
   label: string;
@@ -17,7 +16,6 @@ interface Props {
   recentSaves: SaveGame[];
   city: CityData;
   net: NetworkData;
-  theme: Theme;
   onContinue: () => void;
   onNew: () => void;
   onDemoCity: () => void;
@@ -28,95 +26,112 @@ interface Props {
   onAbout: () => void;
 }
 
-/**
- * The launch screen, set as a report page: the argument on the left, the city
- * itself on the right as a captioned figure, and the featured scenarios ruled
- * like the tables in a report. One committing action, quiet ranks behind it.
- */
+/** Launch desk: choose a working session, then inspect the city and briefs. */
 export default function StartScreen(p: Props) {
-  const thumb = networkThumbnail({ stations: p.net.stations, routes: p.net.routes, zones: p.city.zones }, p.theme);
+  const thumb = networkThumbnail({ city: p.city, stations: p.net.stations, routes: p.net.routes });
   const citizens = p.city.zones.reduce((sum, z) => sum + z.population, 0);
-  const savedLabel = p.recentSaves.length > 0 ? `${p.recentSaves.length} saved` : 'Browser, demos & import';
+  const savedLabel = p.recentSaves.length > 0 ? `${p.recentSaves.length} saved scenarios` : 'Demos and imports';
 
   return (
     <div className="tf-start">
       <div className="tf-start-inner">
-        <header className="tf-start-head">
+        <header className="tf-start-masthead">
           <div className="tf-start-lockup">
-            <span className="tf-start-mark" aria-hidden="true">
-              <BrandMark size={32} />
-            </span>
-            <h1>TransitForge</h1>
+            <span aria-hidden="true"><BrandMark size={26} /></span>
+            <span className="tf-start-wordmark">TransitForge</span>
           </div>
-          <p className="tf-start-lede">
-            A fictional coastal city with six transit lines and a full day of travel demand.
-            Build the network, run the day, break it, and plan against objectives.
-            Every figure traces back to the simulation.
-          </p>
+          <nav className="tf-start-utility" aria-label="Help and settings">
+            <button type="button" className="tf-start-link" onClick={p.onTutorial}>Tutorial</button>
+            <button type="button" className="tf-start-link" onClick={p.onSettings}>Settings</button>
+            <button type="button" className="tf-start-link" onClick={p.onAbout}>About</button>
+          </nav>
         </header>
 
-        <main className="tf-start-grid">
-          <section className="tf-start-actions" aria-label="Start">
-            {p.continueTarget ? (
-              <button type="button" className="tf-btn primary tf-start-go" onClick={p.onContinue} autoFocus>
-                <span>Continue</span>
-                <span className="tf-start-go-sub">{p.continueTarget.label}, {p.continueTarget.detail}</span>
-              </button>
-            ) : (
-              <button type="button" className="tf-btn primary tf-start-go" onClick={p.onDemoCity} autoFocus>
-                <span>Explore Demo City</span>
-                <span className="tf-start-go-sub">No saved work yet — start with the living city</span>
-              </button>
-            )}
+        <main>
+          <section className="tf-start-hero" aria-labelledby="tf-start-title">
+            <div className="tf-start-copy">
+              <h1 id="tf-start-title">Plan a network.<br />Run the day.</h1>
+              <p className="tf-start-lede">
+                Build transit for a living city, run a simulated day, and see what your decisions change.
+                Every figure comes from the simulation.
+              </p>
 
-            <div className="tf-start-quiet-block">
-              <button type="button" className="tf-btn tf-start-go" onClick={p.onNew}>
-                <span>New Planning Scenario</span>
-                <span className="tf-start-go-sub">Blank network, pick a brief</span>
-              </button>
-              {p.continueTarget && (
-                <button type="button" className="tf-btn tf-start-go" onClick={p.onDemoCity}>
-                  <span>Explore Demo City</span>
-                  <span className="tf-start-go-sub">Guided tour of the sandbox</span>
-                </button>
-              )}
-              <button type="button" className="tf-btn tf-start-go" onClick={p.onBrowse}>
-                <span>Load Scenario</span>
-                <span className="tf-start-go-sub">{savedLabel}</span>
-              </button>
+              <div className="tf-start-actions" aria-label="Start or continue">
+                {p.continueTarget ? (
+                  <button type="button" className="tf-btn primary tf-start-primary" onClick={p.onContinue} autoFocus>
+                    <span>Continue</span>
+                    <span className="tf-start-primary-detail">
+                      {p.continueTarget.label}, {p.continueTarget.detail}
+                    </span>
+                  </button>
+                ) : (
+                  <button type="button" className="tf-btn primary tf-start-primary" onClick={p.onDemoCity} autoFocus>
+                    <span>Explore Demo City</span>
+                    <span className="tf-start-primary-detail">A live city, ready to explore</span>
+                  </button>
+                )}
+
+                <div className="tf-start-action-list">
+                  <button type="button" className="tf-start-action" onClick={p.onNew}>
+                    <span className="tf-start-action-name">New planning scenario</span>
+                    <span className="tf-start-action-detail">Start with a blank network and a brief</span>
+                  </button>
+                  {p.continueTarget && (
+                    <button type="button" className="tf-start-action" onClick={p.onDemoCity}>
+                      <span className="tf-start-action-name">Explore Demo City</span>
+                      <span className="tf-start-action-detail">A guided look at the live simulation</span>
+                    </button>
+                  )}
+                  <button type="button" className="tf-start-action" onClick={p.onBrowse}>
+                    <span className="tf-start-action-name">Open scenario library</span>
+                    <span className="tf-start-action-detail">{savedLabel}</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="tf-start-links">
-              <button type="button" className="tf-start-link" onClick={p.onTutorial}>Tutorial</button>
-              <button type="button" className="tf-start-link" onClick={p.onSettings}>Settings</button>
-              <button type="button" className="tf-start-link" onClick={p.onAbout}>About TransitForge</button>
-            </div>
-          </section>
-
-          <section className="tf-start-side" aria-label="The city and its scenarios">
-            {/* Generated from live network data, so the figure always matches the simulation. */}
-            <figure className="tf-start-plate">
-              <div className="tf-start-plate-img" dangerouslySetInnerHTML={{ __html: thumb }} />
+            <figure className="tf-start-figure">
+              <div className="tf-start-map" dangerouslySetInnerHTML={{ __html: thumb }} />
               <figcaption>
-                {citizens.toLocaleString()} citizens, {p.net.routes.length} lines, {p.net.stations.length} stations.
-                The network as the simulation holds it.
+                <span>{citizens.toLocaleString()} citizens</span>
+                <span>{p.net.routes.length} lines</span>
+                <span>{p.net.stations.length} stations</span>
+                <span className="tf-start-figure-note">A plan of the city as the simulation holds it</span>
               </figcaption>
             </figure>
+          </section>
 
-            <section className="tf-start-scenarios" aria-label="Featured scenarios">
-              <h2>Featured scenarios</h2>
-              <ul className="tf-start-demos">
-                {DEMOS.map((d) => (
-                  <li key={d.id}>
-                    <button type="button" className="tf-start-demo" onClick={() => p.onDemo(d.id)}>
-                      <span className="tf-start-demo-name">{d.title}</span>
-                      <span className="tf-start-demo-diff">{d.difficulty}</span>
-                      <span className="tf-start-demo-min">~{d.minutes} min</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
+          <section className="tf-start-scenarios" aria-labelledby="tf-start-scenarios-title">
+            <div className="tf-start-section-head">
+              <h2 id="tf-start-scenarios-title">Featured scenarios</h2>
+              <span>Choose a brief to begin</span>
+            </div>
+            <div className="tf-start-table-wrap">
+              <table className="tf-start-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Scenario</th>
+                    <th scope="col">Focus</th>
+                    <th scope="col">Difficulty</th>
+                    <th scope="col">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DEMOS.map((d) => (
+                    <tr key={d.id}>
+                      <th scope="row">
+                        <button type="button" className="tf-start-demo" onClick={() => p.onDemo(d.id)}>
+                          {d.title}
+                        </button>
+                      </th>
+                      <td>{d.systems.slice(0, 2).join(', ')}</td>
+                      <td>{d.difficulty}</td>
+                      <td>~{d.minutes} min</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </section>
         </main>
 

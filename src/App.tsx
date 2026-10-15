@@ -599,20 +599,21 @@ export default function App() {
   }
 
   // Thumbnails are pure renders of stored networks: a save always draws the
-  // same card. Rebuilt when the library or the theme changes.
+  // same card. Rebuilt only when the library changes (the drawing takes its
+  // colours from the theme tokens in the DOM).
   const thumbs = useMemo(() => {
     const out: Record<string, string> = {};
     for (const d of DEMOS) {
       const a = applyEdits(baseCity, baseNet, d.ops);
-      out[`demo:${d.id}`] = networkThumbnail({ stations: a.stations, routes: a.routes, zones: a.city.zones }, theme);
+      out[`demo:${d.id}`] = networkThumbnail({ city: a.city, stations: a.stations, routes: a.routes });
     }
     for (const s of saves) {
       const c = s.zones ? { ...baseCity, zones: s.zones } : baseCity;
       const a = applyEdits(c, baseNet, s.ops);
-      out[s.id] = networkThumbnail({ stations: a.stations, routes: a.routes, zones: a.city.zones }, theme);
+      out[s.id] = networkThumbnail({ city: a.city, stations: a.stations, routes: a.routes });
     }
     return out;
-  }, [saves, baseCity, baseNet, theme]);
+  }, [saves, baseCity, baseNet]);
 
   // A 60-tick headless sample behind the details pane. Stale picks lose.
   async function selectDetails(d: { kind: 'save' | 'demo'; id: string } | null) {
@@ -2789,7 +2790,6 @@ export default function App() {
           recentSaves={libSaves}
           city={baseCity}
           net={baseNet}
-          theme={theme}
           onContinue={() => { if (continueSave) void openSaveGame(continueSave); }}
           onNew={newScenario}
           onDemoCity={enterDemoCity}
