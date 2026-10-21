@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { blankSave } from '../scenario/persistence.ts';
 import { deleteSave, duplicateSave, listSaves, renameSave, upsertSave } from '../scenario/saveStore.ts';
 import { dropMeta, getMeta, markCompleted, orderRecent, toggleFavorite, touchOpened } from '../scenario/scenarioMeta.ts';
@@ -15,14 +15,36 @@ describe('save library', () => {
 
   it('duplicates and renames saves', () => {
     const save = blankSave('Original', 1337);
-    const copy = duplicateSave(save);
+    const copy = duplicateSave(save).save;
     expect(copy.id).not.toBe(save.id);
     expect(copy.name).toContain('(copy)');
     expect(copy.ops).toEqual(save.ops);
-    const renamed = renameSave(save, '  New Name  ');
+    const renamed = renameSave(save, '  New Name  ').save;
     expect(renamed.name).toBe('New Name');
-    expect(renameSave(save, '   ').name).toBe('Original');
+    expect(renameSave(save, '   ').save.name).toBe('Original');
     deleteSave(copy.id);
+  });
+
+  it('reports writes that do not persist', () => {
+    const backing = new Map<string, string>();
+    const good = {
+      getItem: (k: string) => backing.get(k) ?? null,
+      setItem: (k: string, v: string) => { backing.set(k, v); },
+      removeItem: (k: string) => { backing.delete(k); },
+      clear: () => backing.clear(),
+      key: (i: number) => [...backing.keys()][i] ?? null,
+      get length() { return backing.size; },
+    } as Storage;
+    vi.stubGlobal('localStorage', good);
+    const save = blankSave('Honest', 1337);
+    expect(upsertSave(save)).toBe(true);
+    expect(listSaves().some((s) => s.id === save.id)).toBe(true);
+    const broken = { ...good, setItem: () => { throw new Error('QuotaExceededError'); } } as Storage;
+    vi.stubGlobal('localStorage', broken);
+    expect(upsertSave({ ...save, id: 'sv-broken' })).toBe(false);
+    expect(duplicateSave(save).ok).toBe(false);
+    expect(deleteSave(save.id)).toBe(false);
+    vi.unstubAllGlobals();
   });
 });
 

@@ -19,29 +19,31 @@ function readEnvelope(): Envelope {
   return { version: 2, saves: parsed.saves.filter((s) => s && s.version === 2 && Array.isArray(s.ops)) };
 }
 
-function writeEnvelope(env: Envelope): void {
-  storageWrite(KEY, env);
+function writeEnvelope(env: Envelope): boolean {
+  return storageWrite(KEY, env);
 }
 
 export function listSaves(): SaveGame[] {
   return readEnvelope().saves;
 }
 
-export function upsertSave(save: SaveGame): void {
+/** Returns false when the write did not persist (quota full or storage blocked). */
+export function upsertSave(save: SaveGame): boolean {
   const env = readEnvelope();
   const idx = env.saves.findIndex((x) => x.id === save.id);
   if (idx < 0) env.saves.push(save);
   else env.saves[idx] = save;
-  writeEnvelope(env);
+  return writeEnvelope(env);
 }
 
-export function deleteSave(id: string): void {
+/** Returns false when the removal did not persist. */
+export function deleteSave(id: string): boolean {
   const env = readEnvelope();
   env.saves = env.saves.filter((s) => s.id !== id);
-  writeEnvelope(env);
+  return writeEnvelope(env);
 }
 
-export function duplicateSave(save: SaveGame): SaveGame {
+export function duplicateSave(save: SaveGame): { save: SaveGame; ok: boolean } {
   const copy: SaveGame = {
     ...save,
     id: `sv-${Date.now().toString(36)}-copy`,
@@ -49,12 +51,10 @@ export function duplicateSave(save: SaveGame): SaveGame {
     ops: save.ops.map((o) => ({ ...o })),
     savedAt: Date.now(),
   };
-  upsertSave(copy);
-  return copy;
+  return { save: copy, ok: upsertSave(copy) };
 }
 
-export function renameSave(save: SaveGame, name: string): SaveGame {
+export function renameSave(save: SaveGame, name: string): { save: SaveGame; ok: boolean } {
   const next = { ...save, name: name.trim().slice(0, 48) || save.name, savedAt: Date.now() };
-  upsertSave(next);
-  return next;
+  return { save: next, ok: upsertSave(next) };
 }

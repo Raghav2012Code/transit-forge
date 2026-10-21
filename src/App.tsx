@@ -434,7 +434,10 @@ export default function App() {
 
   function doSave(name: string, id: string | null) {
     const save = captureSave(name, id, nowMs());
-    upsertSave(save);
+    if (!upsertSave(save)) {
+      pushToast('warn', 'Could not save: browser storage is full or blocked.');
+      return;
+    }
     setActiveSaveId(save.id);
     touchOpened(save.id, 0);
     refreshSaves();
@@ -477,7 +480,11 @@ export default function App() {
       setBrowserOpen(true);
       return;
     }
-    upsertSave(parsed.save);
+    if (!upsertSave(parsed.save)) {
+      setImportErrors(['Imported file is valid, but browser storage is full or blocked so it could not be saved.']);
+      setBrowserOpen(true);
+      return;
+    }
     touchOpened(parsed.save.id, 0);
     openBrowser();
     setDetailsSel({ kind: 'save', id: parsed.save.id });
@@ -3254,9 +3261,27 @@ export default function App() {
           onSelectDetails={(d) => void selectDetails(d)}
           onOpenSave={(id) => { const s = saves.find((x) => x.id === id); if (s) void openSaveGame(s); }}
           onOpenDemo={(id) => void openDemo(id)}
-          onDuplicate={(id) => { const s = saves.find((x) => x.id === id); if (s) { duplicateSave(s); refreshSaves(); } }}
-          onRename={(id, name) => { const s = saves.find((x) => x.id === id); if (s) { renameSave(s, name); refreshSaves(); } }}
-          onDelete={(id) => { deleteSave(id); dropMeta(id); if (activeSaveId === id) setActiveSaveId(null); refreshSaves(); }}
+          onDuplicate={(id) => {
+            const s = saves.find((x) => x.id === id);
+            if (!s) return;
+            const { ok } = duplicateSave(s);
+            refreshSaves();
+            if (!ok) pushToast('warn', 'Could not duplicate: browser storage is full or blocked.');
+          }}
+          onRename={(id, name) => {
+            const s = saves.find((x) => x.id === id);
+            if (!s) return;
+            const { ok } = renameSave(s, name);
+            refreshSaves();
+            if (!ok) pushToast('warn', 'Could not rename: browser storage is full or blocked.');
+          }}
+          onDelete={(id) => {
+            const ok = deleteSave(id);
+            dropMeta(id);
+            if (activeSaveId === id) setActiveSaveId(null);
+            refreshSaves();
+            if (!ok) pushToast('warn', 'Could not delete: browser storage is full or blocked.');
+          }}
           onToggleFavorite={(id) => { toggleFavorite(id); refreshSaves(); }}
           onExportSave={(id) => { const s = saves.find((x) => x.id === id); if (s) exportSaveGame(s); }}
           onImportFile={(f) => void importFile(f)}
