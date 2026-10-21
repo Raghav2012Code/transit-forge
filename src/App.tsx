@@ -1425,6 +1425,16 @@ export default function App() {
     return problems.length > 0 ? problems.join('; ') : null;
   }
 
+  /**
+   * Record a scheduled incident as an edit op. The save format replays ops, so
+   * without this the incident (and its shuttle) would vanish on reload while
+   * the live simulation still held it.
+   */
+  function recordIncidentOp(cfg: IncidentConfig) {
+    setOps((prev) => [...prev, { type: 'scheduleIncident', incident: { ...cfg } }]);
+    setRedo([]);
+  }
+
   function createIncident() {
     const sim = simRef.current;
     const problem = validateDraft(incidentDraft, sim);
@@ -1444,9 +1454,9 @@ export default function App() {
     }
     const id = `inc-${sim.nextIncidentId}`;
     sim.nextIncidentId++;
+    const scheduled: IncidentConfig = { ...cfg, id };
     sim.incidents.push({
-      ...cfg,
-      id,
+      ...scheduled,
       status: 'scheduled',
       activeTicks: 0,
       baselineWaiting: 0,
@@ -1454,6 +1464,7 @@ export default function App() {
       strandedPeakDuringIncident: 0,
     });
     sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
+    recordIncidentOp(scheduled);
     setSelectedIncidentId(id);
     setIncidentDraft(EMPTY_DRAFT);
     setSnapshot({ ...sim });
@@ -1510,9 +1521,20 @@ export default function App() {
     if (inc.status === 'scheduled') {
       sim.incidents = sim.incidents.filter((i) => i.id !== id);
       sim.events.push({ t: sim.timeMinutes, text: `${inc.label} — cancelled before start`, level: 'info' });
+      // Cancelling a not-yet-started incident edits the scenario: drop its op so
+      // a save or reopen does not resurrect it.
+      setOps((prev) => prev.filter((o) => !(o.type === 'scheduleIncident' && o.incident.id === id)));
+      setRedo([]);
     } else if (inc.status === 'active') {
       // End now: recovery window starts immediately.
       inc.durationMin = Math.max(0, sim.timeMinutes - inc.startMin);
+      // Keep the saved config in step with the shortened duration.
+      setOps((prev) => prev.map((o) => (
+        o.type === 'scheduleIncident' && o.incident.id === id
+          ? { ...o, incident: { ...o.incident, durationMin: inc.durationMin } }
+          : o
+      )));
+      setRedo([]);
     }
     if (selectedIncidentId === id && inc.status !== 'active' && inc.status !== 'recovering') setSelectedIncidentId(null);
     setSnapshot({ ...sim });
@@ -1755,9 +1777,9 @@ export default function App() {
     const cfg = p.build(Math.round(sim.timeMinutes + 5));
     const id = `inc-${sim.nextIncidentId}`;
     sim.nextIncidentId++;
+    const scheduled: IncidentConfig = { ...cfg, id };
     sim.incidents.push({
-      ...cfg,
-      id,
+      ...scheduled,
       status: 'scheduled',
       activeTicks: 0,
       baselineWaiting: 0,
@@ -1765,6 +1787,7 @@ export default function App() {
       strandedPeakDuringIncident: 0,
     });
     sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
+    recordIncidentOp(scheduled);
     setSelectedIncidentId(id);
     setSnapshot({ ...sim });
   }

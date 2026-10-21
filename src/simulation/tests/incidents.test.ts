@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSimulation, stepSimulation } from '../index.ts';
+import { createSimulation, createSimulationFromParts, stepSimulation } from '../index.ts';
 import {
   deriveClosures,
   incidentPresets,
@@ -423,6 +423,43 @@ describe('scenario integration', () => {
     expect(cmp.rows.length).toBeGreaterThan(0);
     expect(cmp.base.metrics.score).toBeGreaterThanOrEqual(0);
     expect(cmp.base.metrics.score).toBeLessThanOrEqual(100);
+  });
+
+  it('replays a scheduled incident and its replacement shuttle from ops', () => {
+    const city = generateCity(1337);
+    const base = buildNetwork();
+    const route = base.routes.find((r) => r.mode === 'metro') ?? base.routes[0];
+    const from = route.stationIds[0];
+    const to = route.stationIds[route.stationIds.length - 1];
+    const applied = applyEdits(city, base, [
+      {
+        type: 'scheduleIncident',
+        incident: {
+          id: 'inc-replay-1',
+          kind: 'route-suspension',
+          label: 'replayed suspension',
+          targetRouteId: route.id,
+          startMin: 500,
+          durationMin: 30,
+          recoveryMin: 5,
+          severity01: 0.9,
+          replacement: { fromStationId: from, toStationId: to, buses: 4, headwayMin: 6, capacity: 70 },
+        },
+      },
+    ]);
+    expect(applied.warnings).toEqual([]);
+    expect(applied.incidents.map((i) => i.id)).toEqual(['inc-replay-1']);
+    // Reload path: rebuild from replayed edits, then fast-forward to the start.
+    let sim = createSimulationFromParts(1337, applied.city, applied);
+    expect(sim.incidents.map((i) => i.id)).toEqual(['inc-replay-1']);
+    expect(sim.incidents[0].status).toBe('scheduled');
+    while (sim.timeMinutes < 501) sim = stepSimulation(sim, 1);
+    expect(sim.incidents[0].status).toBe('active');
+    const shuttleId = 'rt-rep-inc-replay-1';
+    const shuttle = sim.routes.find((r) => r.id === shuttleId);
+    expect(shuttle).toBeDefined();
+    expect(shuttle?.stationIds).toEqual([from, to]);
+    expect(sim.connections.filter((c) => c.routeId === shuttleId)).toHaveLength(2);
   });
 });
 
