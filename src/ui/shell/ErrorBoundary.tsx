@@ -8,13 +8,13 @@ interface State {
 
 /** Last line of defence: a plain message instead of a blank page. Errors thrown in effects (such as WebGL start-up) reach it too. */
 export default class ErrorBoundary extends Component<{ children: ReactNode }, State> {
-  state: State = { failed: false, error: null };
+  override state: State = { failed: false, error: null };
 
   static getDerivedStateFromError(error: unknown): State {
     return { failed: true, error };
   }
 
-  componentDidCatch(error: unknown, info: ErrorInfo) {
+  override componentDidCatch(error: unknown, info: ErrorInfo) {
     console.error('TransitForge stopped', error, info.componentStack);
   }
 
@@ -29,7 +29,7 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
     location.reload();
   };
 
-  render() {
+  override render() {
     if (!this.state.failed) return this.props.children;
     const f = describeFailure(this.state.error);
     return (
