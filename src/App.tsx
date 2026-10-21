@@ -507,6 +507,17 @@ export default function App() {
     return LENS_GROUPS.some((g) => g.items.some((i) => i.key === v));
   }
 
+  /**
+   * Planning and disruption results are computed against one run. They must not
+   * survive a session switch, or the new city shows the old verdict/baseline.
+   */
+  function clearSessionResults() {
+    setEvaluation(null);
+    setBaselineBundle(null);
+    setActivePlanId(null);
+    setResilienceRows(null);
+  }
+
   async function openSaveGame(save: SaveGame) {
     setStarted(true);
     setWelcome(null);
@@ -527,6 +538,7 @@ export default function App() {
     setRedo([]);
     setCompareResult(null);
     clearDraft();
+    clearSessionResults();
     if (validOverlay(save.analytics.overlay)) setOverlay(save.analytics.overlay);
     if (TRAVEL_DESTS.some((d) => d.key === save.analytics.travelDest)) setTravelDest(save.analytics.travelDest as TravelDest);
     if (DEMAND_LAYERS.some((d) => d.key === save.analytics.demandLayer)) setDemandLayer(save.analytics.demandLayer as DemandLayer);
@@ -575,6 +587,7 @@ export default function App() {
     setRedo([]);
     setCompareResult(null);
     clearDraft();
+    clearSessionResults();
     const demoOps = d.ops.map((o) => ({ ...o }));
     if (d.fares) demoOps.push({ type: 'setFares', fares: { ...d.fares } });
     setOps(demoOps);
@@ -668,6 +681,7 @@ export default function App() {
     setViewing('scenario');
     setCompareResult(null);
     clearDraft();
+    clearSessionResults();
     enterSimulate();
     resetSimTo(baseCity, baseNet);
     setNetworkKey((k) => k + 1);
@@ -681,6 +695,7 @@ export default function App() {
     setWelcome(null);
     enterSimulate();
     resetAll();
+    clearSessionResults();
     setPlaying(true);
     maybeOnboard();
   }
@@ -1568,6 +1583,11 @@ export default function App() {
     setYearsApplied(0);
     setGrowthHistory([]);
     setForecast(null);
+    // A plan evaluation and resilience comparison describe one run; the day
+    // reset ends that run. The brief's baseline anchor stays: it belongs to
+    // the brief, not the run.
+    setEvaluation(null);
+    setResilienceRows(null);
     setSpeed(settings.defaultSpeed);
     if (viewing === 'base') resetSimTo(baseCity, baseNet);
     else {
@@ -1699,6 +1719,7 @@ export default function App() {
     setBaselineBundle(null);
     setPlanHorizon(plan.horizonYears);
     setEvaluation(null);
+    setResilienceRows(null);
     applyOps(plan.ops.map((o) => ({ ...o })), [], 'scenario');
     setViewing('scenario');
   }
