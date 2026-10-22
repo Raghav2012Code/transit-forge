@@ -268,6 +268,38 @@ describe('service disruption', () => {
   });
 });
 
+describe('spawn plans on the closed network (#35)', () => {
+  it('plans spawn-time routes through the same exclusions as replan', () => {
+    let sim = run(1337, 60);
+    const route = sim.routes.find((r) => r.mode === 'metro') ?? sim.routes[0];
+    // A closure between the origin and destination station: a direct trip
+    // would use the suspended segment, so it must not be offered at spawn.
+    sim.incidents.push({
+      ...mkIncident({
+        kind: 'segment-closure',
+        targetRouteId: route.id,
+        segFrom: route.stationIds[1],
+        segTo: route.stationIds[route.stationIds.length - 1],
+      }),
+      id: 'inc-spawn',
+      startMin: sim.timeMinutes,
+      status: 'scheduled',
+    });
+    for (let i = 0; i < 30; i++) sim = stepSimulation(sim, 1);
+    // No passenger may hold a leg whose hop is closed — spawn-time routing
+    // must have excluded it, not left it for a tick-by-tick replan.
+    for (const p of sim.passengers) {
+      if (p.state === 'ARRIVED' || p.state === 'STRANDED') continue;
+      const leg = p.legs[p.legIndex];
+      if (!leg) continue;
+      const r = sim.routes.find((x) => x.id === leg.routeId);
+      if (r) expect(legBlocked(leg, r.stationIds, sim.closures)).toBe(false);
+    }
+    // The closure affects spawn-time routing: passengers don't take the closed segment.
+    // rerouted counter tracks explicit replans, not spawn-time avoidance.
+  });
+});
+
 describe('road incidents', () => {
   it('closes edges and reroutes cars', () => {
     let sim = run(1337, 120);
@@ -474,8 +506,13 @@ describe('presets', () => {
     expect(presets.length).toBeGreaterThanOrEqual(3);
     for (const p of presets) {
       const cfg = p.build(500);
-      expect(cfg.startMin).toBe(500);
-      expect(cfg.durationMin).toBeGreaterThan(0);
+      const configs = Array.isArray(cfg) ? cfg : [cfg];
+      for (const c of configs) {
+        // Skip marker for no-metro case.
+        if ('_skip' in c && c._skip === true) continue;
+        expect(c.startMin).toBe(500);
+        expect(c.durationMin).toBeGreaterThan(0);
+      }
     }
   });
 });

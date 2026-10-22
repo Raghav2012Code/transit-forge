@@ -1874,20 +1874,29 @@ export default function App() {
     const p = presets.find((x) => x.key === key);
     if (!p) return;
     const cfg = p.build(Math.round(sim.timeMinutes + 5));
-    const id = `inc-${sim.nextIncidentId}`;
-    sim.nextIncidentId++;
-    const scheduled: IncidentConfig = { ...cfg, id };
-    sim.incidents.push({
-      ...scheduled,
-      status: 'scheduled',
-      activeTicks: 0,
-      baselineWaiting: 0,
-      recovered90: false,
-      strandedPeakDuringIncident: 0,
-    });
-    sim.events.push({ t: sim.timeMinutes, text: `${cfg.label} — scheduled for ${formatClock(cfg.startMin)}`, level: 'info' });
-    recordIncidentOp(scheduled);
-    setSelectedIncidentId(id);
+    // Some presets return an array of incidents (e.g., multi-incident).
+    const configs = Array.isArray(cfg) ? cfg : [cfg];
+    for (const c of configs) {
+      // Skip cleanly if the preset has no valid infrastructure (_skip marker).
+      if ('_skip' in c && c._skip === true) {
+        sim.events.push({ t: sim.timeMinutes, text: `${c.label} — skipped (no metro network)`, level: 'info' });
+        continue;
+      }
+      const id = `inc-${sim.nextIncidentId}`;
+      sim.nextIncidentId++;
+      const scheduled: IncidentConfig = { ...c, id };
+      sim.incidents.push({
+        ...scheduled,
+        status: 'scheduled',
+        activeTicks: 0,
+        baselineWaiting: 0,
+        recovered90: false,
+        strandedPeakDuringIncident: 0,
+      });
+      sim.events.push({ t: sim.timeMinutes, text: `${c.label} — scheduled for ${formatClock(c.startMin)}`, level: 'info' });
+      recordIncidentOp(scheduled);
+    }
+    setSelectedIncidentId(configs[configs.length - 1]?.id);
     setSnapshot({ ...sim });
   }
 

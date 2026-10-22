@@ -45,14 +45,17 @@ export function resolvedFleet(plan: ServicePlan, cycle: number, timeMin: number)
 /**
  * Next terminus departure at or after `nowMin`. Departures sit on a grid of
  * `headway` anchored at `offset` (phase alignment for synced routes).
+ * Wraps to the next operating day if `nowMin` is past the end of service.
  */
 export function nextTerminusDeparture(plan: ServicePlan, headway: number, offset: number, nowMin: number): number {
   if (!Number.isFinite(headway) || headway <= 0) return Infinity;
-  const start = plan.operatingStartMin;
+  const day = Math.floor(nowMin / 1440) * 1440;
+  const start = day + plan.operatingStartMin;
+  const end = day + plan.operatingEndMin;
   if (nowMin < start) return start + offset;
   const k = Math.ceil((nowMin - start - offset) / headway);
   const dep = start + offset + Math.max(0, k) * headway;
-  return dep < plan.operatingEndMin ? dep : Infinity;
+  return dep < end ? dep : start + 1440 + offset;
 }
 
 /**

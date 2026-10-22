@@ -174,6 +174,10 @@ export function updateIncidentLifecycle(sim: SimulationState): IncidentEvent[] {
     } else if (inc.status === 'active') {
       inc.activeTicks++;
       inc.strandedPeakDuringIncident = Math.max(inc.strandedPeakDuringIncident, strandedCount(sim));
+      // Retry replacement deployment if configured but not yet deployed and buses are now free.
+      if (inc.replacement && !inc.replacementRouteId && sim.emergencyBusesFree >= (inc.replacement?.buses ?? 0)) {
+        events.push(...deployReplacement(sim, inc));
+      }
       if (t >= inc.startMin + inc.durationMin) {
         inc.status = 'recovering';
         inc.activeTicks = 0;
@@ -206,7 +210,7 @@ function finalizeIncident(sim: SimulationState, inc: Incident): void {
   inc.status = 'resolved';
   const c = sim.counters;
   const s = inc.snap ?? { rerouted: 0, completed: 0, totalWaitMin: 0, cancelledTrips: 0, strandedPeak: 0 };
-  const completedDelta = Math.max(1, c.completed - s.completed);
+  const completedDelta = c.completed - s.completed;
   const cap = capacityLostFor(inc, sim.routes, sim.routeLengths, sim.roadGraph, sim.routeCumDist);
   inc.result = {
     affectedPax: Math.max(0, c.rerouted - s.rerouted) + inc.strandedPeakDuringIncident,
@@ -298,17 +302,39 @@ export function hopAheadBlocked(
   return closures.closedHops.has(hopKey(routeId, stationIds[i], stationIds[i - 1]));
 }
 
-/** Nearest OPEN station index (-1 when every station is closed). */
 export function nearestOpenStationIdx(
   cum: number[],
   s: number,
   stationIds: string[],
   closures: DerivedClosures,
+  routeId: string,
+  direction: 1 | -1,
 ): number {
   let best = -1;
   let bestD = Infinity;
   for (let i = 0; i < cum.length; i++) {
     if (closures.closedStations.has(stationIds[i])) continue;
+    // Only consider stations on the vehicle's side of the closure:
+    // the vehicle can't cross a closed hop in its direction of travel.
+    let blocked = false;
+    if (direction === 1) {
+      // Moving forward: cannot reach stations beyond a closed hop ahead
+      for (let j = 0; j < i; j++) {
+        if (closures.closedHops.has(hopKey(routeId, stationIds[j], stationIds[j + 1]))) {
+          blocked = true;
+          break;
+        }
+      }
+    } else {
+      // Moving backward: cannot reach stations before a closed hop behind
+      for (let j = i; j < stationIds.length - 1; j++) {
+        if (closures.closedHops.has(hopKey(routeId, stationIds[j + 1], stationIds[j]))) {
+          blocked = true;
+          break;
+        }
+      }
+    }
+    if (blocked) continue;
     const d = Math.abs((cum[i] ?? 0) - s);
     if (d < bestD) {
       bestD = d;
@@ -435,7 +461,7 @@ export interface IncidentPreset {
   key: string;
   label: string;
   hint: string;
-  build: (startMin: number) => IncidentConfig;
+  build: (startMin: number) => IncidentConfig | IncidentConfig[];
 }
 
 export function incidentPresets(base: {
@@ -496,11 +522,31 @@ export function incidentPresets(base: {
     key: 'multi-incident',
     label: 'Multi-incident',
     hint: 'Two independent failures at once',
-    build: (startMin) => ({
-      id: '', kind: 'major-delay', label: 'Signal delays',
-      targetRouteId: longestMetro?.id ?? '',
-      startMin, durationMin: 30, recoveryMin: 5, severity01: 0.4, delayMin: 4,
-    }),
+    build: (startMin) => {
+      if (!longestMetro) {
+        // No metro network: skip cleanly with an explanatory event (not an incident).
+        return {
+          id: '', kind: 'major-delay', label: 'Multi-incident (no metro network)',
+          targetRouteId: '', startMin, durationMin: 30, recoveryMin: 5, severity01: 0.4, delayMin: 4,
+          _skip: true as const,
+        };
+      }
+      // Two distinct incidents on the longest metro: a segment closure and a signal delay.
+      return [
+        { id: '', kind: 'segment-closure', label: `${longestMetro.name} segment closure`,
+          targetRouteId: longestMetro.id,
+          segFrom: longestMetro.stationIds[Math.floor(longestMetro.stationIds.length / 3)],
+          segTo: longestMetro.stationIds[Math.floor(2 * longestMetro.stationIds.length / 3)],
+          startMin, durationMin: 45, recoveryMin: 10, severity01: 0.9,
+          replacement: { fromStationId: longestMetro.stationIds[Math.floor(longestMetro.stationIds.length / 3)],
+            toStationId: longestMetro.stationIds[Math.floor(2 * longestMetro.stationIds.length / 3)],
+            buses: 6, headwayMin: 6, capacity: 70 },
+        },
+        { id: '', kind: 'major-delay', label: 'Signal delays on ' + longestMetro.name,
+          targetRouteId: longestMetro.id,
+          startMin, durationMin: 30, recoveryMin: 5, severity01: 0.4, delayMin: 4 },
+      ];
+    },
   });
   return out;
 }

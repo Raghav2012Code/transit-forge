@@ -241,7 +241,12 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
       }
       // Both options use live network state: transit via the station graph,
       // car via the congested road graph. Either may be unroutable.
-      const trip = planTrip(w.connections, fromSt, toSt);
+      // Spawn plans on the same closed network every other routing path uses.
+      // Without this, a passenger whose best path would use a suspended line
+      // flips to car en masse or boards an impossible plan and is flagged
+      // "rerouted" next tick, inflating affected-riders counts for an
+      // incident that never actually touched them.
+      const trip = planTrip(w.connections, fromSt, toSt, exclusionsFrom(w.closures));
       const road = cachedRoadPath(w, w.zoneRoadAccess[pair.from] ?? '', w.zoneRoadAccess[pair.to] ?? '', true);
       if (!trip && !road) {
         w.counters.unrouted++;
@@ -455,12 +460,14 @@ export function advancePassengers(w: PassengerWorld, dtMin: number): void {
     if (!parked) w.counters.routeVehHr[vv.routeId] = (w.counters.routeVehHr[vv.routeId] ?? 0) + dtMin / 60;
     if (held) {
       // Holding for a disruption (no movement, no boarding this tick).
-      vv.dwellLeft = dtMin;
+      // Don't set dwellLeft when held — the vehicle is mid-hop, not at a platform.
+      // Setting it would cause a phantom dwell when the hold lifts.
+      vv.dwellLeft = 0;
       vv.load = vv.riders.length;
       if (vv.riders.length > 0) {
         // Offload riders who cannot continue: parked (terminated) = all,
         // held = only those whose remaining leg is blocked. They replan.
-        const idx = nearestOpenStationIdx(cum, vv.s, route.stationIds, w.closures);
+        const idx = nearestOpenStationIdx(cum, vv.s, route.stationIds, w.closures, route.id, vv.direction);
         const sid = idx >= 0 ? route.stationIds[idx] : undefined;
         if (sid) {
           const staying: number[] = [];
