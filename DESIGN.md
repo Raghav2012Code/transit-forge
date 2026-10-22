@@ -237,8 +237,14 @@ dock    the clock, the service day, six readings, and Reports
 **The memorable element is the service-day strip.** It draws the operating
 day (04:00 to 24:00) the way a timetable is drawn: peak periods shaded (read
 from the simulation's own definition), disruptions as bars, the day's load as
-a trace, a needle for now. Pointing at the future offers "Run to 09:00"; the
-past cannot be revisited because the day would have to be replayed. Everything
+a trace, a needle for now. It seeks in both directions: pointing at the future
+offers "Run to 09:00" and plays there; pointing at the past offers
+"Replay to 08:30" and rebuilds the day from its first minute under the plan
+currently held, landing with the clock paused. A rebuild costs about a second
+and a half for a full day and is near-instant for a few minutes back; while it
+runs the strip shows progress and the controls reduce to a stop. A rewind ends
+the later run — the trace stops at the replayed minute and any verdict from
+the discarded run is cleared with a message saying so. Everything
 else is quiet so this can be the one thing that is not.
 
 **Search is also the command line.** One field finds places and runs actions
@@ -307,5 +313,6 @@ display scale (27–46px) for the headline. The workspace itself lives at
 - The panel in Build, Disrupt and Plan is still one scroll of collapsible
   sections. They are short enough today; if they grow, give them the Reports
   sheet's tabs rather than a longer column.
-- The day strip runs forward only. Going back would mean replaying the day from
-  the start, which is a different feature.
+- The day strip seeks, but it does not scrub: each seek is one commit (click,
+  Enter, or a touch release), never a continuous drag, because every minute
+  between here and there has to be stepped.
