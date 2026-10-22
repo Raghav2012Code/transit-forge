@@ -837,6 +837,30 @@ export default function App() {
     setPlaying(true);
   }
 
+  /**
+   * Replay the day to a minute that has passed. This ends the run that followed
+   * it — one timeline, not a branch — so the replay is built off to the side and
+   * swapped in only when it completes: an abandoned rebuild costs nothing.
+   */
+  async function rewindTo(absoluteMinute: number) {
+    if (absoluteMinute >= simRef.current.timeMinutes) return;
+    setPlaying(false);
+    clearRunTarget();
+    clearDraft();
+    const parts = viewing === 'base' ? { city: effBaseCity, net: baseNet } : { city: mod.city, net: mod };
+    const built = await buildSimulationAt(SEED, parts.city, parts.net, absoluteMinute);
+    if (!built) return;
+    simRef.current = built;
+    setSnapshot({ ...built });
+    lastHistTick.current = built.tick;
+  }
+
+  /** The strip's one gesture: ahead plays to the minute, behind replays to it. */
+  function onSeek(absoluteMinute: number) {
+    if (absoluteMinute > simRef.current.timeMinutes) runTo(absoluteMinute);
+    else void rewindTo(absoluteMinute);
+  }
+
   function requestCameraPose(pos: [number, number, number], target: [number, number, number]) {
     setCameraCmd({ seq: camSeq.current++, pose: { pos, target } });
   }
@@ -3246,7 +3270,7 @@ export default function App() {
         history={history}
         incidents={snapshot.incidents}
         runTarget={runTarget}
-        onRunTo={runTo}
+        onSeek={onSeek}
         reportsOpen={reportsOpen}
         onReports={() => setReportsOpen((v) => !v)}
       />

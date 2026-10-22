@@ -22,7 +22,7 @@ interface Props {
   history: SeriesPoint[];
   incidents: Incident[];
   runTarget: number | null;
-  onRunTo: (absoluteMinute: number) => void;
+  onSeek: (absoluteMinute: number) => void;
   /** Omit both to leave the reports button out. */
   reportsOpen?: boolean;
   onReports?: () => void;
@@ -60,7 +60,7 @@ export default function DayBar(p: Props) {
         history={p.history}
         incidents={p.incidents}
         runTarget={p.runTarget}
-        onRunTo={p.onRunTo}
+        onSeek={p.onSeek}
       />
       <dl className="tf-readings">
         {readings.map((r) => (

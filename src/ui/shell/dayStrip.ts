@@ -1,6 +1,7 @@
 // Geometry for the service-day strip. Pure functions: minutes in, pixels out.
 // The strip shows the operating day (04:00 to 24:00) so the peaks, the
 // disruptions and the clock read on one axis, the way a timetable does.
+import { START_MIN } from '../../simulation/index.ts';
 import { isPeak } from '../../simulation/service/servicePlan.ts';
 import type { SeriesPoint } from '../../simulation/analytics/series.ts';
 import type { IncidentStatus } from '../../types/index.ts';
@@ -97,29 +98,45 @@ export function tracePoints(history: SeriesPoint[], dayStart: number, width: num
     .join(' ');
 }
 
-/** The absolute sim minute to run until, for a chosen minute of day. Null for a minute that has passed. */
-export function runTargetFor(chosenMinuteOfDay: number, timeMinutes: number): number | null {
-  const target = dayStartOf(timeMinutes) + chosenMinuteOfDay;
-  return target > timeMinutes ? target : null;
+/** What committing a chosen minute does: play forward, or replay the day back. */
+export interface Seek {
+  kind: 'run' | 'replay';
+  absolute: number;
 }
 
 /**
- * One keyboard step on the grid. Forward stops at the last grid point of the
- * day. Backward stops at the earliest reachable time; pressing back again
- * from there cancels, so there is always a way out that is not Escape.
+ * The chosen minute of day as an absolute sim minute, and which way it goes.
+ * Null for the minute the clock is already on, and for a minute before the
+ * session's first (the strip draws from 04:00 but the run starts at 07:00).
+ */
+export function seekFor(chosenMinuteOfDay: number, timeMinutes: number): Seek | null {
+  const absolute = dayStartOf(timeMinutes) + chosenMinuteOfDay;
+  if (absolute === timeMinutes) return null;
+  if (absolute > timeMinutes) return { kind: 'run', absolute };
+  return absolute >= dayStartOf(timeMinutes) + START_MIN ? { kind: 'replay', absolute } : null;
+}
+
+/**
+ * One keyboard step on the grid. The marker may cross the clock in both
+ * directions: a forward step stops at the last grid point of the day, a
+ * backward step stops at the first minute of the run and cancels from there,
+ * so there is always a way out that is not Escape.
  */
 export function nudgeTarget(current: number | null, timeMinutes: number, stepMinutes: number): number | null {
+  if (stepMinutes === 0) return null;
   const day = dayStartOf(timeMinutes);
+  const earliest = day + START_MIN;
+  const latest = day + DAY_TO - TARGET_STEP;
   const now = minuteOfDay(timeMinutes);
-  const earliest = Math.ceil((now + 1) / TARGET_STEP) * TARGET_STEP;
-  const latest = DAY_TO - TARGET_STEP;
-  if (earliest > latest) return null;
-  if (current === null) {
-    if (stepMinutes <= 0) return null;
-    return day + Math.min(latest, earliest + stepMinutes);
+  const edge =
+    stepMinutes > 0
+      ? Math.ceil((now + 1) / TARGET_STEP) * TARGET_STEP
+      : Math.floor(now / TARGET_STEP) * TARGET_STEP;
+  if (current === null && stepMinutes > 0 && edge > latest) return null;
+  const next = current === null ? day + edge + stepMinutes : day + minuteOfDay(current) + stepMinutes;
+  if (next < earliest) {
+    // Clamp a backward step to the run's first minute; from there it cancels.
+    return current !== null && minuteOfDay(current) <= START_MIN ? null : earliest;
   }
-  const base = minuteOfDay(current);
-  const next = base + stepMinutes;
-  if (next < earliest) return base > earliest ? day + earliest : null;
-  return day + Math.min(latest, next);
+  return Math.min(latest, next);
 }
