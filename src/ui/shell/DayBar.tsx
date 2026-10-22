@@ -14,7 +14,10 @@ interface Props {
   speed: Speed;
   tick: number;
   timeMinutes: number;
+  /** A replay in flight: where it started, the minute it rebuilds to, and how far it has come. */
+  replay: { from: number; target: number; reached: number } | null;
   onToggle: () => void;
+  onStopReplay: () => void;
   onSpeed: (s: Speed) => void;
   onReset: () => void;
   onStep: () => void;
@@ -50,7 +53,9 @@ export default function DayBar(p: Props) {
         speed={p.speed}
         tick={p.tick}
         timeMinutes={p.timeMinutes}
+        replaying={p.replay !== null}
         onToggle={p.onToggle}
+        onStop={p.onStopReplay}
         onSpeed={p.onSpeed}
         onReset={p.onReset}
         onStep={p.onStep}
@@ -60,6 +65,7 @@ export default function DayBar(p: Props) {
         history={p.history}
         incidents={p.incidents}
         runTarget={p.runTarget}
+        replay={p.replay}
         onSeek={p.onSeek}
       />
       <dl className="tf-readings">

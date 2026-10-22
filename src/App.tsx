@@ -765,6 +765,14 @@ export default function App() {
     runTargetRef.current = null;
     setRunTarget(null);
   }
+  // A replay rebuilding the day. Only the newest seek lands; anything older is
+  // abandoned and the run it would have replaced is never touched.
+  const [replay, setReplay] = useState<{ from: number; target: number; reached: number } | null>(null);
+  const replaySeq = useRef(0);
+  function stopReplay() {
+    replaySeq.current += 1;
+    setReplay(null);
+  }
   // Theme: an explicit choice is remembered; until one is made, follow the system.
   function toggleTheme() {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
@@ -820,6 +828,10 @@ export default function App() {
 
   /** Play or pause. Pausing also ends a "run until", so resuming is an ordinary resume. */
   function togglePlay() {
+    if (replay) {
+      stopReplay();
+      return;
+    }
     if (mode !== 'simulate') {
       enterSimulate();
       setPlaying(true);
@@ -841,14 +853,27 @@ export default function App() {
    * Replay the day to a minute that has passed. This ends the run that followed
    * it — one timeline, not a branch — so the replay is built off to the side and
    * swapped in only when it completes: an abandoned rebuild costs nothing.
+   * A later seek supersedes an earlier one; only the newest lands.
    */
   async function rewindTo(absoluteMinute: number) {
     if (absoluteMinute >= simRef.current.timeMinutes) return;
+    const seq = ++replaySeq.current;
     setPlaying(false);
     clearRunTarget();
     clearDraft();
+    const from = simRef.current.timeMinutes;
+    // A rewind of a few minutes lands in tens of milliseconds: no ceremony.
+    const ceremony = from - absoluteMinute > 15;
     const parts = viewing === 'base' ? { city: effBaseCity, net: baseNet } : { city: mod.city, net: mod };
-    const built = await buildSimulationAt(SEED, parts.city, parts.net, absoluteMinute);
+    if (ceremony) setReplay({ from, target: absoluteMinute, reached: START_MIN });
+    const built = await buildSimulationAt(SEED, parts.city, parts.net, absoluteMinute, {
+      onProgress: (reached) => {
+        if (ceremony && seq === replaySeq.current) setReplay({ from, target: absoluteMinute, reached });
+      },
+      shouldStop: () => seq !== replaySeq.current,
+    });
+    if (seq !== replaySeq.current) return;
+    setReplay(null);
     if (!built) return;
     simRef.current = built;
     setSnapshot({ ...built });
@@ -857,6 +882,7 @@ export default function App() {
 
   /** The strip's one gesture: ahead plays to the minute, behind replays to it. */
   function onSeek(absoluteMinute: number) {
+    if (replay) stopReplay();
     if (absoluteMinute > simRef.current.timeMinutes) runTo(absoluteMinute);
     else void rewindTo(absoluteMinute);
   }
@@ -2103,7 +2129,7 @@ export default function App() {
     add({ id: 'speed-1', group: 'Day', label: 'Run at normal speed', keys: ['1'], keywords: 'slow 1x', run: () => setSpeed(1) });
     add({ id: 'speed-5', group: 'Day', label: 'Run at 5× speed', keys: ['2'], keywords: 'faster fast 5x', run: () => setSpeed(5) });
     add({ id: 'speed-20', group: 'Day', label: 'Run at 20× speed', keys: ['3'], keywords: 'fastest fast 20x', run: () => setSpeed(20) });
-    add({ id: 'step', group: 'Day', label: 'Advance one minute', keywords: 'step tick', run: () => { clearRunTarget(); simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); } });
+    add({ id: 'step', group: 'Day', label: 'Advance one minute', keywords: 'step tick', run: () => { if (replay) return; clearRunTarget(); simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); } });
     add({ id: 'reset', group: 'Day', label: 'Reset the day', keys: ['R'], keywords: 'restart start over', run: resetAll });
 
     for (const g of LENS_GROUPS) {
@@ -2412,7 +2438,8 @@ export default function App() {
       } else if (plain && e.key === ']') {
         setRailOpen(true);
       } else if (e.key === 'Escape') {
-        if (contextMenu) setContextMenu(null);
+        if (replay) stopReplay();
+        else if (contextMenu) setContextMenu(null);
         else if (paletteOpen) setPaletteOpen(false);
         else if (searchOpen) setSearchOpen(false);
         else if (reportsOpen) setReportsOpen(false);
@@ -3258,10 +3285,13 @@ export default function App() {
         speed={speed}
         tick={snapshot.tick}
         timeMinutes={snapshot.timeMinutes}
+        replay={replay}
         onToggle={togglePlay}
+        onStopReplay={stopReplay}
         onSpeed={(sp) => setSpeed(sp)}
         onReset={resetAll}
         onStep={() => {
+          if (replay) return;
           clearRunTarget();
           simRef.current = stepSimulation(simRef.current, 1);
           setSnapshot(simRef.current);
