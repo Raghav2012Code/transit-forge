@@ -855,26 +855,43 @@ export default function App() {
    * swapped in only when it completes: an abandoned rebuild costs nothing.
    * A later seek supersedes an earlier one; only the newest lands.
    */
-  async function rewindTo(absoluteMinute: number) {
-    if (absoluteMinute >= simRef.current.timeMinutes) return;
+  async function rewindToMinute(targetMinute: number, parts: { city: typeof baseCity; net: typeof baseNet }, results: 'clear-run' | 'clear-reset') {
     const seq = ++replaySeq.current;
     setPlaying(false);
     clearRunTarget();
     clearDraft();
     const from = simRef.current.timeMinutes;
     // A rewind of a few minutes lands in tens of milliseconds: no ceremony.
-    const ceremony = from - absoluteMinute > 15;
-    const parts = viewing === 'base' ? { city: effBaseCity, net: baseNet } : { city: mod.city, net: mod };
-    if (ceremony) setReplay({ from, target: absoluteMinute, reached: START_MIN });
-    const built = await buildSimulationAt(SEED, parts.city, parts.net, absoluteMinute, {
+    const ceremony = from - targetMinute > 15;
+    if (ceremony) setReplay({ from, target: targetMinute, reached: START_MIN });
+    const built = await buildSimulationAt(SEED, parts.city, parts.net, targetMinute, {
       onProgress: (reached) => {
-        if (ceremony && seq === replaySeq.current) setReplay({ from, target: absoluteMinute, reached });
+        if (ceremony && seq === replaySeq.current) setReplay({ from, target: targetMinute, reached });
       },
       shouldStop: () => seq !== replaySeq.current,
     });
     if (seq !== replaySeq.current) return;
     setReplay(null);
     if (!built) return;
+    // The later run is over: the trace stops at the replayed minute, and the
+    // results computed against that run go with it.
+    setHistory((h) => h.filter((p) => p.t <= targetMinute));
+    if (results === 'clear-run') {
+      const discarded: string[] = [];
+      if (evaluation) discarded.push('the plan verdict');
+      if (baselineBundle) discarded.push('the objective baseline');
+      if (activePlanId) discarded.push('the active plan');
+      if (resilienceRows) discarded.push('the resilience comparison');
+      clearSessionResults();
+      if (discarded.length > 0) {
+        pushToast('info', `Rewound to ${formatClock(targetMinute)} — discarded ${discarded.join(', ')}.`);
+      }
+    } else {
+      // Reset keeps its own results policy: the verdict and the comparison
+      // describe the run, while the brief's baseline anchor stays with it.
+      setEvaluation(null);
+      setResilienceRows(null);
+    }
     simRef.current = built;
     setSnapshot({ ...built });
     lastHistTick.current = built.tick;
@@ -884,7 +901,10 @@ export default function App() {
   function onSeek(absoluteMinute: number) {
     if (replay) stopReplay();
     if (absoluteMinute > simRef.current.timeMinutes) runTo(absoluteMinute);
-    else void rewindTo(absoluteMinute);
+    else {
+      const parts = viewing === 'base' ? { city: effBaseCity, net: baseNet } : { city: mod.city, net: mod };
+      void rewindToMinute(absoluteMinute, parts, 'clear-run');
+    }
   }
 
   function requestCameraPose(pos: [number, number, number], target: [number, number, number]) {
@@ -1634,16 +1654,16 @@ export default function App() {
     setYearsApplied(0);
     setGrowthHistory([]);
     setForecast(null);
-    // A plan evaluation and resilience comparison describe one run; the day
-    // reset ends that run. The brief's baseline anchor stays: it belongs to
-    // the brief, not the run.
-    setEvaluation(null);
-    setResilienceRows(null);
     setSpeed(settings.defaultSpeed);
-    if (viewing === 'base') resetSimTo(baseCity, baseNet);
+    setSelection(null);
+    // Reset is a replay to the first minute of the day through the same path
+    // as any rewind — only the clock path is shared. Growth, speed and the
+    // selection are cleared here, never by a plain rewind.
+    const morning = Math.floor(simRef.current.timeMinutes / 1440) * 1440 + START_MIN;
+    if (viewing === 'base') void rewindToMinute(morning, { city: baseCity, net: baseNet }, 'clear-reset');
     else {
       const fresh = applyEdits(baseCity, baseNet, ops);
-      resetSimTo(fresh.city, fresh);
+      void rewindToMinute(morning, { city: fresh.city, net: fresh }, 'clear-reset');
     }
   }
 

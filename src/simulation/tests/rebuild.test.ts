@@ -8,6 +8,9 @@ import {
   stepSimulation,
   type SimulationState,
 } from '../index.ts';
+import { generateCity } from '../city/generateCity.ts';
+import { buildNetwork } from '../transport/network.ts';
+import { applyEdits } from '../scenario/applyEdits.ts';
 
 /** Everything a player would look at, so equality means "the same day". */
 function signature(sim: SimulationState): string {
@@ -63,5 +66,38 @@ describe('rebuilding a session to a minute', () => {
     const built = await buildSimulationAt(1337, base.city, base, START_MIN - 60);
     expect(built!.tick).toBe(0);
     expect(built!.timeMinutes).toBe(START_MIN);
+  });
+
+  it('lands scheduled incidents where they were scheduled', async () => {
+    const city = generateCity(1337);
+    const baseNet = buildNetwork();
+    const stationId = baseNet.stations[0].id;
+    const applied = applyEdits(city, baseNet, [
+      {
+        type: 'scheduleIncident',
+        incident: {
+          id: 'inc-rewind-test',
+          label: 'test closure',
+          kind: 'station-closure',
+          targetStationId: stationId,
+          startMin: START_MIN + 120,
+          durationMin: 30,
+          recoveryMin: 5,
+          severity01: 0.7,
+        },
+      },
+    ]);
+    expect(applied.warnings).toEqual([]);
+
+    const before = await buildSimulationAt(1337, applied.city, applied, START_MIN + 90);
+    expect(before!.incidents.map((i) => i.status)).toEqual(['scheduled']);
+
+    const during = await buildSimulationAt(1337, applied.city, applied, START_MIN + 130);
+    expect(during!.incidents.map((i) => i.status)).toEqual(['active']);
+
+    // And the replayed minutes equal running there: same clock, same closures.
+    let run = createSimulationFromParts(1337, applied.city, applied);
+    for (let i = 0; i < 130; i++) run = stepSimulation(run, 1);
+    expect(signature(during!)).toBe(signature(run));
   });
 });
