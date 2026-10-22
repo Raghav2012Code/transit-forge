@@ -7,7 +7,7 @@ import './panel.css';
 import './responsive.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
-import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
+import { START_MIN, buildSimulationAt, createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
 import { WORLD_SCALE } from './simulation/city/geography.ts';
 import { computeAccessibility } from './simulation/analytics/accessibility.ts';
 import { computeCoverage } from './simulation/analytics/coverage.ts';
@@ -551,15 +551,16 @@ export default function App() {
     setNetworkKey((k) => k + 1);
     // Fares and incidents ride the ops replay, so the clock starts clean.
     const target = Math.max(0, Math.min(save.tick, 1020));
-    let sim = simRef.current;
-    const total = Math.max(1, target);
-    while (sim.tick < target) {
-      const n = Math.min(120, target - sim.tick);
-      for (let i = 0; i < n; i++) sim = stepSimulation(sim, 1);
-      simRef.current = sim;
-      setLoading({ title: `Opening ${save.name}`, label: 'Advancing the clock', progress: sim.tick / total });
-      await frame();
-    }
+    const built = await buildSimulationAt(SEED, applied.city, applied, START_MIN + target, {
+      onProgress: (reached) =>
+        setLoading({
+          title: `Opening ${save.name}`,
+          label: 'Advancing the clock',
+          progress: (reached - START_MIN) / Math.max(1, target),
+        }),
+    });
+    const sim = built ?? simRef.current;
+    simRef.current = sim;
     setSnapshot({ ...sim });
     setHistory([]);
     lastHistTick.current = sim.tick;
