@@ -34,6 +34,10 @@ export const IconPause = (p: IconProps) => (
   <Svg {...p}><path d="M5.5 3.5v9M10.5 3.5v9" strokeWidth={2} /></Svg>
 );
 
+export const IconStop = (p: IconProps) => (
+  <Svg {...p}><rect x="4.5" y="4.5" width="7" height="7" rx="1" fill="currentColor" stroke="none" /></Svg>
+);
+
 export const IconStep = (p: IconProps) => (
   <Svg {...p}><path d="M4 3.5 10 8l-6 4.5Z" fill="currentColor" stroke="none" /><path d="M12.5 3.5v9" strokeWidth={1.75} /></Svg>
 );

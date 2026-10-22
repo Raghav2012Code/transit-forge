@@ -178,20 +178,23 @@ export function createSimulation(seed = 1337): SimulationState {
   return createSimulationFromParts(seed, city, net);
 }
 
+/** A session's transport network: the base network, or one with edits applied. */
+export interface SessionParts {
+  stations: Station[];
+  routes: TransportRoute[];
+  connections: Connection[];
+  routeLengths: Map<string, number>;
+  routeCumDist: Map<string, number[]>;
+  service?: Record<string, ServicePlan>;
+  incidents?: IncidentConfig[];
+  fares?: FarePolicy;
+}
+
 /** Build a simulation from explicit city + network parts (base or scenario-modified). */
 export function createSimulationFromParts(
   seed: number,
   city: CityData,
-  net: {
-    stations: Station[];
-    routes: TransportRoute[];
-    connections: Connection[];
-    routeLengths: Map<string, number>;
-    routeCumDist: Map<string, number[]>;
-    service?: Record<string, ServicePlan>;
-    incidents?: IncidentConfig[];
-    fares?: FarePolicy;
-  },
+  net: SessionParts,
   serviceOverrides?: Record<string, ServicePlan>,
 ): SimulationState {
   const stations = net.stations.map((s) => ({ ...s, routeIds: [...s.routeIds], modes: [...s.modes] }));
@@ -252,6 +255,46 @@ export function createSimulationFromParts(
     emergencyBusesFree: 12,
     eventFlags: {},
   };
+}
+
+/** Ticks stepped between yields while rebuilding a session to a minute. */
+const REBUILD_CHUNK = 120;
+
+/** Yield to the host so progress can paint. Node (tests) has no frames. */
+function yieldToHost(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => setTimeout(resolve, 0));
+    else setTimeout(resolve, 0);
+  });
+}
+
+/**
+ * The one way to ask for a session as it stands at a given minute: build it from
+ * its parts, then step the pipeline minute by minute — a tick is a time budget, so
+ * the state at a minute cannot be jumped to. Chunked and hookable: the caller sees
+ * progress, and abandons the rebuild by answering true to `shouldStop`, which
+ * resolves null without touching the caller's own session.
+ */
+export async function buildSimulationAt(
+  seed: number,
+  city: CityData,
+  net: SessionParts,
+  targetMinute: number,
+  hooks: { onProgress?: (reached: number) => void; shouldStop?: () => boolean } = {},
+): Promise<SimulationState | null> {
+  let sim = createSimulationFromParts(seed, city, net);
+  const target = Math.max(sim.timeMinutes, Math.floor(targetMinute));
+  hooks.onProgress?.(sim.timeMinutes);
+  while (sim.timeMinutes < target) {
+    const chunkEnd = Math.min(target, sim.timeMinutes + REBUILD_CHUNK);
+    while (sim.timeMinutes < chunkEnd) {
+      if (hooks.shouldStop?.()) return null;
+      sim = stepSimulation(sim, 1);
+    }
+    hooks.onProgress?.(sim.timeMinutes);
+    if (sim.timeMinutes < target) await yieldToHost();
+  }
+  return sim;
 }
 
 /** Advance the clock by dtMinutes. Deterministic; no wall-clock or Math.random.

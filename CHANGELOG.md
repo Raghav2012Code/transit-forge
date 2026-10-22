@@ -2,6 +2,17 @@
 
 Newest first. Version is read from `src/version.ts`.
 
+## 1.7.0
+
+- **The service-day strip seeks backwards.** Point at a minute behind the clock
+  and it offers "Replay to 08:30": the day rebuilds from its first minute under
+  the plan you hold now and lands with the clock paused, so a moment that has
+  passed can be looked at again. A full-day replay takes about a second and a
+  half and shows progress with a stop; a rewind of a few minutes is instant.
+  Rewinding ends the run that followed it — the trace stops at the replayed
+  minute, and a verdict from the discarded run is cleared with a message saying
+  so. Reset now takes the same path to the first minute of the day.
+
 ## 1.6.2
 
 - **The launch screen is a page now, not a dialog.** It follows the same

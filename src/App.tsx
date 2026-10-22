@@ -7,7 +7,7 @@ import './panel.css';
 import './responsive.css';
 import SceneView, { type AnalyticsView, type DraftView, type Layers, type Overlay, type Selection } from './rendering/SceneView.tsx';
 import { generateCity } from './simulation/city/generateCity.ts';
-import { createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
+import { START_MIN, buildSimulationAt, createSimulation, createSimulationFromParts, formatClock, stepSimulation, type SimulationState } from './simulation/index.ts';
 import { WORLD_SCALE } from './simulation/city/geography.ts';
 import { computeAccessibility } from './simulation/analytics/accessibility.ts';
 import { computeCoverage } from './simulation/analytics/coverage.ts';
@@ -551,15 +551,16 @@ export default function App() {
     setNetworkKey((k) => k + 1);
     // Fares and incidents ride the ops replay, so the clock starts clean.
     const target = Math.max(0, Math.min(save.tick, 1020));
-    let sim = simRef.current;
-    const total = Math.max(1, target);
-    while (sim.tick < target) {
-      const n = Math.min(120, target - sim.tick);
-      for (let i = 0; i < n; i++) sim = stepSimulation(sim, 1);
-      simRef.current = sim;
-      setLoading({ title: `Opening ${save.name}`, label: 'Advancing the clock', progress: sim.tick / total });
-      await frame();
-    }
+    const built = await buildSimulationAt(SEED, applied.city, applied, START_MIN + target, {
+      onProgress: (reached) =>
+        setLoading({
+          title: `Opening ${save.name}`,
+          label: 'Advancing the clock',
+          progress: (reached - START_MIN) / Math.max(1, target),
+        }),
+    });
+    const sim = built ?? simRef.current;
+    simRef.current = sim;
     setSnapshot({ ...sim });
     setHistory([]);
     lastHistTick.current = sim.tick;
@@ -764,6 +765,14 @@ export default function App() {
     runTargetRef.current = null;
     setRunTarget(null);
   }
+  // A replay rebuilding the day. Only the newest seek lands; anything older is
+  // abandoned and the run it would have replaced is never touched.
+  const [replay, setReplay] = useState<{ from: number; target: number; reached: number } | null>(null);
+  const replaySeq = useRef(0);
+  function stopReplay() {
+    replaySeq.current += 1;
+    setReplay(null);
+  }
   // Theme: an explicit choice is remembered; until one is made, follow the system.
   function toggleTheme() {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
@@ -819,6 +828,10 @@ export default function App() {
 
   /** Play or pause. Pausing also ends a "run until", so resuming is an ordinary resume. */
   function togglePlay() {
+    if (replay) {
+      stopReplay();
+      return;
+    }
     if (mode !== 'simulate') {
       enterSimulate();
       setPlaying(true);
@@ -834,6 +847,64 @@ export default function App() {
     runTargetRef.current = absoluteMinute;
     setRunTarget(absoluteMinute);
     setPlaying(true);
+  }
+
+  /**
+   * Replay the day to a minute that has passed. This ends the run that followed
+   * it — one timeline, not a branch — so the replay is built off to the side and
+   * swapped in only when it completes: an abandoned rebuild costs nothing.
+   * A later seek supersedes an earlier one; only the newest lands.
+   */
+  async function rewindToMinute(targetMinute: number, parts: { city: typeof baseCity; net: typeof baseNet }, results: 'clear-run' | 'clear-reset') {
+    const seq = ++replaySeq.current;
+    setPlaying(false);
+    clearRunTarget();
+    clearDraft();
+    const from = simRef.current.timeMinutes;
+    // A rewind of a few minutes lands in tens of milliseconds: no ceremony.
+    const ceremony = from - targetMinute > 15;
+    if (ceremony) setReplay({ from, target: targetMinute, reached: START_MIN });
+    const built = await buildSimulationAt(SEED, parts.city, parts.net, targetMinute, {
+      onProgress: (reached) => {
+        if (ceremony && seq === replaySeq.current) setReplay({ from, target: targetMinute, reached });
+      },
+      shouldStop: () => seq !== replaySeq.current,
+    });
+    if (seq !== replaySeq.current) return;
+    setReplay(null);
+    if (!built) return;
+    // The later run is over: the trace stops at the replayed minute, and the
+    // results computed against that run go with it.
+    setHistory((h) => h.filter((p) => p.t <= targetMinute));
+    if (results === 'clear-run') {
+      const discarded: string[] = [];
+      if (evaluation) discarded.push('the plan verdict');
+      if (baselineBundle) discarded.push('the objective baseline');
+      if (activePlanId) discarded.push('the active plan');
+      if (resilienceRows) discarded.push('the resilience comparison');
+      clearSessionResults();
+      if (discarded.length > 0) {
+        pushToast('info', `Rewound to ${formatClock(targetMinute)} — discarded ${discarded.join(', ')}.`);
+      }
+    } else {
+      // Reset keeps its own results policy: the verdict and the comparison
+      // describe the run, while the brief's baseline anchor stays with it.
+      setEvaluation(null);
+      setResilienceRows(null);
+    }
+    simRef.current = built;
+    setSnapshot({ ...built });
+    lastHistTick.current = built.tick;
+  }
+
+  /** The strip's one gesture: ahead plays to the minute, behind replays to it. */
+  function onSeek(absoluteMinute: number) {
+    if (replay) stopReplay();
+    if (absoluteMinute > simRef.current.timeMinutes) runTo(absoluteMinute);
+    else {
+      const parts = viewing === 'base' ? { city: effBaseCity, net: baseNet } : { city: mod.city, net: mod };
+      void rewindToMinute(absoluteMinute, parts, 'clear-run');
+    }
   }
 
   function requestCameraPose(pos: [number, number, number], target: [number, number, number]) {
@@ -1583,16 +1654,16 @@ export default function App() {
     setYearsApplied(0);
     setGrowthHistory([]);
     setForecast(null);
-    // A plan evaluation and resilience comparison describe one run; the day
-    // reset ends that run. The brief's baseline anchor stays: it belongs to
-    // the brief, not the run.
-    setEvaluation(null);
-    setResilienceRows(null);
     setSpeed(settings.defaultSpeed);
-    if (viewing === 'base') resetSimTo(baseCity, baseNet);
+    setSelection(null);
+    // Reset is a replay to the first minute of the day through the same path
+    // as any rewind — only the clock path is shared. Growth, speed and the
+    // selection are cleared here, never by a plain rewind.
+    const morning = Math.floor(simRef.current.timeMinutes / 1440) * 1440 + START_MIN;
+    if (viewing === 'base') void rewindToMinute(morning, { city: baseCity, net: baseNet }, 'clear-reset');
     else {
       const fresh = applyEdits(baseCity, baseNet, ops);
-      resetSimTo(fresh.city, fresh);
+      void rewindToMinute(morning, { city: fresh.city, net: fresh }, 'clear-reset');
     }
   }
 
@@ -2078,7 +2149,7 @@ export default function App() {
     add({ id: 'speed-1', group: 'Day', label: 'Run at normal speed', keys: ['1'], keywords: 'slow 1x', run: () => setSpeed(1) });
     add({ id: 'speed-5', group: 'Day', label: 'Run at 5× speed', keys: ['2'], keywords: 'faster fast 5x', run: () => setSpeed(5) });
     add({ id: 'speed-20', group: 'Day', label: 'Run at 20× speed', keys: ['3'], keywords: 'fastest fast 20x', run: () => setSpeed(20) });
-    add({ id: 'step', group: 'Day', label: 'Advance one minute', keywords: 'step tick', run: () => { clearRunTarget(); simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); } });
+    add({ id: 'step', group: 'Day', label: 'Advance one minute', keywords: 'step tick', run: () => { if (replay) return; clearRunTarget(); simRef.current = stepSimulation(simRef.current, 1); setSnapshot(simRef.current); } });
     add({ id: 'reset', group: 'Day', label: 'Reset the day', keys: ['R'], keywords: 'restart start over', run: resetAll });
 
     for (const g of LENS_GROUPS) {
@@ -2387,7 +2458,8 @@ export default function App() {
       } else if (plain && e.key === ']') {
         setRailOpen(true);
       } else if (e.key === 'Escape') {
-        if (contextMenu) setContextMenu(null);
+        if (replay) stopReplay();
+        else if (contextMenu) setContextMenu(null);
         else if (paletteOpen) setPaletteOpen(false);
         else if (searchOpen) setSearchOpen(false);
         else if (reportsOpen) setReportsOpen(false);
@@ -3233,10 +3305,13 @@ export default function App() {
         speed={speed}
         tick={snapshot.tick}
         timeMinutes={snapshot.timeMinutes}
+        replay={replay}
         onToggle={togglePlay}
+        onStopReplay={stopReplay}
         onSpeed={(sp) => setSpeed(sp)}
         onReset={resetAll}
         onStep={() => {
+          if (replay) return;
           clearRunTarget();
           simRef.current = stepSimulation(simRef.current, 1);
           setSnapshot(simRef.current);
@@ -3245,7 +3320,7 @@ export default function App() {
         history={history}
         incidents={snapshot.incidents}
         runTarget={runTarget}
-        onRunTo={runTo}
+        onSeek={onSeek}
         reportsOpen={reportsOpen}
         onReports={() => setReportsOpen((v) => !v)}
       />

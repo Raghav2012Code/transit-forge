@@ -9,7 +9,7 @@ import {
   minuteOfDay,
   nudgeTarget,
   peakBands,
-  runTargetFor,
+  seekFor,
   tracePoints,
   xOf,
 } from './dayStrip.ts';
@@ -96,12 +96,24 @@ describe('trace', () => {
   });
 });
 
-describe('run until', () => {
-  it('only reaches forward in the current day', () => {
-    expect(runTargetFor(720, 420)).toBe(720);
-    expect(runTargetFor(420, 420)).toBeNull();
-    expect(runTargetFor(300, 420)).toBeNull();
-    expect(runTargetFor(720, 1440 + 420)).toBe(1440 + 720);
+describe('seeking the day', () => {
+  it('runs to a minute ahead and replays to one behind', () => {
+    expect(seekFor(720, 420)).toEqual({ kind: 'run', absolute: 720 });
+    expect(seekFor(600, 900)).toEqual({ kind: 'replay', absolute: 600 });
+    expect(seekFor(720, 1440 + 420)).toEqual({ kind: 'run', absolute: 1440 + 720 });
+    // A day after midnight: the replay target stays inside that day.
+    expect(seekFor(540, 1440 + 1200)).toEqual({ kind: 'replay', absolute: 1440 + 540 });
+  });
+
+  it('offers nothing for the minute it is already on', () => {
+    expect(seekFor(420, 420)).toBeNull();
+    expect(seekFor(minuteOfDay(1440 + 420), 1440 + 420)).toBeNull();
+  });
+
+  it('has nothing behind the first minute of the run', () => {
+    // The strip draws from 04:00, but the run starts at 07:00.
+    expect(seekFor(300, 420)).toBeNull();
+    expect(seekFor(400, 1440 + 1200)).toBeNull();
   });
 
   it('nudges forward from the next grid step', () => {
@@ -114,10 +126,11 @@ describe('run until', () => {
     expect(nudgeTarget(1435, 427, 30)).toBe(1435);
   });
 
-  it('steps back to the earliest reachable time, and cancels only from there', () => {
+  it('crosses the clock and clamps at the first minute of the run', () => {
     expect(nudgeTarget(460, 427, -30)).toBe(430);
-    expect(nudgeTarget(430, 427, -30)).toBeNull();
-    expect(nudgeTarget(null, 427, -30)).toBeNull();
+    expect(nudgeTarget(430, 427, -30)).toBe(420);
+    expect(nudgeTarget(null, 427, -30)).toBe(420);
+    expect(nudgeTarget(420, 427, -30)).toBeNull();
   });
 
   it('has nothing to offer once the day is over', () => {

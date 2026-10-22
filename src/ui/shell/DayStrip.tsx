@@ -11,7 +11,7 @@ import {
   minuteOfDay,
   nudgeTarget,
   peakBands,
-  runTargetFor,
+  seekFor,
   tracePoints,
   xOf,
 } from './dayStrip.ts';
@@ -22,7 +22,10 @@ interface Props {
   incidents: Incident[];
   /** Absolute minute the sim is running toward, if any. */
   runTarget: number | null;
-  onRunTo: (absoluteMinute: number) => void;
+  /** A replay in flight: where it started, the minute it rebuilds to, and how far it has come. */
+  replay: { from: number; target: number; reached: number } | null;
+  /** Seek: forward plays to the minute, backward replays the day to it. */
+  onSeek: (absoluteMinute: number) => void;
 }
 
 const H = 44;
@@ -32,9 +35,9 @@ const KEY_STEP = 30;
 /**
  * The service day on one axis, drawn the way a timetable is: peaks shaded,
  * disruptions as bars, the day's load as a trace, and a needle for now.
- * Pointing at the future offers "run to"; the past cannot be revisited.
+ * Pointing ahead offers "run to"; pointing back offers "replay to".
  */
-export default function DayStrip({ timeMinutes, history, incidents, runTarget, onRunTo }: Props) {
+export default function DayStrip({ timeMinutes, history, incidents, runTarget, replay, onSeek }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
   const [hoverX, setHoverX] = useState<number | null>(null);
@@ -56,14 +59,15 @@ export default function DayStrip({ timeMinutes, history, incidents, runTarget, o
   const spans = incidentSpans(incidents, dayStart);
   const trace = tracePoints(history, dayStart, w, H);
 
-  const targetAt = (x: number) => {
-    const minute = minuteAt(x, w);
-    return runTargetFor(minute, timeMinutes);
-  };
-  const hoverTarget = hoverX === null ? null : targetAt(hoverX);
-  const shown = pending ?? hoverTarget;
+  const seekAt = (x: number) => seekFor(minuteAt(x, w), timeMinutes);
+  const hoverSeek = hoverX === null ? null : seekAt(hoverX);
+  const shown = replay ? null : (pending ?? hoverSeek?.absolute ?? null);
   const shownMinute = shown === null ? null : minuteOfDay(shown);
+  const shownKind = pending !== null ? (pending > timeMinutes ? 'run' : 'replay') : (hoverSeek?.kind ?? 'run');
   const goingTo = runTarget !== null ? minuteOfDay(runTarget) : null;
+  const replayPct = replay && replay.target !== replay.from
+    ? Math.min(100, Math.round(((replay.reached - replay.from) / (replay.target - replay.from)) * 100))
+    : 0;
 
   const pointerX = (e: PointerEvent<HTMLDivElement>) => e.clientX - (box.current?.getBoundingClientRect().left ?? 0);
 
@@ -76,7 +80,7 @@ export default function DayStrip({ timeMinutes, history, incidents, runTarget, o
       setPending(nudgeTarget(pending, timeMinutes, -KEY_STEP));
     } else if (e.key === 'Enter' && pending !== null) {
       e.preventDefault();
-      onRunTo(pending);
+      onSeek(pending);
       setPending(null);
     } else if (e.key === 'Escape' && pending !== null) {
       e.stopPropagation();
@@ -90,16 +94,16 @@ export default function DayStrip({ timeMinutes, history, incidents, runTarget, o
       ref={box}
       role="slider"
       tabIndex={0}
-      aria-label="Service day. Arrow keys choose a later time. Enter runs the simulation to it."
+      aria-label="Service day. Arrow keys choose a minute ahead or behind; Enter runs or replays the simulation to it."
       aria-valuemin={DAY_FROM}
       aria-valuemax={DAY_TO}
       aria-valuenow={Math.min(DAY_TO, Math.max(DAY_FROM, now))}
-      aria-valuetext={`Now ${formatClock(timeMinutes)}${pending !== null ? `, run until ${formatClock(pending)}` : ''}`}
+      aria-valuetext={`Now ${formatClock(timeMinutes)}${replay ? `, replaying to ${formatClock(replay.target)}, ${replayPct}%` : ''}${pending !== null ? `, ${pending > timeMinutes ? 'run' : 'replay'} to ${formatClock(pending)}` : ''}`}
       onPointerMove={(e) => setHoverX(pointerX(e))}
       onPointerLeave={() => setHoverX(null)}
       onClick={(e) => {
-        const t = targetAt(e.clientX - (box.current?.getBoundingClientRect().left ?? 0));
-        if (t !== null) onRunTo(t);
+        const seek = seekAt(e.clientX - (box.current?.getBoundingClientRect().left ?? 0));
+        if (seek) onSeek(seek.absolute);
       }}
       onKeyDown={onKey}
       onBlur={() => setPending(null)}
@@ -132,6 +136,8 @@ export default function DayStrip({ timeMinutes, history, incidents, runTarget, o
             </rect>
           ))}
           {goingTo !== null && <line className="tf-strip-target" x1={xOf(goingTo, w)} x2={xOf(goingTo, w)} y1={0} y2={H} />}
+          {replay && <line className="tf-strip-target" x1={xOf(minuteOfDay(replay.target), w)} x2={xOf(minuteOfDay(replay.target), w)} y1={0} y2={H} />}
+          {replay && <line className="tf-strip-ghost" x1={xOf(minuteOfDay(replay.reached), w)} x2={xOf(minuteOfDay(replay.reached), w)} y1={0} y2={H} />}
           {shownMinute !== null && <line className="tf-strip-ghost" x1={xOf(shownMinute, w)} x2={xOf(shownMinute, w)} y1={0} y2={H} />}
           <line className="tf-strip-now" x1={nowX} x2={nowX} y1={0} y2={H} />
           <path className="tf-strip-flag" d={`M${nowX - 4} 0h8l-4 5z`} />
@@ -139,12 +145,20 @@ export default function DayStrip({ timeMinutes, history, incidents, runTarget, o
       )}
       {shownMinute !== null && (
         <span className="tf-strip-tip" style={{ left: Math.min(Math.max(xOf(shownMinute, w), 28), Math.max(28, w - 28)) }}>
-          Run to {formatClock(shown ?? 0)}
+          {shownKind === 'replay' ? 'Replay to' : 'Run to'} {formatClock(shown ?? 0)}
         </span>
       )}
       {goingTo !== null && shownMinute === null && (
         <span className="tf-strip-tip going" style={{ left: Math.min(Math.max(xOf(goingTo, w), 28), Math.max(28, w - 28)) }}>
           Running to {formatClock(runTarget ?? 0)}
+        </span>
+      )}
+      {replay && (
+        <span
+          className="tf-strip-tip going"
+          style={{ left: Math.min(Math.max(xOf(minuteOfDay(replay.target), w), 40), Math.max(40, w - 40)) }}
+        >
+          Replaying to {formatClock(replay.target)} · {replayPct}%
         </span>
       )}
     </div>
