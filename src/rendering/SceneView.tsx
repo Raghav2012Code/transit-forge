@@ -12,6 +12,7 @@ import { VisualClock } from './vehicles/schedule.ts';
 import { buildCarRig, updateCarRig } from './traffic/carRig.ts';
 import type { CameraCmd } from './map/camera.ts';
 import { resolveClick, type CycleCandidate, type CycleState } from './map/selectionCycle.ts';
+import { edgeMidpointXZ, isDrag, isVisibleInChain } from './map/picking.ts';
 import type { MapMarker } from './map/markers.ts';
 import { getPalette, type Theme } from './palette.ts';
 import { WORLD_SCALE } from '../simulation/city/geography.ts';
@@ -339,6 +340,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     const collectCandidates = (hits: THREE.Intersection[]): CycleCandidate[] => {
       const seen = new Map<string, CycleCandidate>();
       for (const h of hits) {
+        if (!isVisibleInChain(h.object)) continue;
         const ud = h.object.userData as { kind?: Selection['kind']; id?: string };
         if (!ud.kind || ud.id === undefined) continue;
         const key = `${ud.kind}:${ud.id}`;
@@ -349,8 +351,16 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       );
     };
     let cycleState: CycleState | null = null;
+    // Drag is not a click: the primary camera control is drag-to-orbit, so a
+    // release over a road or bare ground must not select or clear anything.
+    let downAt: { x: number; y: number } | null = null;
+    const isDragRelease = (e: MouseEvent) =>
+      downAt !== null && isDrag(e.clientX - downAt.x, e.clientY - downAt.y);
     const pickAll = (): THREE.Object3D[] => [...pickables, ...extraPickables];
     const handleClick = (e: MouseEvent) => {
+      const dragged = isDragRelease(e);
+      downAt = null;
+      if (dragged) return;
       const b = buildRef.current;
       pickAt(e);
       if (b) {
@@ -359,6 +369,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           ray.params.Line = { threshold: 4 };
           const hits = ray.intersectObjects(pickables, false);
           for (const h of hits) {
+            if (!isVisibleInChain(h.object)) continue;
             const ud = h.object.userData as { kind: Selection['kind']; id: string };
             if (b.pickKinds.includes(ud.kind)) {
               b.onPick({ kind: ud.kind, id: ud.id });
@@ -464,6 +475,10 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       onHoverRef.current?.(null);
     };
     const handleContext = (e: MouseEvent) => {
+      // A drag that ends in a right-click must not open the context menu.
+      const dragged = isDragRelease(e);
+      downAt = null;
+      if (dragged) return;
       e.preventDefault();
       const cb = onContextRef.current;
       if (!cb || buildRef.current) return;
@@ -474,6 +489,10 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       if (top) cb({ kind: top.kind as Selection['kind'], id: top.id }, e.clientX, e.clientY);
     };
     renderer.domElement.addEventListener('click', handleClick);
+    const handlePointerDown = (e: PointerEvent) => {
+      downAt = { x: e.clientX, y: e.clientY };
+    };
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown);
     renderer.domElement.addEventListener('mousemove', handleHover);
     renderer.domElement.addEventListener('mouseleave', handleLeave);
     renderer.domElement.addEventListener('contextmenu', handleContext);
@@ -543,6 +562,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       clearGroupDisposing(incidentGroup);
       const sim = simRef.current;
       if (!sim) return;
+      const nodeById = new Map(sim.city.roadNodes.map((n) => [n.id, n.pos]));
       for (const inc of sim.incidents) {
         if (inc.status !== 'active') continue;
         const spots: THREE.Vector3[] = [];
@@ -551,8 +571,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           if (m) spots.push(m.position.clone().setY(10));
         }
         for (const e of inc.edgeIds ?? []) {
-          const m = city.roadMeshById.get(e);
-          if (m) spots.push(m.position.clone().setY(6));
+          const edge = sim.city.roadEdges.find((ed) => ed.id === e);
+          const a = edge ? nodeById.get(edge.a) : undefined;
+          const b = edge ? nodeById.get(edge.b) : undefined;
+          if (a && b) {
+            const mid = edgeMidpointXZ(a, b);
+            spots.push(new THREE.Vector3(mid.x, 6, mid.z));
+          }
         }
         if (inc.targetRouteId && !inc.targetStationId && (inc.edgeIds ?? []).length === 0) {
           const r = sim.routes.find((x) => x.id === inc.targetRouteId);
@@ -1325,8 +1350,9 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const a = edge ? nodeById.get(edge.a) : undefined;
           const b = edge ? nodeById.get(edge.b) : undefined;
           if (a && b) {
+            const mid = edgeMidpointXZ(a, b);
             selRing.visible = true;
-            selRing.position.set((a.x + b.x) / 2, 6, (a.z + b.z) / 2);
+            selRing.position.set(mid.x, 6, mid.z);
           } else selRing.visible = false;
         } else if (sel && sel.kind === 'vehicle') {
           const mesh = rig.meshById.get(sel.id);
@@ -1388,6 +1414,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       ro.disconnect();
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('click', handleClick);
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       renderer.domElement.removeEventListener('mousemove', handleHover);
       renderer.domElement.removeEventListener('mouseleave', handleLeave);
       renderer.domElement.removeEventListener('contextmenu', handleContext);

@@ -14,9 +14,10 @@ import { buildEdgeStates, buildZoneRoadAccess } from '../traffic/cars.ts';
 import { buildRoadGraph } from '../traffic/roadGraph.ts';
 import { capacityLostFor, resilienceScore, type CapacityLost } from '../analytics/resilience.ts';
 import type { IncidentConfig } from '../incidents/incidents.ts';
+import type { Incident } from '../../types/index.ts';
 import type { ResilienceMetrics } from '../../types/index.ts';
 
-export const COMPARE_TICKS = 360;
+export const COMPARE_TICKS = 1020;
 
 export function runHeadless(seed: number, city: CityData, net: NetworkData, ticks = COMPARE_TICKS): SimStats {
   return runHeadlessDetailed(seed, city, net, ticks).stats;
@@ -57,7 +58,7 @@ export function compareResilience(
     net: NetworkData & { service?: Record<string, ServicePlan> },
   ): ResilienceSide => {
     let sim = createSimulationFromParts(seed, c, net);
-    sim.incidents.push({
+    const inc: Incident = {
       ...incident,
       id: incident.id || 'inc-compare',
       status: 'scheduled',
@@ -65,24 +66,42 @@ export function compareResilience(
       baselineWaiting: 0,
       recovered90: false,
       strandedPeakDuringIncident: 0,
-    });
-    for (let i = 0; i < ticks; i++) sim = stepSimulation(sim, 1);
+    };
+    sim.incidents.push(inc);
+    // Snapshot counters at activation for honest incident-window deltas.
+    let snap: { completed: number; totalWaitMin: number; rerouted: number; strandedPeak: number } | null = null;
+    for (let i = 0; i < ticks; i++) {
+      const t = sim.timeMinutes;
+      if (inc.status === 'scheduled' && t >= inc.startMin) {
+        // Activation: take the snapshot exactly when the incident goes active.
+        snap = {
+          completed: sim.counters.completed,
+          totalWaitMin: sim.counters.totalWaitMin,
+          rerouted: sim.counters.rerouted,
+          strandedPeak: sim.counters.strandedPeak,
+        };
+      }
+      sim = stepSimulation(sim, 1);
+    }
+    if (!snap) throw new Error('Incident never activated in compareResilience');
     const stats = computeStats(sim);
     const cap = capacityLostFor(incident, sim.routes, sim.routeLengths, sim.roadGraph, sim.routeCumDist);
     const totalRouteKm = sim.routes.reduce((s, r) => s + (sim.routeLengths.get(r.id) ?? 0) / 1000, 0);
     const totalRoadKm = sim.roadGraph.edges.reduce((s, e) => s + e.lengthM / 1000, 0);
+    const extraWaitMin = Math.max(0, sim.counters.totalWaitMin - snap.totalWaitMin);
+    const completedDelta = sim.counters.completed - snap.completed;
     const metrics = resilienceScore({
-      extraWaitMin: sim.counters.incidentDelayMin,
-      completedDelta: Math.max(1, sim.counters.completed),
-      strandedPeak: sim.counters.strandedPeak,
-      affectedPax: sim.counters.rerouted + sim.counters.strandedPeak,
+      extraWaitMin,
+      completedDelta,
+      strandedPeak: sim.counters.strandedPeak - snap.strandedPeak,
+      affectedPax: (sim.counters.rerouted - snap.rerouted) + (sim.counters.strandedPeak - snap.strandedPeak),
       routeKmLost: cap.routeKmLost,
       totalRouteKm,
       roadKmLost: cap.roadKmLost,
       totalRoadKm,
-      recoveryTicks: sim.incidents.find((x) => x.id === (incident.id || 'inc-compare'))?.result?.recoveryTicks ?? ticks,
+      recoveryTicks: sim.incidents.find((x) => x.id === inc.id)?.result?.recoveryTicks ?? ticks,
     });
-    metrics.rerouted = sim.counters.rerouted;
+    metrics.rerouted = sim.counters.rerouted - snap.rerouted;
     metrics.cancelledTrips = sim.counters.cancelledTrips;
     metrics.stationsClosed = cap.stationsClosed;
     metrics.transitCapLost = cap.transitCapLost;

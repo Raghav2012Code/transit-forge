@@ -32,8 +32,10 @@ describe('scheduling', () => {
     expect(nextTerminusDeparture(plan, 5, 0, 401)).toBe(405);
     // Before opening, first departure is at start + offset.
     expect(nextTerminusDeparture(plan, 5, 2, 100)).toBe(332);
-    // After close, no service.
-    expect(nextTerminusDeparture(plan, 5, 0, 1410)).toBe(Infinity);
+    // After close, wraps to next day's first departure (operatingEndMin=1410, next day start=330+1440=1770).
+    expect(nextTerminusDeparture(plan, 5, 0, 1410)).toBe(1770);
+    // At 1409, next grid point is 1410 (end) -> wraps to next day.
+    expect(nextTerminusDeparture(plan, 5, 0, 1409)).toBe(1770);
   });
 
   it('switches peak/off-peak headways', () => {
