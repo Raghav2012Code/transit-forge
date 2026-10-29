@@ -2,6 +2,13 @@ import type { Building } from '../../types/index.ts';
 
 const CELL = 32;
 
+/**
+ * Clearance a tree keeps from a building footprint. The index inflates its
+ * insertion radius by this much so a query point in the pad annulus still
+ * finds a long slab whose circumscribed circle ends just short of the cell.
+ */
+export const BUILDING_PAD = 1.8;
+
 /** x of a north-south polyline at depth z (linear between samples). */
 export function xAtZ(poly: { x: number; z: number }[], z: number): number {
   if (poly.length === 0) return 0;
@@ -82,9 +89,9 @@ export function discsHitBox(index: DiscIndex, b: Building, margin = 0): boolean 
 /** Buildings by footprint, to ask whether a point lies on or beside one. */
 export class BuildingIndex {
   private cells = new Map<number, Building[]>();
-  constructor(buildings: Building[]) {
+  constructor(buildings: Building[], pad = 0) {
     for (const b of buildings) {
-      const r = Math.hypot(b.w, b.d) / 2;
+      const r = Math.hypot(b.w, b.d) / 2 + Math.max(0, pad);
       for (let i = Math.floor((b.pos.x - r) / CELL); i <= Math.floor((b.pos.x + r) / CELL); i++) {
         for (let j = Math.floor((b.pos.z - r) / CELL); j <= Math.floor((b.pos.z + r) / CELL); j++) {
           const k = key(i, j);

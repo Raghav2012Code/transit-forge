@@ -1,4 +1,5 @@
 import type { TransportRoute } from '../../types/index.ts';
+import { textOn } from './bulletInk.ts';
 
 /**
  * The route bullet: the capsule you'd read off a platform sign. Every
@@ -18,23 +19,6 @@ function routeLabel(route: { id: string; name: string }): string {
   const code = routeCode(route);
   const rest = route.name.trim().replace(new RegExp(`^${code}\\s*`, 'i'), '');
   return rest || route.name;
-}
-
-/**
- * White text fails on a light line colour, so the bullet flips to ink —
- * the same reason a yellow line's bullet is set in black on a real sign.
- */
-function textOn(hex: string): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return '#ffffff';
-  const n = parseInt(m[1], 16);
-  const srgb = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => {
-    const x = c / 255;
-    return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
-  });
-  const lum = 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
-  // Contrast against white vs against ink, whichever is safer.
-  return (1.05) / (lum + 0.05) >= (lum + 0.05) / 0.09 ? '#ffffff' : '#15181c';
 }
 
 export function RouteBullet({ route }: { route: Pick<TransportRoute, 'id' | 'name' | 'color'> }) {

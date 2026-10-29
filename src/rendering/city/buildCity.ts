@@ -3,7 +3,7 @@ import type { CityData } from '../../types/index.ts';
 import type { ScenePalette } from '../palette.ts';
 import { buildBuildings } from './buildings.ts';
 import { buildParks, buildTrees } from './props.ts';
-import { BuildingIndex, DiscIndex, discsHitBox, type Disc } from './spatial.ts';
+import { BUILDING_PAD, BuildingIndex, DiscIndex, discsHitBox, type Disc } from './spatial.ts';
 import { buildStreets } from './streets.ts';
 import { buildTerrain, riverBanks } from './terrain.ts';
 
@@ -42,7 +42,7 @@ export function buildCityMeshes(city: CityData, palette: ScenePalette, avoid: Di
   const parks = buildParks(city, palette);
   if (parks) group.add(parks);
   const kept = city.buildings.filter((b) => !discsHitBox(clear, b, 1));
-  const trees = buildTrees(city, palette, new BuildingIndex(kept), clear);
+  const trees = buildTrees(city, palette, new BuildingIndex(kept, BUILDING_PAD), clear);
   if (trees) buildings.add(trees);
 
   // Zone discs (subtle, used for district picking + readability).

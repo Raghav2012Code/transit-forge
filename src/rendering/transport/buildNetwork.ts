@@ -12,8 +12,12 @@ export const MODE_Y: Record<TransportMode, number> = {
   road: 0.55,
 };
 
-const BAND_W: Record<TransportMode, number> = { metro: 3.2, rail: 3.6, bus: 3.4, road: 3 };
-const DECK_W: Record<TransportMode, number> = { metro: 6.4, rail: 7.2, bus: 0, road: 0 };
+/** Height a draft preview rides at: the alignment the tool would build, plus a hairline. */
+export function draftY(mode: TransportMode): number {
+  return MODE_Y[mode] + 1.2;
+}
+
+const BAND_W: Record<TransportMode, number> = { metro: 3.2, rail: 3.6, bus: 3.4, road: 3 };const DECK_W: Record<TransportMode, number> = { metro: 6.4, rail: 7.2, bus: 0, road: 0 };
 const DECK_T = 1.5;
 const PLATFORM_LEN: Record<TransportMode, number> = { metro: 34, rail: 42, bus: 16, road: 16 };
 

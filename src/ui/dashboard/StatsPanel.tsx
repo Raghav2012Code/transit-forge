@@ -138,8 +138,8 @@ export default function StatsPanel({ stats }: { stats: SimStats }) {
         />
       )}
       <div className="tf-hint">
-        Peak occupancy {stats.maxOccupancy >= 95 ? 'is above' : 'is below'} the 95% critical line
-        {oTone === 'good' ? ' — capacity is holding.' : ' — boardings are being turned away.'}
+        Peak occupancy {stats.maxOccupancy >= 95 ? 'is above the 95% critical line' : stats.maxOccupancy >= 85 ? 'is in the 85–95% warning band' : 'is below the 85% warning band'}
+        {oTone === 'good' ? ' — capacity is holding.' : oTone === 'warn' ? ' — close to capacity.' : ' — boardings are being turned away.'}
       </div>
     </>
   );

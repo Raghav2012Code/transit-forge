@@ -4,7 +4,7 @@ import type { ScenePalette } from '../palette.ts';
 import { merge, nonIndexed, tint } from '../transport/sweep.ts';
 import { RIVER_HALF } from './terrain.ts';
 import { hash01 } from './buildings.ts';
-import { xAtZ, type BuildingIndex, type DiscIndex } from './spatial.ts';
+import { BUILDING_PAD, xAtZ, type BuildingIndex, type DiscIndex } from './spatial.ts';
 
 /** How leafy a district's streets are. */
 const LEAF: Record<DistrictKind, number> = {
@@ -53,7 +53,7 @@ export function buildTrees(
   const ok = (x: number, z: number): boolean =>
     x > xAtZ(city.coast, z) + 16 &&
     Math.abs(x - xAtZ(city.river, z)) > RIVER_HALF + 8 &&
-    !buildings.covers(x, z, 1.8) &&
+    !buildings.covers(x, z, BUILDING_PAD) &&
     !avoid.near(x, z, 3);
   const arterials = city.roadEdges.filter((e) => e.isArterial);
   const nodes = new Map(city.roadNodes.map((n) => [n.id, n.pos]));

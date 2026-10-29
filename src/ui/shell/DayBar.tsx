@@ -54,6 +54,7 @@ export default function DayBar(p: Props) {
         tick={p.tick}
         timeMinutes={p.timeMinutes}
         replaying={p.replay !== null}
+        runTarget={p.runTarget}
         onToggle={p.onToggle}
         onStop={p.onStopReplay}
         onSpeed={p.onSpeed}

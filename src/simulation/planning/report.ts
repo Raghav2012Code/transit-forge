@@ -96,6 +96,13 @@ export function reportToJson(report: PlanReport): string {
   return JSON.stringify(report, null, 2);
 }
 
+/** Objective completion 0..100, averaged over every objective (0 when none). */
+export function objectiveProgressPct(report: Pick<PlanReport, 'objectives'>): number {
+  if (report.objectives.length === 0) return 0;
+  const sum = report.objectives.reduce((s, o) => s + Math.min(1, Math.max(0, o.progress)), 0);
+  return Math.round((sum / report.objectives.length) * 100);
+}
+
 export function reportToText(report: PlanReport): string {
   const lines: string[] = [];
   lines.push(`TRANSITFORGE PLANNING REPORT — ${report.title}`);

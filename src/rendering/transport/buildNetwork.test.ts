@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildNetworkMeshes, MODE_Y, pierArcs, routeCurve } from './buildNetwork.ts';
+import { buildNetworkMeshes, draftY, MODE_Y, pierArcs, routeCurve } from './buildNetwork.ts';
 import { getPalette } from '../palette.ts';
 import { DiscIndex, discsHitBox } from '../city/spatial.ts';
 import type { Building, Station, TransportRoute } from '../../types/index.ts';
@@ -59,6 +59,12 @@ describe('viaducts over the scaled spans', () => {
     expect(kinds(net.byMode.bus)).not.toContain('pier');
     // The busway rides the street, not a viaduct.
     expect(net.curves.get('rt-world-bus')?.pts[0].y).toBe(MODE_Y.bus);
+  });
+
+  it('drafts a bus at street height and an aerial line on its viaduct', () => {
+    expect(draftY('bus')).toBe(MODE_Y.bus + 1.2);
+    expect(draftY('metro')).toBe(MODE_Y.metro + 1.2);
+    expect(draftY('bus')).toBeLessThan(draftY('metro'));
   });
 });
 

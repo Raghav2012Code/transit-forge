@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DEMOS, type DemoScenario } from '../../simulation/scenario/demos.ts';
 import type { SaveGame } from '../../simulation/scenario/persistence.ts';
+import { saveClockLabel } from '../../simulation/scenario/persistence.ts';
 import { MAX_RECENT, orderRecent, type ScenarioMeta } from '../../simulation/scenario/scenarioMeta.ts';
 import { ConfirmDialog, PromptDialog } from './Dialog.tsx';
 
@@ -151,7 +152,7 @@ export default function ScenarioBrowser(p: Props) {
                     <div>
                       <strong>{meta?.favorite ? '★ ' : ''}{s.name}</strong>
                       <div className="tf-hint">
-                        {s.ops.length} edits, {s.tick > 0 ? `day at ${Math.floor(s.tick / 60) + 7}:00` : 'fresh morning'}, saved {timeAgo(s.savedAt)}
+                        {s.ops.length} edits, {saveClockLabel(s.tick)}, saved {timeAgo(s.savedAt)}
                       </div>
                     </div>
                   </button>

@@ -4,6 +4,7 @@
 // Everything the scene paints that is not a line colour or a condition comes
 // from here. Hex values are the sRGB of the matching oklch tokens in index.css.
 import { WORLD_SCALE } from '../simulation/city/geography.ts';
+import type { CongestionLevel } from '../types/index.ts';
 
 /** Fog distances are positions in the world, so they scale with it. */
 const S = WORLD_SCALE;
@@ -44,6 +45,21 @@ export interface ScenePalette {
   mark: { amber: number; blue: number; green: number; car: number };
   /** Two-ended ramps: the low end is the quiet one on either ground. */
   ramp: { blueLow: number; blueHigh: number; greenLow: number; greenHigh: number; none: number };
+  /**
+   * Condition colours: what a value means (free/heavy, excellent/poor, alarm)
+   * rather than which line it is. Tuned per ground so the quiet ends stay
+   * visible on both the light paper and the dark plate.
+   */
+  condition: {
+    congestion: Record<CongestionLevel, number>;
+    grade: Record<'excellent' | 'good' | 'moderate' | 'poor' | 'very poor', number>;
+    alarm: number;
+    warn: number;
+    good: number;
+    hot: number;
+    /** Change markers for a deployed replacement shuttle. */
+    shuttle: number;
+  };
   label: {
     fill: string;
     text: string;
@@ -90,6 +106,15 @@ const LIGHT: ScenePalette = {
   station: { regular: 0xaab3bf, interchange: 0x8691a0, glow: 0x334155 },
   mark: { amber: 0xd48806, blue: 0x1b6fc4, green: 0x0e7a52, car: 0x6b7280 },
   ramp: { blueLow: 0xdfe7f5, blueHigh: 0x1e3a8a, greenLow: 0xdcefe3, greenHigh: 0x14532d, none: 0x9aa3b2 },
+  condition: {
+    congestion: { free: 0x34d399, light: 0xfacc15, moderate: 0xfb923c, heavy: 0xef4444, severe: 0x991b1b },
+    grade: { excellent: 0x34d399, good: 0xa3e635, moderate: 0xfacc15, poor: 0xfb923c, 'very poor': 0xef4444 },
+    alarm: 0xef4444,
+    warn: 0xfb923c,
+    good: 0x34d399,
+    hot: 0xef4444,
+    shuttle: 0xf472b6,
+  },
   label: {
     fill: 'rgba(255,255,255,0.95)',
     text: '#1b2026',
@@ -135,7 +160,16 @@ const DARK: ScenePalette = {
   },
   station: { regular: 0xcbd5e1, interchange: 0xf8fafc, glow: 0x334155 },
   mark: { amber: 0xfacc15, blue: 0x6ea8fe, green: 0x4ade80, car: 0xfbbf24 },
-  ramp: { blueLow: 0x1e3a8a, blueHigh: 0xf1f5ff, greenLow: 0x14532d, greenHigh: 0xf1fff5, none: 0x475569 },
+  ramp: { blueLow: 0x3d5b96, blueHigh: 0xf1f5ff, greenLow: 0x2f6b4f, greenHigh: 0xf1fff5, none: 0x475569 },
+  condition: {
+    congestion: { free: 0x34d399, light: 0xfacc15, moderate: 0xfb923c, heavy: 0xf87171, severe: 0xb91c1c },
+    grade: { excellent: 0x34d399, good: 0xa3e635, moderate: 0xfacc15, poor: 0xfb923c, 'very poor': 0xf87171 },
+    alarm: 0xf87171,
+    warn: 0xfb923c,
+    good: 0x34d399,
+    hot: 0xf87171,
+    shuttle: 0xf472b6,
+  },
   label: {
     fill: 'rgba(11,16,32,0.88)',
     text: '#e8eefc',
@@ -151,4 +185,9 @@ const DARK: ScenePalette = {
 
 export function getPalette(theme: Theme): ScenePalette {
   return theme === 'dark' ? DARK : LIGHT;
+}
+
+/** A packed 0xRRGGBB colour as the CSS hex the legend and markers use. */
+export function hexColor(n: number): string {
+  return `#${(n >>> 0).toString(16).padStart(6, '0')}`;
 }

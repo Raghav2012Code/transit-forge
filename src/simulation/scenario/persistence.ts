@@ -4,6 +4,7 @@
 // Pre-scale (v1) files are rejected, never migrated: their coordinates are in
 // the old ~1.2 km metre and would load onto the wrong place in the 5x city.
 import { SAVE_VERSION } from '../../version.ts';
+import { START_MIN, formatClock } from '../index.ts';
 import type { Zone } from '../../types/index.ts';
 import type { FarePolicy } from '../economics/fares.ts';
 import { DEFAULT_FARES, sanitizeFares } from '../economics/fares.ts';
@@ -59,6 +60,14 @@ export const DEFAULT_ANALYTICS: SaveAnalytics = {
 
 export function makeSaveId(): string {
   return `sv-${Date.now().toString(36)}`;
+}
+
+/**
+ * The clock a save resumes at, wrapped exactly like the in-app clock (a run
+ * that crossed midnight reads 00:xx, never 24:xx or 25:xx).
+ */
+export function saveClockLabel(tick: number): string {
+  return tick > 0 ? `day at ${formatClock(START_MIN + tick)}` : 'fresh morning';
 }
 
 export function blankSave(name: string, seed: number): SaveGame {

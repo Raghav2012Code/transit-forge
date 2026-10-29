@@ -33,8 +33,11 @@ export const DWELL_MIN = 0.45;
  */
 export function buildSchedule(knots: number[], cycle: number): Schedule {
   const n = knots.length;
-  if (n < 2 || !(cycle > 0)) return { cycle: 1, at: () => ({ arc: knots[0] ?? 0, dir: 1 }) };
+    if (n < 2 || !(cycle > 0)) return { cycle: 1, at: () => ({ arc: knots[0] ?? 0, dir: 1 }) };
   const run = knots[n - 1] - knots[0];
+  // A degenerate alignment (every station at one point) has no run to pace:
+  // dividing by it would NaN every leg and every vehicle position.
+  if (!Number.isFinite(run) || run <= 0) return { cycle: 1, at: () => ({ arc: knots[0] ?? 0, dir: 1 }) };
   const stops = 2 * n - 2;
   // Never let platform time eat the whole cycle on a short or crowded line.
   const dwell = Math.min(DWELL_MIN, (0.5 * cycle) / stops);

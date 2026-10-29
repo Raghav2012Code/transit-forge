@@ -27,7 +27,7 @@ import {
 import { generateBriefs, type Difficulty, type PlanningBrief } from './simulation/planning/briefs.ts';
 import { detectProblems, type CityProblem } from './simulation/planning/problems.ts';
 import type { RecContext } from './simulation/planning/recommendations.ts';
-import { buildReport, reportToHtml, reportToJson, type PlanReport } from './simulation/planning/report.ts';
+import { buildReport, objectiveProgressPct, reportToHtml, reportToJson, type PlanReport } from './simulation/planning/report.ts';
 import type { PlanningScore } from './simulation/analytics/impact.ts';
 import {
   deletePlan,
@@ -145,12 +145,13 @@ import LoadingOverlay from './ui/product/LoadingOverlay.tsx';
 import {
   blankSave,
   parseSaveGame,
+  saveClockLabel,
   saveFileName,
   serializeSaveGame,
   type SaveGame,
 } from './simulation/scenario/persistence.ts';
 import { deleteSave, duplicateSave, listSaves, renameSave, upsertSave } from './simulation/scenario/saveStore.ts';
-import { dropMeta, getMeta, orderRecent, toggleFavorite, touchOpened, type ScenarioMeta } from './simulation/scenario/scenarioMeta.ts';
+import { dropMeta, getMeta, markCompleted, orderRecent, toggleFavorite, touchOpened, type ScenarioMeta } from './simulation/scenario/scenarioMeta.ts';
 import { networkThumbnail } from './simulation/scenario/thumbnail.ts';
 import { DEMOS, demoBrief, demoById, type DemoAction } from './simulation/scenario/demos.ts';
 import {
@@ -439,7 +440,9 @@ export default function App() {
       return;
     }
     setActiveSaveId(save.id);
-    touchOpened(save.id, 0);
+    // Keep the recorded objective progress: a save made after a plan run shows
+    // it, rather than resetting the Recent row to zero.
+    touchOpened(save.id, evaluation ? objectiveProgressPct(evaluation.report) : getMeta(save.id).progressPct);
     refreshSaves();
     pushToast('good', `Saved ${save.name}.`);
   }
@@ -565,7 +568,7 @@ export default function App() {
     setHistory([]);
     lastHistTick.current = sim.tick;
     setActiveSaveId(save.id);
-    touchOpened(save.id, 0);
+    touchOpened(save.id, getMeta(save.id).progressPct);
     refreshSaves();
     setLoading(null);
     maybeOnboard();
@@ -1001,7 +1004,15 @@ export default function App() {
     const seen = seenEvents.current;
     const fresh = snapshot.events.filter((e) => !seen.has(`${e.t}|${e.text}`));
     if (fresh.length === 0) return;
-    if (seen.size > 400) seen.clear();
+    if (seen.size > 400) {
+      // Evict the oldest half rather than clearing: a clear would re-announce
+      // every event still in the bounded timeline as if it were new.
+      let drop = seen.size - 200;
+      for (const key of seen) {
+        if (drop-- <= 0) break;
+        seen.delete(key);
+      }
+    }
     for (const e of fresh) seen.add(`${e.t}|${e.text}`);
     const batch = fresh.slice(-2).map((e) => ({
       id: toastSeq.current++,
@@ -1531,7 +1542,10 @@ export default function App() {
   function createIncident() {
     const sim = simRef.current;
     const problem = validateDraft(incidentDraft, sim);
-    if (problem) return;
+    if (problem) {
+      pushToast('warn', problem);
+      return;
+    }
     const cfg = draftToConfig(incidentDraft);
     if (incidentDraft.withReplacement && (incidentDraft.kind === 'segment-closure' || incidentDraft.kind === 'route-suspension' || incidentDraft.kind === 'station-closure')) {
       const rep = replacementEndpoints(incidentDraft, sim);
@@ -1647,6 +1661,7 @@ export default function App() {
 
   function enterPlan() {
     setMode('plan');
+    setContextMenu(null);
   }
 
   function resetAll() {
@@ -1743,6 +1758,14 @@ export default function App() {
       score: ev.score,
     });
     setEvaluation({ report, rows: ev.rows, resilienceRows: ev.resilienceRows, score: ev.score });
+    // The scenario browser's Recent/Completed tabs read this sidecar: a partial
+    // plan records its objective progress, and a passing one completes the
+    // linked save once (re-submitting keeps its first completion).
+    if (activeSaveId) {
+      touchOpened(activeSaveId, objectiveProgressPct(report));
+      if (ev.passed && !getMeta(activeSaveId).completedAt) markCompleted(activeSaveId);
+      refreshSaves();
+    }
     if (activePlanId) {
       const plans = listPlans();
       const plan = plans.find((x) => x.id === activePlanId);
@@ -1984,17 +2007,20 @@ export default function App() {
     resetSimTo(mod.city, mod);
     setNetworkKey((k) => k + 1);
     clearDraft();
+    setContextMenu(null);
   }
 
   function enterDisrupt() {
     setMode('disrupt');
     setPlaying(false);
     clearRunTarget();
+    setContextMenu(null);
   }
 
   function enterSimulate() {
     setMode('simulate');
     clearDraft();
+    setContextMenu(null);
   }
 
   function selectMode(m: Mode) {
@@ -2429,6 +2455,35 @@ export default function App() {
         return;
       }
       if (typing) return;
+      // Escape always works, and dismisses the topmost surface first. A
+      // browser dialog (confirm/rename) handles its own Escape in the capture
+      // phase and stops the event, so this only sees what is left.
+      if (e.key === 'Escape') {
+        if (contextMenu) setContextMenu(null);
+        else if (paletteOpen) setPaletteOpen(false);
+        else if (searchOpen) setSearchOpen(false);
+        else if (savePrompt) setSavePrompt(false);
+        else if (confirmReset) setConfirmReset(false);
+        else if (settingsOpen) setSettingsOpen(false);
+        else if (browserOpen) { setBrowserOpen(false); setImportErrors(null); }
+        else if (reportsOpen) setReportsOpen(false);
+        else if (replay) stopReplay();
+        else if (measureTool) {
+          setMeasureTool(false);
+          setMeasure(null);
+          setMeasureHover(null);
+        } else if (inspectMode) setInspectMode(false);
+        else if (openTrip) setOpenTrip(null);
+        else if (tutorial.active) sendTutorial({ type: 'exit' });
+        else if (onboarding.active) sendOnboarding({ type: 'skip' });
+        else if (mode === 'simulate' && selection) setSelection(null);
+        else enterSimulate();
+        return;
+      }
+      // Plain keys are inert while an app-level modal is open: R must not
+      // reset the day behind the scenario browser, and so on.
+      const dialogOpen = settingsOpen || browserOpen || paletteOpen || searchOpen || savePrompt || confirmReset;
+      if (dialogOpen) return;
       // Plain keys only. Ctrl/Alt combinations belong to the browser
       // (Ctrl+A select-all, Ctrl+F find, Ctrl+P print), never to the app.
       const plain = !mod && !e.altKey;
@@ -2466,26 +2521,6 @@ export default function App() {
         setRailOpen(false);
       } else if (plain && e.key === ']') {
         setRailOpen(true);
-      } else if (e.key === 'Escape') {
-        if (replay) stopReplay();
-        else if (contextMenu) setContextMenu(null);
-        else if (paletteOpen) setPaletteOpen(false);
-        else if (searchOpen) setSearchOpen(false);
-        else if (reportsOpen) setReportsOpen(false);
-        else if (measureTool) {
-          setMeasureTool(false);
-          setMeasure(null);
-          setMeasureHover(null);
-        } else if (inspectMode) setInspectMode(false);
-        else if (openTrip) setOpenTrip(null);
-        else if (savePrompt) setSavePrompt(false);
-        else if (confirmReset) setConfirmReset(false);
-        else if (settingsOpen) setSettingsOpen(false);
-        else if (browserOpen) { setBrowserOpen(false); setImportErrors(null); }
-        else if (tutorial.active) sendTutorial({ type: 'exit' });
-        else if (onboarding.active) sendOnboarding({ type: 'skip' });
-        else if (mode === 'simulate' && selection) setSelection(null);
-        else enterSimulate();
       } else if ((e.key === 't' || e.key === 'T') && plain) {
         toggleTheme();
       } else if ((e.key === 's' || e.key === 'S') && plain) {
@@ -2811,24 +2846,28 @@ export default function App() {
             points: draftStations.map((id) => stationPos.get(id)).filter((p): p is { x: number; z: number } => Boolean(p)).map((p) => ({ x: p.x, z: p.z })),
             hover: null,
             hoverValid: true,
+            mode: tool,
           }
         : tool === 'extend'
           ? {
               points: extendStations.map((id) => stationPos.get(id)).filter((p): p is { x: number; z: number } => Boolean(p)).map((p) => ({ x: p.x, z: p.z })),
               hover: null,
               hoverValid: true,
+              mode: mod.routes.find((r) => r.id === extendRouteId)?.mode ?? 'metro',
             }
           : tool === 'station'
             ? {
                 points: draftPoint ? [draftPoint] : [],
                 hover,
                 hoverValid: hover ? !validateStationPlacement(hover.x, hover.z) : true,
+                mode: 'road',
               }
             : tool === 'road'
               ? {
                   points: draftNodes.map((n) => ({ x: n.x, z: n.z })),
                   hover,
                   hoverValid: hover ? !validateRoadNode(hover.x, hover.z) : true,
+                  mode: 'road',
                 }
               : null;
 
@@ -2918,7 +2957,7 @@ export default function App() {
     return (
       <div className="tf-app">
         <StartScreen
-          continueTarget={continueSave ? { label: continueSave.name, detail: `${continueSave.ops.length} edits, ${continueSave.tick > 0 ? `day at ${Math.floor(continueSave.tick / 60) + 7}:00` : 'fresh morning'}` } : null}
+          continueTarget={continueSave ? { label: continueSave.name, detail: `${continueSave.ops.length} edits, ${saveClockLabel(continueSave.tick)}` } : null}
           recentSaves={libSaves}
           city={baseCity}
           net={baseNet}
@@ -3030,6 +3069,7 @@ export default function App() {
               <Legend
                 overlay={overlay}
                 demandLayer={demandLayer}
+                theme={theme}
                 note={LENS_NOTE[overlay]}
                 extras={{
                   problems: problemMarkerList.length > 0,
@@ -3317,7 +3357,12 @@ export default function App() {
         replay={replay}
         onToggle={togglePlay}
         onStopReplay={stopReplay}
-        onSpeed={(sp) => setSpeed(sp)}
+        onSpeed={(sp) => {
+          // Choosing a speed ends a run-to-a-time boost; the radio and the
+          // actual rate then agree.
+          clearRunTarget();
+          setSpeed(sp);
+        }}
         onReset={resetAll}
         onStep={() => {
           if (replay) return;
