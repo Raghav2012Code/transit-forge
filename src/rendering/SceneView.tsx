@@ -2,10 +2,9 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { SimulationState } from '../simulation/index.ts';
-import type { CongestionLevel } from '../types/index.ts';
+import type { TransportMode } from '../types/index.ts';
 import { buildCityMeshes } from './city/buildCity.ts';
-import { buildNetworkMeshes, MODE_Y } from './transport/buildNetwork.ts';
-import { buildTrackCurve } from './transport/trackPath.ts';
+import { buildNetworkMeshes, draftY, MODE_Y } from './transport/buildNetwork.ts';import { buildTrackCurve } from './transport/trackPath.ts';
 import { rectProfile, sweep } from './transport/sweep.ts';
 import { buildVehicles, syncVehicleMeshes, updateVehicles } from './vehicles/vehicles.ts';
 import { VisualClock } from './vehicles/schedule.ts';
@@ -124,6 +123,8 @@ export interface DraftView {
   points: DraftPoint[];
   hover: DraftPoint | null;
   hoverValid: boolean;
+  /** The alignment the draft would be built on (bus at street, metro on a viaduct). */
+  mode: TransportMode;
 }
 
 interface SceneViewProps {
@@ -171,22 +172,6 @@ interface SceneViewProps {
 function stationLoad(waiting: number, capacityPerHr: number): number {
   return Math.min(1, waiting / Math.max(1, capacityPerHr * 0.25));
 }
-
-const CONGESTION_COLORS: Record<CongestionLevel, number> = {
-  free: 0x34d399,
-  light: 0xfacc15,
-  moderate: 0xfb923c,
-  heavy: 0xef4444,
-  severe: 0x991b1b,
-};
-
-const GRADE_COLORS: Record<AccessGradeKey, number> = {
-  excellent: 0x34d399,
-  good: 0xa3e635,
-  moderate: 0xfacc15,
-  poor: 0xfb923c,
-  'very poor': 0xef4444,
-};
 
 // Rendering consumes simulation data; it never mutates it or holds sim logic.
 export default function SceneView({ simRef, layers, overlay, selection, onSelect, networkKey, theme, ghosts, highlightRoutes, build, draft, analytics, cameraCmd, onCamera, onHoverObject, onContextPick, problemMarkers, changeMarkers, catchment, measure, measureActive, onMeasurePoint, onMeasureHover }: SceneViewProps) {
@@ -250,7 +235,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     if (!mount || !sim) return;
 
     const P = getPalette(theme);
-    const { scene: SCENE, station: STATION, mark: MARK, ramp: RAMP } = P;
+    const { scene: SCENE, station: STATION, mark: MARK, ramp: RAMP, condition: COND } = P;
     const light = theme === 'light';
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     const dpr = Math.min(window.devicePixelRatio, 2);
@@ -524,7 +509,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     for (const g of ghostsRef.current) {
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(6, 0.9, 8, 24),
-        new THREE.MeshBasicMaterial({ color: 0xef4444, wireframe: true }),
+        new THREE.MeshBasicMaterial({ color: COND.alarm, wireframe: true }),
       );
       ring.rotation.x = -Math.PI / 2;
       ring.position.set(g.x, 6, g.z);
@@ -586,7 +571,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           if (m) spots.push(m.position.clone().setY(12));
         }
         spots.forEach((p, si) => {
-          const ring = new THREE.Mesh(new THREE.TorusGeometry(7, 1, 8, 32), markerMat(0xef4444));
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(7, 1, 8, 32), markerMat(COND.alarm));
           ring.rotation.x = -Math.PI / 2;
           ring.position.copy(p);
           ring.userData = { kind: 'incident', id: inc.id, baseY: p.y, phase: si * 1.1 };
@@ -607,7 +592,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
               incidentGroup.add(
                 new THREE.Mesh(
                   sweep(curve, rectProfile(3.4, 0, 0.12), 0, 0, curve.length, 3),
-                  new THREE.MeshBasicMaterial({ color: 0xf472b6 }),
+                  new THREE.MeshBasicMaterial({ color: COND.shuttle }),
                 ),
               );
             }
@@ -639,11 +624,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       }
       draftGroup.clear();
       if (!d) return;
-      // The draft is drawn on the same alignment a built line would get.
-      const y = MODE_Y.metro + 1.2;
+      // The draft is drawn on the same alignment a built line would get:
+      // buses at street level, metro/rail on their viaducts.
+      const y = draftY(d.mode);
       const run = d.points.map((p) => ({ x: p.x, z: p.z }));
       if (d.hover) run.push({ x: d.hover.x, z: d.hover.z });
-      const curve = buildTrackCurve(run, MODE_Y.metro);
+      const curve = buildTrackCurve(run, MODE_Y[d.mode]);
       if (curve) {
         const ribbon = new THREE.Mesh(sweep(curve, rectProfile(3.2, 0, 0.5), 0, 0, curve.length, 2.5), draftMat);
         draftGroup.add(ribbon);
@@ -654,7 +640,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         draftGroup.add(dot);
       }
       if (d.hover) {
-        hoverDotMat.color.setHex(d.hoverValid ? MARK.green : 0xef4444);
+        hoverDotMat.color.setHex(d.hoverValid ? MARK.green : COND.alarm);
         const hov = new THREE.Mesh(draftDotGeo, hoverDotMat);
         hov.position.set(d.hover.x, y, d.hover.z);
         draftGroup.add(hov);
@@ -662,7 +648,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
     };
 
     const TONE_COLORS: Record<string, number> = {
-      warn: MARK.amber, bad: 0xef4444, info: MARK.blue, good: 0x34d399,
+      warn: MARK.amber, bad: COND.alarm, info: MARK.blue, good: COND.good,
     };
     // Problem + change markers: pooled rings, rebuilt when marker identity changes.
     const problemGroup = new THREE.Group();
@@ -945,7 +931,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
 
     const loadColor = new THREE.Color();
     const baseColor = new THREE.Color(STATION.regular);
-    const hotColor = new THREE.Color(0xef4444);
+    const hotColor = new THREE.Color(COND.alarm);
     const routeBase = new THREE.Color();
     const routeHot = new THREE.Color(light ? 0x111827 : 0xffffff);
     const groundTone = new THREE.Color(SCENE.land);
@@ -1016,18 +1002,18 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           const mat = mesh.material as THREE.MeshStandardMaterial;
           if (ov === 'congestion') {
             const level = cur.edgeState[id]?.level ?? 'free';
-            mat.color.setHex(CONGESTION_COLORS[level]);
-            mat.emissive.setHex(CONGESTION_COLORS[level]);
+            mat.color.setHex(COND.congestion[level]);
+            mat.emissive.setHex(COND.congestion[level]);
             mat.emissiveIntensity = light ? 0.25 : 0.45;
           } else if (ov === 'status') {
             const st = cur.edgeState[id];
             if (st?.closed) {
-              mat.color.setHex(0xef4444);
-              mat.emissive.setHex(0xef4444);
+              mat.color.setHex(COND.alarm);
+              mat.emissive.setHex(COND.alarm);
               mat.emissiveIntensity = light ? 0.4 + 0.2 * Math.sin(elapsed * 5) : 0.8 + 0.4 * Math.sin(elapsed * 5);
             } else if (st && st.capMult < 1) {
-              mat.color.setHex(0xfb923c);
-              mat.emissive.setHex(0xfb923c);
+              mat.color.setHex(COND.warn);
+              mat.emissive.setHex(COND.warn);
               mat.emissiveIntensity = 0.5;
             } else {
               mat.color.setHex(mesh.userData.baseColor as number);
@@ -1037,7 +1023,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           } else if (ov === 'critical' && av) {
             const score = av.criticalScores[id] ?? 0;
             if (score > 0) {
-              loadColor.setHex(0x1e3a8a).lerp(hotColor, Math.min(1, score / 100));
+              loadColor.setHex(RAMP.blueLow).lerp(hotColor, Math.min(1, score / 100));
               mat.color.copy(loadColor);
               mat.emissive.copy(loadColor);
               mat.emissiveIntensity = 0.5;
@@ -1089,12 +1075,12 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             const occ = occN[id] ? occSum[id] / occN[id] : 0;
             routeBase.set(mesh.userData.baseColor as string);
             if (occ >= 0.9) {
-              mat.color.setHex(0xef4444);
-              mat.emissive.setHex(0xef4444);
+              mat.color.setHex(COND.alarm);
+              mat.emissive.setHex(COND.alarm);
               mat.emissiveIntensity = light ? 0.6 + 0.3 * Math.sin(elapsed * 5) : 1.4 + 0.8 * Math.sin(elapsed * 5);
             } else if (occ >= 0.7) {
               mat.color.copy(routeBase).lerp(routeHot, 0.35);
-              mat.emissive.setHex(0xfb923c);
+              mat.emissive.setHex(COND.warn);
               mat.emissiveIntensity = light ? 0.5 : 1.1;
             } else {
               mat.color.copy(routeBase);
@@ -1106,13 +1092,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             const suspended = cur.closures.suspendedRoutes.has(id);
             const reduced = (cur.closures.headwayMult.get(id) ?? 1) > 1;
             if (suspended) {
-              mat.color.setHex(0xef4444);
-              mat.emissive.setHex(0xef4444);
+              mat.color.setHex(COND.alarm);
+              mat.emissive.setHex(COND.alarm);
               mat.emissiveIntensity = light ? 0.6 + 0.3 * Math.sin(elapsed * 5) : 1.2 + 0.6 * Math.sin(elapsed * 5);
             } else if (reduced) {
               routeBase.set(mesh.userData.baseColor as string);
               mat.color.copy(routeBase).lerp(routeHot, 0.3);
-              mat.emissive.setHex(0xfb923c);
+              mat.emissive.setHex(COND.warn);
               mat.emissiveIntensity = light ? 0.5 : 0.9;
             } else {
               routeBase.set(mesh.userData.baseColor as string);
@@ -1123,7 +1109,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           } else if (ov === 'critical' && av) {
             const score = av.criticalScores[id] ?? 0;
             if (score > 0) {
-              loadColor.setHex(0x1e3a8a).lerp(hotColor, Math.min(1, score / 100));
+              loadColor.setHex(RAMP.blueLow).lerp(hotColor, Math.min(1, score / 100));
               mat.color.copy(loadColor);
               mat.emissive.copy(loadColor);
               mat.emissiveIntensity = 0.6;
@@ -1148,13 +1134,13 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           if (heat && av) {
             mat.opacity = 0.42;
             if (ov === 'accessibility') {
-              mat.color.setHex(GRADE_COLORS[av.grades[id] ?? 'poor']);
+              mat.color.setHex(COND.grade[av.grades[id] ?? 'poor']);
             } else if (ov === 'traveltime') {
               const t = av.travel[id];
               if (t === null || t === undefined) mat.color.setHex(RAMP.none);
               else {
                 const f = Math.min(1, t / Math.max(1, av.travelMax));
-                loadColor.setHex(0x34d399).lerp(hotColor, f);
+                loadColor.setHex(COND.good).lerp(hotColor, f);
                 mat.color.copy(loadColor);
               }
             } else if (ov === 'coverage') {
@@ -1170,7 +1156,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             } else if (ov === 'development') {
               const d = av.dev[id] ?? 0;
               mat.color.setHex(
-                d >= 0.85 ? 0xef4444 : d >= 0.65 ? 0xfb923c : d >= 0.4 ? 0xfacc15 : d >= 0.15 ? 0x34d399 : RAMP.none,
+                d >= 0.85 ? COND.alarm : d >= 0.65 ? COND.warn : d >= 0.4 ? COND.congestion.light : d >= 0.15 ? COND.good : RAMP.none,
               );
             } else if (ov === 'growth') {
               const f = av.growthMax > 0 ? Math.min(1, Math.max(0, (av.growth[id] ?? 0) / av.growthMax)) : 0;
@@ -1179,7 +1165,7 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
             } else {
               // demand
               const f = av.demandMax > 0 ? Math.min(1, (av.demand[id] ?? 0) / av.demandMax) : 0;
-              loadColor.setHex(0x34d399).lerp(hotColor, f);
+              loadColor.setHex(COND.good).lerp(hotColor, f);
               mat.color.copy(loadColor);
             }
           } else {
@@ -1205,20 +1191,20 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
           mat.emissiveIntensity = ov === 'load' ? (light ? 0.1 + 0.6 * load : 0.3 + 1.8 * load) : light ? 0.1 : 0.4;
           let sc = ov === 'load' ? 1 + load * 0.6 : 1;
           if (bottleneckSet?.has(id)) {
-            mat.emissive.setHex(0xef4444);
+            mat.emissive.setHex(COND.alarm);
             mat.emissiveIntensity = light ? 0.6 + 0.4 * Math.sin(elapsed * 5) : 1.2 + 0.8 * Math.sin(elapsed * 5);
             sc = Math.max(sc, 1.35);
           }
           if (ov === 'status' && cur.closures.closedStations.has(id)) {
-            mat.color.setHex(0xef4444);
-            mat.emissive.setHex(0xef4444);
+            mat.color.setHex(COND.alarm);
+            mat.emissive.setHex(COND.alarm);
             mat.emissiveIntensity = light ? 0.6 + 0.3 * Math.sin(elapsed * 5) : 1.2 + 0.6 * Math.sin(elapsed * 5);
             sc = Math.max(sc, 1.3);
           }
           if (ov === 'critical' && av) {
             const score = av.criticalScores[id] ?? 0;
             if (score > 0) {
-              loadColor.setHex(0x1e3a8a).lerp(hotColor, Math.min(1, score / 100));
+              loadColor.setHex(RAMP.blueLow).lerp(hotColor, Math.min(1, score / 100));
               mat.color.copy(loadColor);
               mat.emissive.copy(loadColor);
               mat.emissiveIntensity = 0.3 + Math.min(1, score / 100);
@@ -1428,6 +1414,10 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
         const mat = mesh.material as THREE.Material | THREE.Material[] | undefined;
         if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
         else if (mat) mat.dispose();
+        // Instanced meshes carry their own instance buffers, which neither the
+        // geometry nor the material dispose releases.
+        const inst = o as THREE.InstancedMesh;
+        if (inst.isInstancedMesh) inst.dispose();
       });
       // Shared draft resources are only reached by the traversal above while a
       // draft mesh exists, so dispose them here too.
@@ -1436,6 +1426,9 @@ export default function SceneView({ simRef, layers, overlay, selection, onSelect
       draftDotMat.dispose();
       hoverDotMat.dispose();
       renderer.dispose();
+      // Release the GL context now: a theme switch or a burst of build edits
+      // rebuilds the scene, and browsers cap live contexts.
+      renderer.forceContextLoss();
       mount.removeChild(renderer.domElement);
     };
     // Full scene rebuild only on discrete scenario applies (networkKey).

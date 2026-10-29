@@ -31,8 +31,12 @@ export function poseFor(target: { x: number; z: number }, dist: number, tilt: Ti
       target: [target.x, 0, target.z],
     };
   }
+  // The perspective offset is normalised to the clamped distance, so a preset
+  // lands exactly on the limit instead of overshooting it by the offset's
+  // length and letting OrbitControls snap the pose back.
+  const k = d / Math.hypot(0.55, 0.75, 0.55);
   return {
-    pos: [target.x + d * 0.55, d * 0.75, target.z + d * 0.55],
+    pos: [target.x + 0.55 * k, 0.75 * k, target.z + 0.55 * k],
     target: [target.x, 0, target.z],
   };
 }

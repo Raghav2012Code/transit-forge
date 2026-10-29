@@ -2,10 +2,22 @@ import { describe, expect, it } from 'vitest';
 import {
   blankSave,
   parseSaveGame,
+  saveClockLabel,
   saveFileName,
   serializeSaveGame,
   validateSaveGame,
 } from '../scenario/persistence.ts';
+
+describe('save clock label', () => {
+  it('wraps past midnight the way the in-app clock does', () => {
+    expect(saveClockLabel(0)).toBe('fresh morning');
+    expect(saveClockLabel(60)).toBe('day at 08:00');
+    expect(saveClockLabel(17 * 60)).toBe('day at 00:00');
+    expect(saveClockLabel(1020)).toBe('day at 00:00');
+    expect(saveClockLabel(1021)).toBe('day at 00:01');
+    expect(saveClockLabel(1440 + 60)).toBe('day at 08:00');
+  });
+});
 
 describe('savegame format', () => {
   it('round-trips through export serialization', () => {

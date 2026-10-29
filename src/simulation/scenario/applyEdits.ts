@@ -44,8 +44,10 @@ export function validateIncidentConfig(
   // Skip marker for presets that compose zero incidents (e.g., multi-incident on no metro).
   if ((inc as IncidentConfig & { _skip?: true })._skip === true) return problems;
   if (inc.durationMin < 5 || inc.durationMin > 600) problems.push('duration must be 5–600 min');
-  if (inc.startMin < 0 || inc.startMin >= 1440) problems.push('start must be within the day');
-  if (inc.startMin < 420) problems.push('start must be at or after 07:00 (the first simulation minute)');
+  // startMin is an absolute simulation minute (the day starts at 07:00, minute
+  // 420), so it may run past 1440 on a session that has crossed midnight.
+  if (!Number.isFinite(inc.startMin)) problems.push('start must be a minute number');
+  else if (inc.startMin < 420) problems.push('start must be at or after 07:00 (the first simulation minute)');
   switch (inc.kind) {
     case 'station-closure':
       if (!inc.targetStationId || !stationIds.has(inc.targetStationId)) problems.push('unknown station');

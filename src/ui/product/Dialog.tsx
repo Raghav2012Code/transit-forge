@@ -1,4 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+/**
+ * Escape closes this dialog and nothing else: the capture listener stops the
+ * event before the app's global handler can also close the browser behind it.
+ */
+function useEscape(onCancel: () => void) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      onCancel();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onCancel]);
+}
 
 /** Blocking confirmation for destructive actions. */
 export function ConfirmDialog({ title, body, confirmLabel = 'Delete', onConfirm, onCancel }: {
@@ -8,6 +25,7 @@ export function ConfirmDialog({ title, body, confirmLabel = 'Delete', onConfirm,
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  useEscape(onCancel);
   return (
     <div className="tf-modal-scrim" role="alertdialog" aria-modal="true" aria-label={title}>
       <div className="tf-modal">
@@ -33,6 +51,7 @@ export function PromptDialog({ title, label, initial, confirmLabel = 'Save', onC
 }) {
   const [value, setValue] = useState(initial);
   const valid = value.trim().length > 0;
+  useEscape(onCancel);
   return (
     <div className="tf-modal-scrim" role="dialog" aria-modal="true" aria-label={title}>
       <div className="tf-modal">
@@ -45,7 +64,6 @@ export function PromptDialog({ title, label, initial, confirmLabel = 'Save', onC
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && valid) onConfirm(value.trim());
-              if (e.key === 'Escape') onCancel();
             }}
             // Autofocus is scoped to this modal only.
             autoFocus

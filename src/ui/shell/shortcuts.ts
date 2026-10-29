@@ -27,7 +27,7 @@ export const SHORTCUT_GROUPS: readonly ShortcutGroup[] = [
     items: [
       [['/'], 'Search the map or run a command'],
       [['F'], 'Focus the selection'],
-      [['0'], 'Reset the view'],
+      [['0', 'Home'], 'Reset the view'],
       [['A'], 'Accessibility lens on or off'],
       [['I'], 'Quick inspect while building'],
       [['M'], 'Measure a distance'],

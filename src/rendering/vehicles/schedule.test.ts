@@ -63,6 +63,13 @@ describe('line schedule', () => {
     expect(Number.isFinite(tight.cycle)).toBe(true);
     expect(Number.isFinite(tight.at(0.7).arc)).toBe(true);
   });
+
+  it('falls back safely when every station sits on one point', () => {
+    const flat = buildSchedule([500, 500, 500, 500], 12);
+    expect(flat.cycle).toBeGreaterThan(0);
+    expect(Number.isFinite(flat.at(0).arc)).toBe(true);
+    expect(flat.at(3.3).arc).toBe(500);
+  });
 });
 
 describe('visual clock', () => {

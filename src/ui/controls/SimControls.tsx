@@ -16,6 +16,8 @@ interface Props {
   timeMinutes: number;
   /** A replay is rebuilding the day; the controls reduce to stop. */
   replaying?: boolean;
+  /** Running to a minute: the loop temporarily boosts to 20×, so the radios say so. */
+  runTarget?: number | null;
   onToggle: () => void;
   onStop?: () => void;
   onSpeed: (s: Speed) => void;
@@ -29,12 +31,16 @@ export default function SimControls({
   tick,
   timeMinutes,
   replaying = false,
+  runTarget = null,
   onToggle,
   onStop,
   onSpeed,
   onReset,
   onStep,
 }: Props) {
+  // A run-to-a-time always runs at 20×; say so instead of showing a speed the
+  // loop is not using.
+  const shownSpeed = runTarget !== null ? 20 : speed;
   return (
     <div className="tf-controls">
       <button
@@ -73,11 +79,15 @@ export default function SimControls({
             key={s.value}
             type="button"
             role="radio"
-            aria-checked={speed === s.value}
+            aria-checked={shownSpeed === s.value}
             className="tf-seg-item"
             disabled={replaying}
             onClick={() => onSpeed(s.value)}
-            title={`${s.label} speed (${s.value === 1 ? '1' : s.value === 5 ? '2' : '3'})`}
+            title={
+              runTarget !== null
+                ? `Running to the target at ${s.label}; choosing a speed stops the run`
+                : `${s.label} speed (${s.value === 1 ? '1' : s.value === 5 ? '2' : '3'})`
+            }
           >
             {s.label}
           </button>

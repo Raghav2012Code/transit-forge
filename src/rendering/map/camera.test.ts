@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CAM_MAX_DIST, CAM_MIN_DIST, zoomPose, type CameraPose } from './camera.ts';
+import { CAM_MAX_DIST, CAM_MIN_DIST, poseFor, zoomPose, type CameraPose } from './camera.ts';
 import { WORLD_SCALE } from '../../simulation/city/geography.ts';
 
 const S = WORLD_SCALE;
@@ -37,5 +37,18 @@ describe('zoomPose', () => {
     expect(zoomPose(pose, Number.NaN)).toBe(pose);
     const flat: CameraPose = { pos: [1, 2, 3], target: [1, 2, 3] };
     expect(zoomPose(flat, 0.5)).toBe(flat);
+  });
+});
+
+describe('poseFor', () => {
+  it('lands exactly on the clamp instead of overshooting it', () => {
+    const far = poseFor({ x: 40 * S, z: 0 }, CAM_MAX_DIST * 10, 'perspective');
+    expect(dist(far)).toBeCloseTo(CAM_MAX_DIST, 6);
+    const near = poseFor({ x: 40 * S, z: 0 }, 1, 'perspective');
+    expect(dist(near)).toBeCloseTo(CAM_MIN_DIST, 6);
+  });
+
+  it('keeps the requested distance when it is inside the limits', () => {
+    expect(dist(poseFor({ x: 0, z: 0 }, 400 * S, 'perspective'))).toBeCloseTo(400 * S, 6);
   });
 });

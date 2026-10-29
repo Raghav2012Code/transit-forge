@@ -24,7 +24,10 @@ export default function SearchPalette({ entries, commands, onPick, onClose }: Pr
   const listId = useId();
 
   const rows = useMemo<Row[]>(() => {
-    const cmds = rankCommands(commands, query, 6).map<Row>((c) => ({ type: 'command', key: `c:${c.id}`, command: c }));
+    // The palette's own "open search" command would close and immediately
+    // reopen it, clearing the query; leave it out of its own results.
+    const rankable = commands.filter((c) => c.id !== 'search');
+    const cmds = rankCommands(rankable, query, 6).map<Row>((c) => ({ type: 'command', key: `c:${c.id}`, command: c }));
     const places = searchIndex(entries, query, 6).map<Row>((e) => ({ type: 'place', key: `p:${e.kind}:${e.id}`, entry: e }));
     return [...cmds, ...places];
   }, [commands, entries, query]);

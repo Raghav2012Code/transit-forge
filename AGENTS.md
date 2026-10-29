@@ -13,7 +13,8 @@ Three separated layers:
 3. `src/ui/` — React dashboard, controls, inspectors. No sim logic inside components
    beyond calling the simulation API.
 
-Supporting folders: `src/types/`, `src/data/`, `src/workers/`.
+Supporting folders: `src/types/` (shared data shapes) and `src/simulation/tests/`
+(the deterministic unit tests).
 
 ## Interface
 
@@ -68,5 +69,5 @@ Five canonical roles with matching label names: `needs-triage`, `needs-info`,
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` at the repo root plus `docs/adr/`. See
-`docs/agents/domain.md`.
+Single-context: `CONTEXT.md` at the repo root when it exists (created lazily by
+`/domain-modeling`) plus `docs/adr/`. See `docs/agents/domain.md`.

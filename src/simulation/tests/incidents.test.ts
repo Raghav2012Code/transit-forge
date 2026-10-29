@@ -493,6 +493,54 @@ describe('scenario integration', () => {
     expect(shuttle?.stationIds).toEqual([from, to]);
     expect(sim.connections.filter((c) => c.routeId === shuttleId)).toHaveLength(2);
   });
+
+  it('keeps an incident whose start falls after midnight (absolute minute)', () => {
+    const city = generateCity(1337);
+    const base = buildNetwork();
+    const route = base.routes[0];
+    const applied = applyEdits(city, base, [
+      {
+        type: 'scheduleIncident',
+        incident: {
+          id: 'inc-day2',
+          kind: 'route-suspension',
+          label: 'day two suspension',
+          targetRouteId: route.id,
+          startMin: 1500,
+          durationMin: 30,
+          recoveryMin: 5,
+          severity01: 0.6,
+        },
+      },
+    ]);
+    expect(applied.warnings).toEqual([]);
+    expect(applied.incidents.map((i) => i.id)).toEqual(['inc-day2']);
+    let sim = createSimulationFromParts(1337, applied.city, applied);
+    while (sim.timeMinutes < 1500) sim = stepSimulation(sim, 1);
+    expect(sim.incidents[0].status).toBe('scheduled');
+    sim = stepSimulation(sim, 1);
+    expect(sim.timeMinutes).toBe(1501);
+    expect(sim.incidents[0].status).toBe('active');
+  });
+
+  it('rejects an incident start before the first minute or not finite', () => {
+    const city = generateCity(1337);
+    const base = buildNetwork();
+    const inc = {
+      kind: 'route-suspension' as const,
+      label: 'bad start',
+      targetRouteId: base.routes[0].id,
+      durationMin: 30,
+      recoveryMin: 5,
+      severity01: 0.6,
+    };
+    const applied = applyEdits(city, base, [
+      { type: 'scheduleIncident', incident: { ...inc, id: 'early', startMin: 100 } },
+      { type: 'scheduleIncident', incident: { ...inc, id: 'nan', startMin: Number.NaN } },
+    ]);
+    expect(applied.incidents).toHaveLength(0);
+    expect(applied.warnings).toHaveLength(2);
+  });
 });
 
 describe('presets', () => {
